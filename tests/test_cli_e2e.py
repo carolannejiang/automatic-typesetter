@@ -1,0 +1,66 @@
+import os
+import tempfile
+import unittest
+import xml.etree.ElementTree as ET
+import zipfile
+import io
+
+from bookformatter.cli import main
+
+CHAPTERS = {
+    "01-morning.md": "# Morning\n\nThe kettle ticked as it warmed, and the house stayed quiet.\n",
+    "02-noon.md": "# Noon\n\nBy noon the light had flattened everything into fact.\n",
+    "03-night.md": "# Night\n\n> Night is a room.\n\nAnd we live in it, mostly asleep.\n",
+}
+
+
+class CliEndToEndTests(unittest.TestCase):
+    def test_build_epub_and_html_from_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "src")
+            os.makedirs(src)
+            for name, content in CHAPTERS.items():
+                with open(os.path.join(src, name), "w") as fh:
+                    fh.write(content)
+            out = os.path.join(tmp, "out")
+            code = main([
+                src, "-t", "One Day", "-a", "Test Author",
+                "-o", out, "-f", "epub,html", "--verbose",
+            ])
+            self.assertEqual(code, 0)
+
+            epub_path = os.path.join(out, "one-day.epub")
+            html_path = os.path.join(out, "one-day.html")
+            self.assertTrue(os.path.exists(epub_path))
+            self.assertTrue(os.path.exists(html_path))
+
+            with zipfile.ZipFile(epub_path) as zf:
+                self.assertEqual(zf.infolist()[0].filename, "mimetype")
+                for name in zf.namelist():
+                    if name.endswith((".xhtml", ".opf", ".ncx", ".xml")):
+                        ET.parse(io.BytesIO(zf.read(name)))
+                nav = zf.read("OEBPS/nav.xhtml").decode()
+                for title in ("Morning", "Noon", "Night"):
+                    self.assertIn(title, nav)
+
+            with open(html_path) as fh:
+                page = fh.read()
+            self.assertIn("@page", page)
+            self.assertIn('class="chapter" id="chapter-1"', page)
+            self.assertIn('class="frontmatter fm-end"', page)
+            self.assertIn("One Day", page)
+            self.assertIn("Test Author", page)
+
+    def test_single_txt_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = os.path.join(tmp, "story.txt")
+            with open(src, "w") as fh:
+                fh.write("A paragraph of story.\n\nAnother paragraph.")
+            out = os.path.join(tmp, "out")
+            code = main([src, "-o", out, "-f", "epub"])
+            self.assertEqual(code, 0)
+            self.assertTrue(os.path.exists(os.path.join(out, "story.epub")))
+
+
+if __name__ == "__main__":
+    unittest.main()
