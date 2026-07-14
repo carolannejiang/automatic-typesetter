@@ -34,8 +34,28 @@ Outputs land in `./build/` (change with `-o`): `<slug>.epub`, `<slug>.pdf`,
 and `<slug>.html` (the paginated print source — open it in a browser and
 File → Print to make your own PDF).
 
-Or install it: `pip install .` gives you a `bookformatter` command
-(`pip install ".[pdf]"` adds WeasyPrint for full print fidelity).
+Or install it: `pip install .` gives you `bookformatter` and
+`bookformatter-web` commands (`pip install ".[pdf]"` adds WeasyPrint for
+full print fidelity).
+
+## Prefer a website? Run the web interface
+
+```bash
+python3 -m bookformatter.web
+```
+
+This starts a local web app at <http://127.0.0.1:8000> (and opens it in
+your browser): paste article/feed links, upload `.md`/`.txt`/`.html`
+files, or paste text directly; set the title, author, cover image, and
+every option the CLI has (theme, trim size, formats, fonts, chapter
+behavior, feed handling, PDF engine); click **Make the book**; download
+the EPUB/PDF/HTML when the build finishes.
+
+It runs entirely on your machine — nothing is uploaded anywhere. It's
+standard library only, like the rest of the tool. `--port` changes the
+port; `--host 0.0.0.0` makes it reachable from other devices on your
+network (note: the app has no login — don't expose it to the open
+internet as-is).
 
 ## What goes in
 
@@ -89,14 +109,16 @@ Rendering engines (`--pdf-engine auto|weasyprint|chrome|none`):
 ## How it works
 
 ```
-inputs ──► ingest (md / txt / html / url / feed)
-              │  readability-style extraction, lazy-image fixes,
-              │  URL absolutization, image download, chapter splitting
-              ▼
-         Book model (metadata + chapters of clean HTML + image assets)
-              │
-              ├──► EPUB 3 writer (stdlib zipfile; polyglot XHTML)
-              └──► print HTML (CSS Paged Media) ──► WeasyPrint / Chrome ──► PDF
+CLI (bookformatter) ─┐
+                     ├─► ingest (md / txt / html / url / feed)
+web UI (…web)  ──────┘        │  readability-style extraction, lazy-image
+                              │  fixes, URL absolutization, image download,
+                              │  chapter splitting
+                              ▼
+                Book model (metadata + chapters of clean HTML + assets)
+                              │
+                              ├──► EPUB 3 writer (stdlib zipfile; polyglot XHTML)
+                              └──► print HTML (CSS Paged Media) ──► WeasyPrint / Chrome ──► PDF
 ```
 
 Everything ingested is normalized to a small set of book-safe tags and
@@ -152,7 +174,7 @@ permission to reproduce.
 ## Development
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 72 tests, no dependencies
+python3 -m unittest discover -s tests -t .   # 78 tests, no dependencies
 python3 -m bookformatter examples/field-notes -t "Field Notes on Book Making" -a "You"
 ```
 

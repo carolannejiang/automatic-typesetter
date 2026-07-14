@@ -25,6 +25,7 @@ pdf = ["weasyprint>=60"]
 
 [project.scripts]
 bookformatter = "bookformatter.cli:main"
+bookformatter-web = "bookformatter.web:main"
 
 [tool.setuptools]
 packages = ["bookformatter"]
