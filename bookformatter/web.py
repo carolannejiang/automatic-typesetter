@@ -21,6 +21,7 @@ import re
 import shutil
 import tempfile
 import threading
+import time
 import urllib.parse
 import uuid
 import webbrowser
@@ -35,9 +36,12 @@ from .models import Asset, Book, BookMeta, slugify
 MAX_BODY = 100 * 1024 * 1024  # 100 MB upload cap
 ALLOWED_UPLOAD_EXTS = ingester.ALL_EXTS
 MAX_JOBS = 20
+MAX_INPUTS = 100          # links + files per build
+CONCURRENT_BUILDS = 2     # simultaneous presses; others wait their turn
 
 _jobs: dict = {}
 _jobs_lock = threading.Lock()
+_build_slots = threading.Semaphore(CONCURRENT_BUILDS)
 
 
 class Job:
@@ -109,6 +113,8 @@ def _clean_size(value: str, default: str, pattern) -> str:
 
 def _run_build(job: Job, params: dict, uploads: list) -> None:
     """uploads: list of (field_name, filename, bytes)."""
+    job.message = "Waiting for a free press…"
+    _build_slots.acquire()
     try:
         job.status = "running"
         job.message = "Collecting content…"
@@ -158,6 +164,8 @@ def _run_build(job: Job, params: dict, uploads: list) -> None:
 
         if not inputs:
             raise ValueError("No input given — add a link, a file, or pasted text.")
+        if len(inputs) > MAX_INPUTS:
+            raise ValueError(f"Too many inputs ({len(inputs)}); the limit is {MAX_INPUTS} per build.")
 
         opts = ingester.IngestOptions(
             split=_first(params, "split", "auto"),
@@ -260,6 +268,8 @@ def _run_build(job: Job, params: dict, uploads: list) -> None:
     except Exception as exc:  # surfaced to the UI
         job.status = "error"
         job.message = str(exc) or exc.__class__.__name__
+    finally:
+        _build_slots.release()
 
 
 def _parse_multipart(content_type: str, body: bytes):
@@ -313,20 +323,68 @@ class Handler(BaseHTTPRequestHandler):
         if self.verbose:
             super().log_message(fmt, *args)
 
+    def _route(self, raw_path: str):
+        """Strip the configured base path (e.g. /book). Returns the inner
+        path, or None if this request was already answered."""
+        base = getattr(self.server, "base_path", "")
+        if not base:
+            return raw_path
+        if raw_path == base:
+            self._send(301, b"", "text/plain", {"Location": base + "/"})
+            return None
+        if raw_path.startswith(base + "/"):
+            return raw_path[len(base):]
+        self._json(404, {"error": "not found"})
+        return None
+
+    def _client_ip(self) -> str:
+        forwarded = self.headers.get("X-Forwarded-For", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        return self.client_address[0]
+
+    def _rate_limited(self) -> bool:
+        """Sliding-window build limit per client IP (public mode only)."""
+        if not getattr(self.server, "public", False):
+            return False
+        limit, window = getattr(self.server, "rate_limit", (6, 900))
+        now = time.time()
+        buckets = self.server.rate_buckets
+        with self.server.rate_lock:
+            bucket = buckets.setdefault(self._client_ip(), [])
+            bucket[:] = [t for t in bucket if now - t < window]
+            if len(bucket) >= limit:
+                return True
+            bucket.append(now)
+            if len(buckets) > 10000:
+                buckets.clear()  # crude flood safety valve
+        return False
+
     # -- routes ------------------------------------------------------------
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
-        if parsed.path in ("/", "/index.html"):
-            self._send(200, PAGE.encode("utf-8"), "text/html; charset=utf-8")
-        elif parsed.path == "/status":
+        path = self._route(parsed.path)
+        if path is None:
+            return
+        if path in ("", "/", "/index.html"):
+            page = PAGE
+            if getattr(self.server, "passcode", ""):
+                page = page.replace(
+                    "<!--EXTRA_FIELDS-->",
+                    '<div class="card"><h2>Passcode</h2>'
+                    '<label for="passcode">This press is private — enter its passcode</label>'
+                    '<input type="text" id="passcode" name="passcode"></div>',
+                )
+            self._send(200, page.encode("utf-8"), "text/html; charset=utf-8")
+        elif path == "/status":
             query = urllib.parse.parse_qs(parsed.query)
             job = _jobs.get(_first(query, "id"))
             if job is None:
                 self._json(404, {"error": "unknown job"})
             else:
                 self._json(200, job.to_json())
-        elif parsed.path == "/download":
+        elif path == "/download":
             query = urllib.parse.parse_qs(parsed.query)
             job = _jobs.get(_first(query, "id"))
             wanted = _first(query, "file")
@@ -349,8 +407,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
-        if parsed.path != "/build":
+        path = self._route(parsed.path)
+        if path is None:
+            return
+        if path != "/build":
             self._json(404, {"error": "not found"})
+            return
+        if self._rate_limited():
+            self._json(429, {"error": "Too many builds from this address — try again in a few minutes."})
             return
         try:
             length = int(self.headers.get("Content-Length") or 0)
@@ -366,6 +430,11 @@ class Handler(BaseHTTPRequestHandler):
         else:
             params = urllib.parse.parse_qs(body.decode("utf-8", "replace"))
             uploads = []
+
+        passcode = getattr(self.server, "passcode", "")
+        if passcode and _first(params, "passcode") != passcode:
+            self._json(403, {"error": "Wrong or missing passcode."})
+            return
 
         has_content = (
             _first(params, "urls")
@@ -383,14 +452,37 @@ class Handler(BaseHTTPRequestHandler):
         self._json(200, {"id": job.id})
 
 
-def make_server(host: str = "127.0.0.1", port: int = 8000) -> ThreadingHTTPServer:
+def _normalize_base_path(base: str) -> str:
+    base = (base or "").strip()
+    if not base or base == "/":
+        return ""
+    if not base.startswith("/"):
+        base = "/" + base
+    return base.rstrip("/")
+
+
+def make_server(host: str = "127.0.0.1", port: int = 8000, base_path: str = "",
+                public: bool = False, passcode: str = "",
+                rate_limit=(6, 900)) -> ThreadingHTTPServer:
     try:
         server = ThreadingHTTPServer((host, port), Handler)
     except OSError:
         # Port taken: fall back to an ephemeral port.
         server = ThreadingHTTPServer((host, 0), Handler)
     server.daemon_threads = True
+    server.base_path = _normalize_base_path(base_path)
+    server.public = public
+    server.passcode = passcode
+    server.rate_limit = rate_limit
+    server.rate_buckets = {}
+    server.rate_lock = threading.Lock()
+    from . import fetch as _fetch
+    _fetch.PUBLIC_MODE = public  # SSRF guard for user-supplied URLs
     return server
+
+
+def _env_flag(name: str) -> bool:
+    return (os.environ.get(name) or "").strip().lower() in ("1", "true", "yes", "on")
 
 
 def main(argv=None) -> int:
@@ -398,20 +490,42 @@ def main(argv=None) -> int:
 
     parser = argparse.ArgumentParser(
         prog="bookformatter-web",
-        description="Run the local bookformatter web interface.",
+        description="Run the bookformatter web interface.",
+        epilog=(
+            "Environment variables (used as defaults): PORT, "
+            "BOOKFORMATTER_BASE_PATH, BOOKFORMATTER_PUBLIC, BOOKFORMATTER_PASSCODE."
+        ),
     )
     parser.add_argument("--host", default="127.0.0.1",
-                        help="bind address (default: 127.0.0.1 — local only)")
-    parser.add_argument("--port", type=int, default=8000, help="port (default: 8000)")
+                        help="bind address (default: 127.0.0.1 — local only; use 0.0.0.0 to serve others)")
+    parser.add_argument("--port", type=int,
+                        default=int(os.environ.get("PORT") or 8000),
+                        help="port (default: $PORT or 8000)")
+    parser.add_argument("--base-path",
+                        default=os.environ.get("BOOKFORMATTER_BASE_PATH", ""),
+                        help="serve under a URL prefix, e.g. /book (for reverse proxies)")
+    parser.add_argument("--public", action="store_true",
+                        default=_env_flag("BOOKFORMATTER_PUBLIC"),
+                        help="public-deployment mode: block fetches of internal addresses "
+                             "and rate-limit builds per client IP")
+    parser.add_argument("--passcode",
+                        default=os.environ.get("BOOKFORMATTER_PASSCODE", ""),
+                        help="require this passcode to start builds")
     parser.add_argument("--no-browser", action="store_true", help="do not open a browser tab")
     parser.add_argument("-v", "--verbose", action="store_true", help="log requests")
     args = parser.parse_args(argv)
 
     Handler.verbose = args.verbose
-    server = make_server(args.host, args.port)
-    url = f"http://{args.host}:{server.server_address[1]}/"
-    print(f"bookformatter web is running at {url}  (Ctrl+C to stop)")
-    if not args.no_browser:
+    server = make_server(args.host, args.port, base_path=args.base_path,
+                         public=args.public, passcode=args.passcode)
+    base = server.base_path or ""
+    url = f"http://{args.host}:{server.server_address[1]}{base}/"
+    mode = "public" if args.public else "local"
+    print(f"bookformatter web ({mode} mode) is running at {url}  (Ctrl+C to stop)")
+    if args.public and not args.passcode:
+        print("  note: public mode without a passcode — anyone who can reach this "
+              "server can run builds on it.")
+    if not args.no_browser and not args.public and args.host in ("127.0.0.1", "localhost"):
         threading.Timer(0.4, lambda: webbrowser.open(url)).start()
     try:
         server.serve_forever()
@@ -629,6 +743,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
       </details>
     </div>
 
+    <!--EXTRA_FIELDS-->
     <button class="build" id="go" type="submit">Make the book</button>
   </form>
 
@@ -661,7 +776,8 @@ form.addEventListener("submit", async (ev) => {
   msg.className = "msg spin"; msg.textContent = "Starting";
   stats.textContent = ""; warnings.innerHTML = ""; downloads.innerHTML = "";
   try {
-    const resp = await fetch("/build", { method: "POST", body: new FormData(form) });
+    // Relative URLs so the app works at any mount point (e.g. /book/).
+    const resp = await fetch("build", { method: "POST", body: new FormData(form) });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || "Build failed to start.");
     timer = setInterval(() => poll(data.id), 700);
@@ -673,7 +789,7 @@ form.addEventListener("submit", async (ev) => {
 async function poll(id) {
   let data;
   try {
-    const resp = await fetch("/status?id=" + id);
+    const resp = await fetch("status?id=" + id);
     data = await resp.json();
   } catch (err) { return; }
   msg.textContent = data.status === "done"
@@ -691,7 +807,7 @@ async function poll(id) {
     for (const f of data.files) {
       const a = document.createElement("a");
       const ext = f.name.split(".").pop().toUpperCase();
-      a.href = "/download?id=" + id + "&file=" + encodeURIComponent(f.name);
+      a.href = "download?id=" + id + "&file=" + encodeURIComponent(f.name);
       a.innerHTML = "<strong>" + ext + "</strong> &mdash; " + f.name +
                     " (" + (f.size / 1024 < 1024 ? (f.size/1024).toFixed(0) + " KB" : (f.size/1048576).toFixed(1) + " MB") + ")";
       downloads.appendChild(a);

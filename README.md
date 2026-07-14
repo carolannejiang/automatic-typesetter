@@ -54,8 +54,14 @@ the EPUB/PDF/HTML when the build finishes.
 It runs entirely on your machine — nothing is uploaded anywhere. It's
 standard library only, like the rest of the tool. `--port` changes the
 port; `--host 0.0.0.0` makes it reachable from other devices on your
-network (note: the app has no login — don't expose it to the open
-internet as-is).
+network.
+
+Want it on your own domain (e.g. `example.com/book`)? The app supports
+mounting under a URL prefix (`--base-path /book`), a hardened public mode
+(SSRF guard + rate limiting), and an optional passcode; the repo ships a
+`Dockerfile`. See **[docs/DEPLOY.md](docs/DEPLOY.md)** for the
+step-by-step recipe (Fly.io + a Vercel rewrite, plus nginx/Caddy
+alternatives).
 
 ## What goes in
 

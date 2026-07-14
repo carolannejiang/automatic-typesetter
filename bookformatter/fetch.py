@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import base64
+import ipaddress
 import re
+import socket
 import urllib.error
+import urllib.parse
 import urllib.request
 
 USER_AGENT = "bookformatter/0.1 (+https://github.com/carolannejiang/bookformatter)"
 MAX_BYTES = 20 * 1024 * 1024
+
+# When True (public web deployments), refuse to fetch private/internal
+# addresses so visitors can't use the server to probe its own network.
+PUBLIC_MODE = False
 
 _cache: dict = {}
 
@@ -17,10 +24,46 @@ class FetchError(Exception):
     pass
 
 
+def validate_public_url(url: str) -> None:
+    """Raise FetchError if a URL points at a private/internal address.
+
+    Best-effort SSRF guard for public deployments: checks the scheme and
+    every resolved address. (DNS-rebinding between check and connect is out
+    of scope for this tool.)
+    """
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme not in ("http", "https"):
+        raise FetchError(f"{url}: only http(s) URLs are allowed")
+    host = parts.hostname or ""
+    try:
+        infos = socket.getaddrinfo(host, parts.port or 443, proto=socket.IPPROTO_TCP)
+    except OSError as exc:
+        raise FetchError(f"could not resolve {host}: {exc}") from exc
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
+            raise FetchError(f"{url}: refusing to fetch an internal address")
+
+
+class _GuardedRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Re-validate every redirect hop in public mode."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if PUBLIC_MODE:
+            validate_public_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_opener = urllib.request.build_opener(_GuardedRedirectHandler)
+
+
 def fetch(url: str, timeout: float = 30.0):
     """Fetch a URL. Returns (bytes, content_type, final_url). Caches per run."""
     if url in _cache:
         return _cache[url]
+    if PUBLIC_MODE:
+        validate_public_url(url)
     req = urllib.request.Request(
         url,
         headers={
@@ -30,7 +73,7 @@ def fetch(url: str, timeout: float = 30.0):
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _opener.open(req, timeout=timeout) as resp:
             data = resp.read(MAX_BYTES + 1)
             if len(data) > MAX_BYTES:
                 raise FetchError(f"{url}: response larger than {MAX_BYTES} bytes")
