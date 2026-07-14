@@ -1,87 +1,81 @@
-# Putting the website on your own domain
+# Putting the press on your domain
 
-This guide gets bookformatter running at **`carolanne.link/book`** (adjust
-the names for any other domain/path).
+Target: **`book.carolanne.link`** (a subdomain — the simplest setup).
+`carolanne.link` uses Vercel's nameservers, and `book` is currently only
+covered by a wildcard that serves a 404, so the name is free to claim.
+Adjust names for any other domain.
 
-`carolanne.link` is served by **Vercel**. Vercel hosts static and
-serverless sites, so it can't run this app directly (builds are
-long-running Python processes that need WeasyPrint/Chromium). The standard
-pattern instead:
+Vercel itself can't run this app (builds are long-running Python
+processes needing WeasyPrint), so the app runs on **Fly.io** and the
+subdomain points at it. The repo already contains everything: the
+`Dockerfile`, `fly.toml`, and a GitHub Actions workflow that performs the
+whole deployment.
 
-1. run the app in a small container host (Fly.io shown below), and
-2. add a **rewrite** to the Vercel project so `/book` proxies to it.
+## One-time setup (the only human steps)
 
-Visitors only ever see `carolanne.link/book` — the app host is invisible.
+1. **Create a Fly.io account** at <https://fly.io> (it asks for a card;
+   this app scales to zero when idle and costs at most a few dollars a
+   month, usually cents).
 
-## 1 · Run the app on Fly.io (~5 minutes)
+2. **Make a deploy token**: Fly dashboard → *Tokens* (or
+   `fly tokens create deploy`). Copy it.
 
-The repo already contains the `Dockerfile`. From the repo root:
+3. **Add repository secrets** on GitHub
+   (`carolannejiang/bookformatter` → Settings → Secrets and variables →
+   Actions → *New repository secret*):
+   - `FLY_API_TOKEN` — the token from step 2 (required)
+   - `BOOKFORMATTER_PASSCODE` — any phrase; visitors must type it to run
+     builds (optional but recommended — the press has no accounts)
 
-```bash
-# install flyctl once: https://fly.io/docs/flyctl/install/
-fly launch --no-deploy --name carolanne-bookformatter   # accept defaults; creates fly.toml
-fly secrets set BOOKFORMATTER_BASE_PATH=/book
-# optional but recommended — only people with the passcode can run builds:
-fly secrets set BOOKFORMATTER_PASSCODE=some-secret-words
-fly deploy
-```
+4. **Run the workflow**: Actions tab → *Deploy to Fly.io* → *Run
+   workflow*. It creates the app (`carolanne-bookpress`), sets the
+   passcode, deploys, and requests the certificate for
+   `book.carolanne.link`. (If the app name is already taken on Fly,
+   change it in `fly.toml` and in `.github/workflows/deploy.yml`, then
+   rerun.)
 
-Check it works at `https://carolanne-bookformatter.fly.dev/book/`.
+5. **Add the DNS record** in Vercel (dashboard → *Domains* →
+   `carolanne.link` → *DNS Records*):
 
-Fly's smallest machine (shared-cpu-1x, 256 MB) is fine; add
-`--vm-memory 512` if large feed builds get killed. Any Docker host works
-the same way (Railway and Render can deploy this repo directly — set the
-env vars in their dashboard).
+   | Type  | Name   | Value                          |
+   |-------|--------|--------------------------------|
+   | CNAME | `book` | `carolanne-bookpress.fly.dev.` |
 
-## 2 · Add the rewrite on Vercel
+   The explicit record overrides the wildcard for `book`. Fly notices the
+   DNS, finishes the Let's Encrypt certificate automatically (usually
+   within a few minutes), and `https://book.carolanne.link` is live.
 
-In the Vercel project that serves `carolanne.link`, add to `vercel.json`
-(create the file at the project root if it doesn't exist):
+After that, every push to `main` redeploys automatically, and the
+workflow can be rerun manually any time.
+
+## Serving under a path instead (`carolanne.link/book`)
+
+Also supported. Deploy the same app with the base-path env set
+(`fly secrets set BOOKFORMATTER_BASE_PATH=/book` or the env var on any
+host), then add rewrites to the Vercel project that serves the domain:
 
 ```json
 {
   "rewrites": [
-    { "source": "/book", "destination": "https://carolanne-bookformatter.fly.dev/book" },
-    { "source": "/book/:path*", "destination": "https://carolanne-bookformatter.fly.dev/book/:path*" }
+    { "source": "/book", "destination": "https://carolanne-bookpress.fly.dev/book" },
+    { "source": "/book/:path*", "destination": "https://carolanne-bookpress.fly.dev/book/:path*" }
   ]
 }
 ```
 
-Deploy the Vercel project. Done: `https://carolanne.link/book` now serves
-the press. (If the site redirects apex → `www`, the path follows
-automatically: `www.carolanne.link/book`.)
+## Other hosts
 
-## Alternatives to the Vercel rewrite
-
-**Your own server (VPS) with Caddy** — if you ever move the domain to a
-box you control:
-
-```caddyfile
-carolanne.link {
-    handle /book* {
-        reverse_proxy 127.0.0.1:8080
-    }
-    # ... the rest of the site
-}
-```
-
-**nginx:**
-
-```nginx
-location = /book { return 301 /book/; }
-location /book/ { proxy_pass http://127.0.0.1:8080; proxy_set_header X-Forwarded-For $remote_addr; }
-```
-
-Run the app on the box with:
+Any Docker host works — Railway and Render can deploy this repo directly;
+set `BOOKFORMATTER_PUBLIC=1` (and optionally `BOOKFORMATTER_PASSCODE`,
+`BOOKFORMATTER_BASE_PATH`) in their dashboards. On your own VPS:
 
 ```bash
-BOOKFORMATTER_BASE_PATH=/book BOOKFORMATTER_PUBLIC=1 BOOKFORMATTER_PASSCODE=... \
+BOOKFORMATTER_PUBLIC=1 BOOKFORMATTER_PASSCODE=... \
     bookformatter-web --host 127.0.0.1 --port 8080 --no-browser
 ```
 
-**Subdomain instead of a path** — `book.carolanne.link` is even simpler:
-add a CNAME to the app host and skip the base path entirely. Path vs
-subdomain is purely cosmetic; everything else stays the same.
+behind Caddy (`book.carolanne.link { reverse_proxy 127.0.0.1:8080 }`) or
+nginx.
 
 ## What public mode does
 
@@ -98,11 +92,9 @@ subdomain is purely cosmetic; everything else stays the same.
   20 retained jobs.
 
 `BOOKFORMATTER_PASSCODE` adds a passcode field to the page; builds
-without the right passcode are rejected. **Recommended** — a book build
-is real CPU work, and this app has no accounts or billing. Don't run a
-passcode-less instance anywhere heavily trafficked.
+without the right passcode are rejected.
 
 Honest limitations of the hosted setup: jobs live in memory (a restart
-forgets in-flight builds), there's no HTTPS termination in the app itself
-(Fly/Vercel provide it), and DNS-rebinding SSRF is out of scope. For a
-personal press behind a passcode, that's a reasonable trade.
+forgets in-flight builds), TLS comes from the platform (Fly/Vercel), and
+DNS-rebinding SSRF is out of scope. For a personal press behind a
+passcode, that's a reasonable trade.

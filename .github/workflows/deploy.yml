@@ -1,0 +1,53 @@
+# Deploys the bookformatter web press to Fly.io.
+#
+# One-time setup (repo Settings → Secrets and variables → Actions):
+#   FLY_API_TOKEN            required — from https://fly.io/dashboard → Tokens
+#   BOOKFORMATTER_PASSCODE   optional — passcode visitors must enter to build
+#
+# Run it from the Actions tab ("Run workflow"), or it runs automatically on
+# pushes to main.
+
+name: Deploy to Fly.io
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+concurrency: fly-deploy
+
+env:
+  FLY_APP: carolanne-bookpress
+  FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Create the app on first run
+        run: flyctl apps create "$FLY_APP" || true
+
+      - name: Set the build passcode (if the secret is configured)
+        env:
+          PASSCODE: ${{ secrets.BOOKFORMATTER_PASSCODE }}
+        run: |
+          if [ -n "$PASSCODE" ]; then
+            flyctl secrets set --app "$FLY_APP" --stage "BOOKFORMATTER_PASSCODE=$PASSCODE"
+          else
+            echo "No BOOKFORMATTER_PASSCODE secret set — the press will be open to anyone who finds it."
+          fi
+
+      - name: Deploy
+        run: flyctl deploy --remote-only --app "$FLY_APP"
+
+      - name: Request the certificate for book.carolanne.link
+        run: flyctl certs add book.carolanne.link --app "$FLY_APP" || true
+
+      - name: Show where things stand
+        run: |
+          flyctl status --app "$FLY_APP"
+          flyctl certs list --app "$FLY_APP" || true

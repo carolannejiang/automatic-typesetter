@@ -1,0 +1,25 @@
+# Fly.io app configuration for the bookformatter web press.
+# Serves at https://carolanne-bookpress.fly.dev and, once the CNAME +
+# certificate are in place, at https://book.carolanne.link.
+#
+# If the app name is taken when you first deploy, change it here AND in
+# .github/workflows/deploy.yml (FLY_APP).
+
+app = "carolanne-bookpress"
+primary_region = "iad"
+
+[env]
+  # Public-deployment hardening: SSRF guard + per-IP rate limiting.
+  BOOKFORMATTER_PUBLIC = "1"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Scale to zero when idle — the machine wakes on the next visit.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
