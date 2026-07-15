@@ -68,6 +68,12 @@ class WebTests(unittest.TestCase):
 
     # -- tests ---------------------------------------------------------------
 
+    def test_head_request_supported(self):
+        req = urllib.request.Request(self.base + "/", method="HEAD")
+        with urllib.request.urlopen(req) as resp:
+            self.assertEqual(resp.status, 200)
+            self.assertIn("text/html", resp.headers.get("Content-Type", ""))
+
     def test_index_serves_form_with_all_knobs(self):
         code, body = self._get("/")
         self.assertEqual(code, 200)

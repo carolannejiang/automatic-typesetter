@@ -401,6 +401,16 @@ class Handler(BaseHTTPRequestHandler):
 
     # -- routes ------------------------------------------------------------
 
+    def do_HEAD(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = self._route(parsed.path)
+        if path is None:
+            return
+        if path in ("", "/", "/index.html"):
+            self._send(200, b"", "text/html; charset=utf-8")
+        else:
+            self._send(404, b"", "application/json")
+
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         path = self._route(parsed.path)
