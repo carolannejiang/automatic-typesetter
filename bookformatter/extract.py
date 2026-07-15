@@ -37,6 +37,13 @@ _POSITIVE_HINT = re.compile(
 )
 _AD_HINT = re.compile(r"(^|[-_ ])ads?([-_ ]|$)", re.I)
 
+# A footnote *definition* container, as emitted by Substack and similar:
+# <div class="footnote"><a id="footnote-1">1</a><div class="footnote-content">
+# …</div></div>. The class carries the singular word "footnote" (the plural
+# "footnotes" wrapper around a proper <ol> is left alone — see
+# _normalize_footnote_defs).
+_FOOTNOTE_DEF_HINT = re.compile(r"(^|[-_ ])footnote([-_ ]|$)", re.I)
+
 # Tags kept in cleaned chapter content; everything else is unwrapped.
 _KEEP_TAGS = {
     "p", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote",
@@ -181,6 +188,57 @@ def _absolutize(root: Node, base_url: str) -> None:
             img.attrs["src"] = urljoin(base_url, src)
 
 
+def _normalize_footnote_defs(container: Node, referenced: set) -> None:
+    """Rewrite standalone footnote *definition* blocks into one canonical
+    ``<ol class="footnotes">`` endnote list.
+
+    Substack (and similar) render each note as its own
+    ``<div class="footnote"><a id="footnote-1">1</a>
+    <div class="footnote-content">…</div></div>`` rather than a single
+    ``<ol>`` of ``<li>`` items. Left as-is, ``_clean_tree`` unwraps those
+    ``<div>``s (``div`` is not a kept tag), orphaning each note's text from
+    its landing anchor so footnote inlining — and EPUB endnote links — break.
+    Converting them to ``<li>`` items up front preserves the note/anchor
+    grouping for both print (page-bottom footnotes) and EPUB (endnotes).
+    """
+    items = []
+    for node in list(container.walk()):
+        if node.is_text or node.parent is None \
+                or node.tag not in ("div", "section", "aside"):
+            continue
+        if not _FOOTNOTE_DEF_HINT.search(node.get("class") or ""):
+            continue
+        # Skip a wrapper that already holds a proper list of notes.
+        if node.find("li") is not None:
+            continue
+        # The landing anchor a body citation points at identifies the note.
+        landing = next(
+            (a for a in node.find_all("a")
+             if a.get("id") and a.get("id") in referenced),
+            None,
+        )
+        if landing is None:
+            continue
+        li = Node("li", {"id": landing.get("id")})
+        # Move the note's content into the item, dropping the bare number
+        # marker anchor (the printed "1." is re-derived by the renderer) and
+        # the insignificant whitespace around it.
+        for child in list(node.children):
+            if child is landing or (child.is_text and not (child.text or "").strip()):
+                continue
+            child.detach()
+            li.append(child)
+        items.append((node, li))
+    if not items:
+        return
+    ol = Node("ol", {"class": "footnotes"})
+    for _, li in items:
+        ol.append(li)
+    for node, _ in items:
+        node.detach()
+    container.append(ol)
+
+
 def _clean_tree(container: Node) -> None:
     """Reduce the winning container to book-safe semantic markup."""
     # In-document fragment links: remember which targets are referenced so
@@ -190,6 +248,10 @@ def _clean_tree(container: Node) -> None:
         href = a.get("href") or ""
         if href.startswith("#") and len(href) > 1:
             referenced.add(href[1:])
+
+    # Regroup scattered footnote-definition blocks before the unwrap pass
+    # below strips the <div>s that hold them together.
+    _normalize_footnote_defs(container, referenced)
 
     for node in list(container.walk()):
         if node is container or node.is_text or node.parent is None:

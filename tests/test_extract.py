@@ -1,6 +1,7 @@
 import unittest
 
 from bookformatter.extract import clean_fragment, extract_article, plain_text_to_html
+from bookformatter.footnotes import inline_footnotes
 
 BLOG_PAGE = """<!DOCTYPE html>
 <html lang="en">
@@ -108,6 +109,32 @@ class ExtractTests(unittest.TestCase):
         self.assertIn('id="f1"', doc.html)
         self.assertNotIn('href="#gone"', doc.html)
         self.assertIn("[2]", doc.html)  # link text kept, wrapper removed
+
+    def test_substack_footnote_defs_become_canonical_list(self):
+        # Substack renders each note as its own <div class="footnote"> with the
+        # text in a sibling <div class="footnote-content">, not an <ol>/<li>.
+        # Extraction must regroup these before the div-unwrapping pass orphans
+        # the note text from its landing anchor.
+        filler = "A reasonably long paragraph, with commas, to win the scoring pass. " * 3
+        page = f"""<html><head><title>Post</title></head><body>
+        <article class="post"><div class="body markup">
+        <p>{filler}Cited here.<a class="footnote-anchor" id="footnote-anchor-1"
+           href="#footnote-1">1</a></p>
+        <p>{filler}</p>
+        <div class="footnote" data-component-name="FootnoteToDOM">
+          <a class="footnote-number" href="#footnote-anchor-1" id="footnote-1">1</a>
+          <div class="footnote-content"><p>The actual note text.</p></div>
+        </div>
+        </div></article></body></html>"""
+        doc = extract_article(page, base_url="https://x.substack.example/")
+        # The note is regrouped as an <li> carrying the referenced anchor id,
+        # holding the note prose (not the bare "1" marker).
+        self.assertIn('<li id="footnote-1"><p>The actual note text.</p></li>', doc.html)
+        self.assertNotIn('class="footnote-content"', doc.html)
+        # And it inlines to a page-bottom footnote span with the real text.
+        out = inline_footnotes(doc.html)
+        self.assertIn('<span class="footnote">The actual note text.</span>', out)
+        self.assertNotIn("<li", out)
 
     def test_plain_text_paragraphs(self):
         out = plain_text_to_html("Para one\nstill one.\n\nPara two & <tag>.")
