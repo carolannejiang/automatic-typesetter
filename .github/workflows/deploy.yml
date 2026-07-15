@@ -5,14 +5,14 @@
 #   BOOKFORMATTER_PASSCODE   optional — passcode visitors must enter to build
 #
 # Run it from the Actions tab ("Run workflow"), or it runs automatically on
-# pushes to main.
+# pushes to the default branch.
 
 name: Deploy to Fly.io
 
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, claude/text-to-book-formatter-7f00e6]
 
 concurrency: fly-deploy
 
