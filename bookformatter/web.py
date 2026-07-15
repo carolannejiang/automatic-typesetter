@@ -178,9 +178,10 @@ def run_build(params: dict, uploads: list, workdir: str,
     if len(inputs) > MAX_INPUTS:
         raise ValueError(f"Too many inputs ({len(inputs)}); the limit is {MAX_INPUTS} per build.")
 
+    include_pictures = _first(params, "include_pictures") == "on"
     opts = ingester.IngestOptions(
         split=_first(params, "split", "auto"),
-        images=_first(params, "images", "download"),
+        images=_first(params, "images", "download") if include_pictures else "strip",
         order=_first(params, "order", "auto"),
         max_items=int(_first(params, "max_items", "0") or 0),
         fetch_full=_first(params, "fetch_full") == "on",
@@ -787,6 +788,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
             (for truncated feeds)</label></div>
         </div>
         <div class="checks" style="margin-top:0.9rem">
+          <label><input type="checkbox" name="include_pictures" checked> Include pictures</label>
           <label><input type="checkbox" name="drop_caps"> Drop caps on chapter openings</label>
           <label><input type="checkbox" name="no_chapter_numbers"> Omit &ldquo;Chapter N&rdquo; labels</label>
           <label><input type="checkbox" name="no_toc"> Omit the contents page (print)</label>
