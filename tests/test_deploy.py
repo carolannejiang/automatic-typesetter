@@ -113,6 +113,22 @@ class PasscodeTests(unittest.TestCase):
         _, body, _ = self.fx.get("/")
         self.assertIn(b'name="passcode"', body)
 
+    def test_page_shows_unlock_gate(self):
+        _, body, _ = self.fx.get("/")
+        self.assertIn(b'<div id="gate">', body)
+        self.assertIn(b'class="locked"', body)
+        self.assertIn(b">Unlock</button>", body)
+
+    def test_unlock_rejects_wrong_password(self):
+        code, resp = self.fx.post("/unlock", {"passcode": "nope"})
+        self.assertEqual(code, 403)
+        self.assertEqual(resp["error"], "Wrong password.")
+
+    def test_unlock_accepts_right_password(self):
+        code, resp = self.fx.post("/unlock", {"passcode": "sesame"})
+        self.assertEqual(code, 200)
+        self.assertTrue(resp["ok"])
+
     def test_build_without_passcode_rejected(self):
         code, resp = self.fx.post("/build", {"pasted": "text"})
         self.assertEqual(code, 403)

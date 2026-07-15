@@ -114,14 +114,7 @@ def _page() -> str:
         "Runs entirely on your machine &mdash; nothing is uploaded anywhere.",
         "Books are pressed on demand &mdash; nothing is stored on the server.",
     )
-    if os.environ.get("BOOKFORMATTER_PASSCODE"):
-        page = page.replace(
-            "<!--EXTRA_FIELDS-->",
-            '<div class="card"><h2>Passcode</h2>'
-            '<label for="passcode">This press is private &mdash; enter its passcode</label>'
-            '<input type="text" id="passcode" name="passcode"></div>',
-        )
-    return page
+    return _web.apply_passcode_gate(page, bool(os.environ.get("BOOKFORMATTER_PASSCODE")))
 
 
 def _respond(start_response, code: int, body: bytes, content_type: str, extra=None):
@@ -205,6 +198,20 @@ def _build(environ, start_response):
         shutil.rmtree(workdir, ignore_errors=True)
 
 
+def _unlock(environ, start_response):
+    """Verify a passcode for the unlock gate. Builds still re-check it."""
+    passcode = os.environ.get("BOOKFORMATTER_PASSCODE", "")
+    try:
+        length = int(environ.get("CONTENT_LENGTH") or 0)
+    except ValueError:
+        length = 0
+    body = environ["wsgi.input"].read(length) if 0 < length <= 4096 else b""
+    params = urllib.parse.parse_qs(body.decode("utf-8", "replace"))
+    if not passcode or _web._first(params, "passcode") == passcode:
+        return _json(start_response, 200, {"ok": True})
+    return _json(start_response, 403, {"error": "Wrong password."})
+
+
 def app(environ, start_response):
     """WSGI entry point."""
     fetch.PUBLIC_MODE = True  # hosted: never fetch internal addresses
@@ -214,6 +221,10 @@ def app(environ, start_response):
     if path in ("/", "/index.html", "/api/index") and method in ("GET", "HEAD"):
         body = b"" if method == "HEAD" else _page().encode("utf-8")
         return _respond(start_response, 200, body, "text/html; charset=utf-8")
+    if path.endswith("/unlock") or path == "/unlock":
+        if method != "POST":
+            return _json(start_response, 405, {"error": "POST here to unlock"})
+        return _unlock(environ, start_response)
     if path.endswith("/build") or path == "/build":
         if method != "POST":
             return _json(start_response, 405, {"error": "POST here to build a book"})

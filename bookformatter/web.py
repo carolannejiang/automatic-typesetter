@@ -420,14 +420,7 @@ class Handler(BaseHTTPRequestHandler):
         if path is None:
             return
         if path in ("", "/", "/index.html"):
-            page = PAGE
-            if getattr(self.server, "passcode", ""):
-                page = page.replace(
-                    "<!--EXTRA_FIELDS-->",
-                    '<div class="card"><h2>Passcode</h2>'
-                    '<label for="passcode">This press is private — enter its passcode</label>'
-                    '<input type="text" id="passcode" name="passcode"></div>',
-                )
+            page = apply_passcode_gate(PAGE, bool(getattr(self.server, "passcode", "")))
             self._send(200, page.encode("utf-8"), "text/html; charset=utf-8")
         elif path == "/status":
             query = urllib.parse.parse_qs(parsed.query)
@@ -461,6 +454,9 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = self._route(parsed.path)
         if path is None:
+            return
+        if path == "/unlock":
+            self._handle_unlock()
             return
         if path != "/build":
             self._json(404, {"error": "not found"})
@@ -502,6 +498,20 @@ class Handler(BaseHTTPRequestHandler):
         thread = threading.Thread(target=_run_build, args=(job, params, uploads), daemon=True)
         thread.start()
         self._json(200, {"id": job.id})
+
+    def _handle_unlock(self):
+        """Verify a passcode for the unlock gate. Builds still re-check it."""
+        passcode = getattr(self.server, "passcode", "")
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        body = self.rfile.read(length) if 0 < length <= 4096 else b""
+        params = urllib.parse.parse_qs(body.decode("utf-8", "replace"))
+        if not passcode or _first(params, "passcode") == passcode:
+            self._json(200, {"ok": True})
+        else:
+            self._json(403, {"error": "Wrong password."})
 
 
 def _normalize_base_path(base: str) -> str:
@@ -665,9 +675,42 @@ ul.warnings { color: var(--warn); font-size: 0.85rem; padding-left: 1.2rem; }
 }
 .downloads a strong { color: var(--accent); }
 footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 2.5rem; }
+
+/* Unlock gate — mirrors carolanne.link/admin */
+#gate { display: none; }
+body.locked .wrap { display: none; }
+body.locked #gate { display: block; }
+body.locked { background: #fff; color: #111; }
+@media (prefers-color-scheme: dark) { body.locked { background: #0b0b0c; color: #f4f4f5; } }
+#gate {
+  --g-bg: #fff; --g-fg: #111; --g-muted: #6b7280; --g-border: #e5e7eb;
+  --g-accent: #111; --g-accent-fg: #fff; --g-danger: #b42318; --g-field-bg: #fff;
+  font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  #gate {
+    --g-bg: #0b0b0c; --g-fg: #f4f4f5; --g-muted: #9ca3af; --g-border: #27272a;
+    --g-accent: #f4f4f5; --g-accent-fg: #0b0b0c; --g-danger: #f97066; --g-field-bg: #161618;
+  }
+}
+#gate .g-main { min-height: 100dvh; display: grid; place-items: start center; padding: min(5vh, 2.5rem) 1.25rem; }
+#gate .g-wrap { width: 100%; max-width: 560px; }
+#gate .g-head { display: flex; align-items: center; justify-content: space-between; margin: 0 0 1.25rem; }
+#gate .g-h1 { font-size: 1.5rem; font-weight: 600; margin: 0; color: var(--g-fg); }
+#gate .g-alert { margin: 0 0 1.25rem; padding: .6rem .75rem; font-size: .9rem; color: var(--g-danger); border: 1px solid var(--g-danger); border-radius: 8px; }
+#gate .g-form { display: grid; gap: 1rem; }
+#gate .g-label { display: grid; gap: .4rem; font-size: .85rem; color: var(--g-muted); }
+#gate .g-input { width: 100%; padding: .65rem .75rem; font-size: 1rem; color: var(--g-fg); background: var(--g-field-bg); border: 1px solid var(--g-border); border-radius: 8px; font-family: inherit; }
+#gate .g-btn { padding: .65rem 1rem; font-size: 1rem; font-weight: 600; color: var(--g-accent-fg); background: var(--g-accent); border: none; border-radius: 8px; cursor: pointer; font-family: inherit; transition: opacity .15s, transform 50ms; }
+#gate .g-btn:disabled { cursor: default; opacity: .55; }
+#gate .g-btn:not(:disabled):hover { opacity: .82; }
+#gate .g-btn:not(:disabled):active { transform: translateY(1px); }
+#gate .g-input:focus-visible, #gate .g-btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+#gate [hidden] { display: none; }
 </style>
 </head>
 <body>
+<!--GATE-->
 <div class="wrap">
   <header class="masthead">
     <h1>bookformatter</h1>
@@ -881,6 +924,72 @@ function showError(text) {
 </body>
 </html>
 """
+
+
+# The unlock gate shown when a passcode is configured. Mirrors the locked
+# screen at carolanne.link/admin (there is no WebAuthn backend here, so the
+# passkey / Touch ID path is left out — password only).
+GATE_HTML = r"""<div id="gate">
+  <main class="g-main">
+    <div class="g-wrap">
+      <div class="g-head"><h1 class="g-h1" id="g-h1">book.carolanne.link</h1></div>
+      <p class="g-alert" id="g-alert" role="alert" hidden></p>
+      <form class="g-form" id="g-form">
+        <label class="g-label">Password
+          <input class="g-input" type="password" id="g-pass" autocomplete="current-password" autofocus>
+        </label>
+        <button class="g-btn" type="submit" id="g-btn">Unlock</button>
+      </form>
+    </div>
+  </main>
+</div>
+<script>
+(function () {
+  var h1 = document.getElementById("g-h1");
+  if (h1) h1.textContent = location.host || "book.carolanne.link";
+  var form = document.getElementById("g-form");
+  var pass = document.getElementById("g-pass");
+  var btn = document.getElementById("g-btn");
+  var alertEl = document.getElementById("g-alert");
+  form.addEventListener("submit", async function (ev) {
+    ev.preventDefault();
+    alertEl.hidden = true;
+    if (!pass.value) return;
+    btn.disabled = true; btn.textContent = "Checking…";
+    try {
+      // Relative URL so the gate works at any mount point (e.g. /book/).
+      const resp = await fetch("unlock", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "passcode=" + encodeURIComponent(pass.value),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.error || "Wrong password.");
+      document.getElementById("passcode").value = pass.value;
+      document.body.classList.remove("locked");
+    } catch (err) {
+      alertEl.textContent = err.message; alertEl.hidden = false;
+      pass.focus(); pass.select();
+    } finally {
+      btn.disabled = false; btn.textContent = "Unlock";
+    }
+  });
+})();
+</script>"""
+
+
+def apply_passcode_gate(page: str, locked: bool) -> str:
+    """Reveal the unlock gate (and stash a hidden passcode field for builds)
+    when a passcode is configured; otherwise leave the placeholders inert."""
+    if not locked:
+        return page
+    page = page.replace("<body>", '<body class="locked">', 1)
+    page = page.replace("<!--GATE-->", GATE_HTML, 1)
+    page = page.replace(
+        "<!--EXTRA_FIELDS-->",
+        '<input type="hidden" id="passcode" name="passcode">', 1,
+    )
+    return page
 
 
 if __name__ == "__main__":
