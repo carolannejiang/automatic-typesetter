@@ -63,6 +63,8 @@ def build_parser() -> argparse.ArgumentParser:
     design.add_argument("--no-chapter-numbers", action="store_true",
                         help="omit 'Chapter N' labels above chapter titles")
     design.add_argument("--no-toc", action="store_true", help="omit the table of contents page in print output")
+    design.add_argument("--no-footnotes", action="store_true",
+                        help="keep footnotes as an end-of-chapter list instead of setting them at the foot of the page")
 
     content = parser.add_argument_group("content handling")
     content.add_argument("--split", default="auto", choices=["auto", "h1", "h2", "none"],
@@ -145,6 +147,7 @@ def main(argv=None) -> int:
             line_height=args.line_height, chapter_start=args.chapter_start,
             toc=not args.no_toc, drop_caps=args.drop_caps,
             chapter_numbers=not args.no_chapter_numbers,
+            footnotes=not args.no_footnotes,
         )
         with open(html_path, "w", encoding="utf-8") as fh:
             fh.write(page)

@@ -104,6 +104,10 @@ Paged Media:
 - front matter (title page, copyright, table of contents) with hidden
   folios; body matter restarts at page 1 on a recto
 - TOC with dot leaders and real page numbers
+- footnotes set at the foot of the citing page and numbered per page —
+  reference markers and end-of-piece note lists (the Markdown/Pandoc/web
+  convention) are folded into page-bottom notes; `--no-footnotes` keeps them
+  as an end-of-chapter list instead
 - `* * *` scene-break ornaments for `---`/`<hr>`, styled blockquotes,
   tables, figures with captions, code blocks
 
@@ -115,6 +119,7 @@ Rendering engines (`--pdf-engine auto|weasyprint|chrome|none`):
 | Folios + front-matter numbering restart | ✓ | ✓ | ✓* |
 | Recto chapter openers (blank versos) | ✓ | — (falls back to plain page break) | ✓* |
 | Running heads, TOC page numbers | ✓ | — | — |
+| Foot-of-page footnotes | ✓ | — (notes fall back to inline text) | — |
 
 \* recent Chromium-based browsers.
 

@@ -219,6 +219,7 @@ def run_build(params: dict, uploads: list, workdir: str,
     drop_caps = _first(params, "drop_caps") == "on"
     chapter_numbers = _first(params, "no_chapter_numbers") != "on"
     toc = _first(params, "no_toc") != "on"
+    footnotes = _first(params, "no_footnotes") != "on"
     font_size = _clean_size(_first(params, "font_size"), "11pt", _FONT_SIZE_RE)
     line_height = _clean_size(_first(params, "line_height"), "1.45", _LINE_HEIGHT_RE)
     pdf_engine = _first(params, "pdf_engine", "auto")
@@ -252,6 +253,7 @@ def run_build(params: dict, uploads: list, workdir: str,
             book, theme=theme, trim=trim, font_size=font_size,
             line_height=line_height, chapter_start=chapter_start,
             toc=toc, drop_caps=drop_caps, chapter_numbers=chapter_numbers,
+            footnotes=footnotes,
         )
         with open(html_path, "w", encoding="utf-8") as fh:
             fh.write(page)
@@ -788,6 +790,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
           <label><input type="checkbox" name="drop_caps"> Drop caps on chapter openings</label>
           <label><input type="checkbox" name="no_chapter_numbers"> Omit &ldquo;Chapter N&rdquo; labels</label>
           <label><input type="checkbox" name="no_toc"> Omit the contents page (print)</label>
+          <label><input type="checkbox" name="no_footnotes"> Endnotes instead of foot-of-page notes</label>
         </div>
       </details>
     </div>

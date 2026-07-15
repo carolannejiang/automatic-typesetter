@@ -226,6 +226,31 @@ nav.print-toc a { text-decoration: none; color: inherit; }
 nav.print-toc a::after {
   content: leader(". ") target-counter(attr(href url), page);
 }
+
+/* Footnotes: set at the foot of the citing page and numbered per page.
+   float:footnote and the @footnote region are CSS Paged Media features that
+   WeasyPrint and Prince honor; headless Chrome lacks them, so notes fall
+   back to inline text there — the same engine tier as running heads and TOC
+   folios. The call (superscript in the text) and marker (in the note) are
+   generated automatically from the footnote counter. */
+@page { @footnote {
+  border-top: 0.4pt solid #666;
+  margin-top: 0.5em;
+  padding-top: 0.3em;
+} }
+span.footnote {
+  float: footnote;
+  font-size: 0.8em;
+  line-height: 1.3;
+  text-align: left;
+  text-indent: 0;
+  hyphens: none; -webkit-hyphens: none;
+}
+span.footnote p { display: inline; margin: 0; text-indent: 0; }
+span.footnote::footnote-call {
+  vertical-align: super; font-size: 0.7em; line-height: 0;
+}
+span.footnote::footnote-marker { font-weight: normal; }
 """
 )
 
