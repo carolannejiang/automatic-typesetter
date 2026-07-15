@@ -4,7 +4,7 @@ Target: **`book.carolanne.link`**. The domain already lives on Vercel
 (Vercel nameservers), and `book` is currently only covered by a wildcard
 that serves a 404 — free to claim. Adjust names for any other domain.
 
-## Option A — All on Vercel (chosen; no new accounts)
+## Option A — All on Vercel (no new accounts)
 
 The repo contains a serverless adapter (`api/index.py`, `vercel.json`,
 `bookformatter/serverless.py`): the same press, built synchronously per
@@ -41,7 +41,7 @@ may need a smaller "max posts" or the CLI instead. Request bodies
 book streams straight back. The SSRF guard is always on, and Vercel's
 Hobby plan is for non-commercial use.
 
-## Option B — Fly.io (adds server-rendered WeasyPrint PDFs)
+## Option B — Fly.io (adds server-rendered WeasyPrint PDFs; currently serving book.carolanne.link)
 
 For one-click, full-fidelity print PDFs (running heads, TOC page numbers,
 recto chapter openers), run the container on Fly and point the subdomain
