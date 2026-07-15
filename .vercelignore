@@ -1,0 +1,10 @@
+tests/
+examples/
+docs/
+build/
+dist/
+.github/
+Dockerfile
+fly.toml
+*.egg-info/
+__pycache__/

@@ -111,158 +111,197 @@ def _clean_size(value: str, default: str, pattern) -> str:
     return value if pattern.match(value) else default
 
 
+class BuildResult:
+    """What a build produced, independent of how it's hosted."""
+
+    def __init__(self):
+        self.files: dict = {}      # display name -> absolute path
+        self.warnings: list = []
+        self.book_title = ""
+        self.stats = ""
+
+
+def run_build(params: dict, uploads: list, workdir: str,
+              progress=lambda message: None, allow_pdf: bool = True,
+              out: BuildResult = None) -> BuildResult:
+    """The build pipeline shared by the local server and the serverless
+    function. uploads: list of (field_name, filename, bytes). Raises
+    ValueError for user-facing input problems."""
+    out = out if out is not None else BuildResult()
+    progress("Collecting content…")
+
+    inputs: list = []
+    input_dir = os.path.join(workdir, "inputs")
+    os.makedirs(input_dir, exist_ok=True)
+
+    for line in _first(params, "urls").splitlines():
+        url = line.strip()
+        if not url:
+            continue
+        if not url.startswith(("http://", "https://")):
+            url = "https://" + url
+        inputs.append(url)
+
+    cover: Asset = None
+    taken: set = set()
+    for field, filename, data in uploads:
+        if field == "cover":
+            media, ext = sniff_image(data, "")
+            if media:
+                cover = Asset(filename=f"images/cover{ext}", data=data, media_type=media)
+            else:
+                out.warnings.append(
+                    f"cover {filename!r} is not a recognized image (jpg/png/gif/webp/svg)"
+                )
+            continue
+        ext = os.path.splitext(filename or "")[1].lower()
+        if ext not in ALLOWED_UPLOAD_EXTS:
+            out.warnings.append(
+                f"skipped upload {filename!r}: unsupported type "
+                f"(use {', '.join(sorted(ALLOWED_UPLOAD_EXTS))})"
+            )
+            continue
+        path = os.path.join(input_dir, _safe_upload_name(filename, taken))
+        with open(path, "wb") as fh:
+            fh.write(data)
+        inputs.append(path)
+
+    pasted = _first(params, "pasted")
+    if pasted:
+        path = os.path.join(input_dir, "pasted-text.md")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(pasted)
+        inputs.append(path)
+
+    if not inputs:
+        raise ValueError("No input given — add a link, a file, or pasted text.")
+    if len(inputs) > MAX_INPUTS:
+        raise ValueError(f"Too many inputs ({len(inputs)}); the limit is {MAX_INPUTS} per build.")
+
+    opts = ingester.IngestOptions(
+        split=_first(params, "split", "auto"),
+        images=_first(params, "images", "download"),
+        order=_first(params, "order", "auto"),
+        max_items=int(_first(params, "max_items", "0") or 0),
+        fetch_full=_first(params, "fetch_full") == "on",
+    )
+    result = ingester.ingest(inputs, opts)
+    out.warnings.extend(w for w in result.warnings if w not in out.warnings)
+    if not result.chapters:
+        raise ValueError("No chapters could be produced from those inputs.")
+
+    pub_date = _first(params, "pub_date")
+    if pub_date and not re.match(r"^\d{4}(-\d{2}){0,2}$", pub_date):
+        out.warnings.append(f"ignored publication date {pub_date!r} (use YYYY-MM-DD)")
+        pub_date = ""
+    meta = BookMeta(
+        title=_first(params, "title") or result.title_hint or "Untitled",
+        author=_first(params, "author") or result.author_hint or "",
+        language=_first(params, "language", "en") or "en",
+        description=_first(params, "description") or None,
+        publisher=_first(params, "publisher") or None,
+        rights=_first(params, "rights") or None,
+        date=pub_date or _dt.date.today().isoformat(),
+        source_url=result.source_url,
+    )
+    book = Book(meta=meta, chapters=result.chapters, assets=result.assets, cover=cover)
+    out.book_title = meta.title
+    out.stats = (
+        f"{len(book.chapters)} chapter(s) · {book.word_count():,} words"
+        + (f" · {len(book.assets)} image(s)" if book.assets else "")
+    )
+
+    theme = _first(params, "theme", "classic")
+    trim = _first(params, "trim", "6x9")
+    if trim not in themes.TRIM_SIZES:
+        trim = "6x9"
+    chapter_start = _first(params, "chapter_start", "right")
+    drop_caps = _first(params, "drop_caps") == "on"
+    chapter_numbers = _first(params, "no_chapter_numbers") != "on"
+    toc = _first(params, "no_toc") != "on"
+    font_size = _clean_size(_first(params, "font_size"), "11pt", _FONT_SIZE_RE)
+    line_height = _clean_size(_first(params, "line_height"), "1.45", _LINE_HEIGHT_RE)
+    pdf_engine = _first(params, "pdf_engine", "auto")
+    if pdf_engine not in ("auto", "weasyprint", "chrome", "none"):
+        pdf_engine = "auto"
+    formats = set(params.get("formats") or ["epub", "pdf"])
+    if "pdf" in formats and not allow_pdf:
+        formats.discard("pdf")
+        formats.add("html")
+        out.warnings.append(
+            "This host can't render PDFs server-side. Download the print HTML, open it "
+            "in Chrome or Edge, and use File → Print → Save as PDF — that gives correct "
+            "trim, margins, and page numbers."
+        )
+
+    out_dir = os.path.join(workdir, "out")
+    os.makedirs(out_dir, exist_ok=True)
+    name = slugify(_first(params, "name") or meta.title)
+
+    if "epub" in formats:
+        progress("Writing EPUB…")
+        epub_path = os.path.join(out_dir, f"{name}.epub")
+        epub_writer.write_epub(book, epub_path, theme=theme, drop_caps=drop_caps,
+                               chapter_numbers=chapter_numbers)
+        out.files[f"{name}.epub"] = epub_path
+
+    if "pdf" in formats or "html" in formats:
+        progress("Typesetting pages…")
+        html_path = os.path.join(out_dir, f"{name}.html")
+        page = printbook.build_print_html(
+            book, theme=theme, trim=trim, font_size=font_size,
+            line_height=line_height, chapter_start=chapter_start,
+            toc=toc, drop_caps=drop_caps, chapter_numbers=chapter_numbers,
+        )
+        with open(html_path, "w", encoding="utf-8") as fh:
+            fh.write(page)
+        if "html" in formats:
+            out.files[f"{name}.html"] = html_path
+
+        if "pdf" in formats and pdf_engine == "none":
+            out.files[f"{name}.html"] = html_path
+            out.warnings.append(
+                "PDF engine 'none': download the HTML and print it to PDF from your browser."
+            )
+        elif "pdf" in formats:
+            progress("Rendering PDF…")
+            pdf_path = os.path.join(out_dir, f"{name}.pdf")
+            try:
+                engine = printbook.write_pdf(html_path, pdf_path, engine=pdf_engine)
+                out.files[f"{name}.pdf"] = pdf_path
+                if engine == "chrome":
+                    out.warnings.append(
+                        "PDF rendered with Chrome: trim, margins, breaks and folios are "
+                        "correct, but running heads and TOC page numbers need WeasyPrint "
+                        "(pip install weasyprint)."
+                    )
+            except printbook.PdfError as exc:
+                out.files[f"{name}.html"] = html_path
+                out.warnings.append(
+                    f"Could not render a PDF ({exc}). Download the HTML and print it "
+                    "to PDF from your browser instead."
+                )
+
+    return out
+
+
 def _run_build(job: Job, params: dict, uploads: list) -> None:
-    """uploads: list of (field_name, filename, bytes)."""
+    """Thread entry for the local server: runs the shared pipeline while
+    exposing live status through the polled Job."""
     job.message = "Waiting for a free press…"
     _build_slots.acquire()
     try:
         job.status = "running"
-        job.message = "Collecting content…"
+        live = BuildResult()
+        live.files = job.files        # shared references so the polled job
+        live.warnings = job.warnings  # shows files/warnings as they land
 
-        inputs: list = []
-        input_dir = os.path.join(job.workdir, "inputs")
-        os.makedirs(input_dir, exist_ok=True)
+        def progress(message):
+            job.message = message
 
-        for line in _first(params, "urls").splitlines():
-            url = line.strip()
-            if not url:
-                continue
-            if not url.startswith(("http://", "https://")):
-                url = "https://" + url
-            inputs.append(url)
-
-        cover: Asset = None
-        taken: set = set()
-        for field, filename, data in uploads:
-            if field == "cover":
-                media, ext = sniff_image(data, "")
-                if media:
-                    cover = Asset(filename=f"images/cover{ext}", data=data, media_type=media)
-                else:
-                    job.warnings.append(
-                        f"cover {filename!r} is not a recognized image (jpg/png/gif/webp/svg)"
-                    )
-                continue
-            ext = os.path.splitext(filename or "")[1].lower()
-            if ext not in ALLOWED_UPLOAD_EXTS:
-                job.warnings.append(
-                    f"skipped upload {filename!r}: unsupported type "
-                    f"(use {', '.join(sorted(ALLOWED_UPLOAD_EXTS))})"
-                )
-                continue
-            path = os.path.join(input_dir, _safe_upload_name(filename, taken))
-            with open(path, "wb") as fh:
-                fh.write(data)
-            inputs.append(path)
-
-        pasted = _first(params, "pasted")
-        if pasted:
-            path = os.path.join(input_dir, "pasted-text.md")
-            with open(path, "w", encoding="utf-8") as fh:
-                fh.write(pasted)
-            inputs.append(path)
-
-        if not inputs:
-            raise ValueError("No input given — add a link, a file, or pasted text.")
-        if len(inputs) > MAX_INPUTS:
-            raise ValueError(f"Too many inputs ({len(inputs)}); the limit is {MAX_INPUTS} per build.")
-
-        opts = ingester.IngestOptions(
-            split=_first(params, "split", "auto"),
-            images=_first(params, "images", "download"),
-            order=_first(params, "order", "auto"),
-            max_items=int(_first(params, "max_items", "0") or 0),
-            fetch_full=_first(params, "fetch_full") == "on",
-        )
-        result = ingester.ingest(inputs, opts)
-        job.warnings.extend(w for w in result.warnings if w not in job.warnings)
-        if not result.chapters:
-            raise ValueError("No chapters could be produced from those inputs.")
-
-        pub_date = _first(params, "pub_date")
-        if pub_date and not re.match(r"^\d{4}(-\d{2}){0,2}$", pub_date):
-            job.warnings.append(f"ignored publication date {pub_date!r} (use YYYY-MM-DD)")
-            pub_date = ""
-        meta = BookMeta(
-            title=_first(params, "title") or result.title_hint or "Untitled",
-            author=_first(params, "author") or result.author_hint or "",
-            language=_first(params, "language", "en") or "en",
-            description=_first(params, "description") or None,
-            publisher=_first(params, "publisher") or None,
-            rights=_first(params, "rights") or None,
-            date=pub_date or _dt.date.today().isoformat(),
-            source_url=result.source_url,
-        )
-        book = Book(meta=meta, chapters=result.chapters, assets=result.assets, cover=cover)
-        job.book_title = meta.title
-        job.stats = (
-            f"{len(book.chapters)} chapter(s) · {book.word_count():,} words"
-            + (f" · {len(book.assets)} image(s)" if book.assets else "")
-        )
-
-        theme = _first(params, "theme", "classic")
-        trim = _first(params, "trim", "6x9")
-        if trim not in themes.TRIM_SIZES:
-            trim = "6x9"
-        chapter_start = _first(params, "chapter_start", "right")
-        drop_caps = _first(params, "drop_caps") == "on"
-        chapter_numbers = _first(params, "no_chapter_numbers") != "on"
-        toc = _first(params, "no_toc") != "on"
-        font_size = _clean_size(_first(params, "font_size"), "11pt", _FONT_SIZE_RE)
-        line_height = _clean_size(_first(params, "line_height"), "1.45", _LINE_HEIGHT_RE)
-        pdf_engine = _first(params, "pdf_engine", "auto")
-        if pdf_engine not in ("auto", "weasyprint", "chrome", "none"):
-            pdf_engine = "auto"
-        formats = set(params.get("formats") or ["epub", "pdf"])
-
-        out_dir = os.path.join(job.workdir, "out")
-        os.makedirs(out_dir, exist_ok=True)
-        name = slugify(_first(params, "name") or meta.title)
-
-        if "epub" in formats:
-            job.message = "Writing EPUB…"
-            epub_path = os.path.join(out_dir, f"{name}.epub")
-            epub_writer.write_epub(book, epub_path, theme=theme, drop_caps=drop_caps,
-                                   chapter_numbers=chapter_numbers)
-            job.files[f"{name}.epub"] = epub_path
-
-        if "pdf" in formats or "html" in formats:
-            job.message = "Typesetting pages…"
-            html_path = os.path.join(out_dir, f"{name}.html")
-            page = printbook.build_print_html(
-                book, theme=theme, trim=trim, font_size=font_size,
-                line_height=line_height, chapter_start=chapter_start,
-                toc=toc, drop_caps=drop_caps, chapter_numbers=chapter_numbers,
-            )
-            with open(html_path, "w", encoding="utf-8") as fh:
-                fh.write(page)
-            if "html" in formats:
-                job.files[f"{name}.html"] = html_path
-
-            if "pdf" in formats and pdf_engine == "none":
-                job.files[f"{name}.html"] = html_path
-                job.warnings.append(
-                    "PDF engine 'none': download the HTML and print it to PDF from your browser."
-                )
-            elif "pdf" in formats:
-                job.message = "Rendering PDF…"
-                pdf_path = os.path.join(out_dir, f"{name}.pdf")
-                try:
-                    engine = printbook.write_pdf(html_path, pdf_path, engine=pdf_engine)
-                    job.files[f"{name}.pdf"] = pdf_path
-                    if engine == "chrome":
-                        job.warnings.append(
-                            "PDF rendered with Chrome: trim, margins, breaks and folios are "
-                            "correct, but running heads and TOC page numbers need WeasyPrint "
-                            "(pip install weasyprint)."
-                        )
-                except printbook.PdfError as exc:
-                    job.files[f"{name}.html"] = html_path
-                    job.warnings.append(
-                        f"Could not render a PDF ({exc}). Download the HTML and print it "
-                        "to PDF from your browser instead."
-                    )
-
+        result = run_build(params, uploads, job.workdir, progress=progress, out=live)
+        job.book_title = result.book_title
+        job.stats = result.stats
         job.message = "Done"
         job.status = "done"
     except Exception as exc:  # surfaced to the UI

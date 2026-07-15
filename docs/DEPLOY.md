@@ -1,58 +1,73 @@
 # Putting the press on your domain
 
-Target: **`book.carolanne.link`** (a subdomain — the simplest setup).
-`carolanne.link` uses Vercel's nameservers, and `book` is currently only
-covered by a wildcard that serves a 404, so the name is free to claim.
-Adjust names for any other domain.
+Target: **`book.carolanne.link`**. The domain already lives on Vercel
+(Vercel nameservers), and `book` is currently only covered by a wildcard
+that serves a 404 — free to claim. Adjust names for any other domain.
 
-Vercel itself can't run this app (builds are long-running Python
-processes needing WeasyPrint), so the app runs on **Fly.io** and the
-subdomain points at it. The repo already contains everything: the
-`Dockerfile`, `fly.toml`, and a GitHub Actions workflow that performs the
-whole deployment.
+## Option A — All on Vercel (chosen; no new accounts)
 
-## One-time setup (the only human steps)
+The repo contains a serverless adapter (`api/index.py`, `vercel.json`,
+`bookformatter/serverless.py`): the same press, built synchronously per
+request. EPUBs are identical to the local tool. PDFs are delivered as
+**print HTML** — open the download and File → Print → Save as PDF
+(Chrome/Edge give correct trim, margins, and page numbers; server-side
+PDF needs system libraries Vercel's Python functions don't have — see
+Option B if you want that).
 
-1. **Create a Fly.io account** at <https://fly.io> (it asks for a card;
-   this app scales to zero when idle and costs at most a few dollars a
-   month, usually cents).
+Setup, all in the Vercel dashboard (~5 minutes):
 
-2. **Make a deploy token**: Fly dashboard → *Tokens* (or
-   `fly tokens create deploy`). Copy it.
+1. **Import the repo**: <https://vercel.com/new> → Import
+   `carolannejiang/bookformatter`. Framework preset "Other", no build
+   command, defaults as detected → **Deploy**. (The production branch is
+   the repo's default branch; every push to it redeploys automatically.)
 
-3. **Add repository secrets** on GitHub
-   (`carolannejiang/bookformatter` → Settings → Secrets and variables →
-   Actions → *New repository secret*):
-   - `FLY_API_TOKEN` — the token from step 2 (required)
-   - `BOOKFORMATTER_PASSCODE` — any phrase; visitors must type it to run
-     builds (optional but recommended — the press has no accounts)
+2. **Set the passcode** (recommended — builds are real compute on your
+   account): Project → Settings → Environment Variables →
+   `BOOKFORMATTER_PASSCODE` = a phrase you like → save, then Deployments
+   → ⋯ on the latest → Redeploy so it takes effect.
 
-4. **Run the workflow**: Actions tab → *Deploy to Fly.io* → *Run
-   workflow*. It creates the app (`carolanne-bookpress`), sets the
-   passcode, deploys, and requests the certificate for
-   `book.carolanne.link`. (If the app name is already taken on Fly,
-   change it in `fly.toml` and in `.github/workflows/deploy.yml`, then
-   rerun.)
+3. **Attach the subdomain**: Project → Settings → Domains → add
+   `book.carolanne.link`. Because the domain is on Vercel DNS in the same
+   account, Vercel configures the record and certificate itself —
+   no manual DNS.
 
-5. **Add the DNS record** in Vercel (dashboard → *Domains* →
-   `carolanne.link` → *DNS Records*):
+That's it: `https://book.carolanne.link` is live.
 
-   | Type  | Name   | Value                          |
-   |-------|--------|--------------------------------|
-   | CNAME | `book` | `carolanne-bookpress.fly.dev.` |
+Hosted limits to know about: each build must finish inside the function's
+window (60 s as configured in `vercel.json`; on plans with Fluid compute
+you can raise `maxDuration` to 300) — a huge blog with "fetch full posts"
+may need a smaller "max posts" or the CLI instead. Request bodies
+(uploads) cap at ~4.5 MB on Vercel. Nothing is stored server-side; the
+book streams straight back. The SSRF guard is always on, and Vercel's
+Hobby plan is for non-commercial use.
 
-   The explicit record overrides the wildcard for `book`. Fly notices the
-   DNS, finishes the Let's Encrypt certificate automatically (usually
-   within a few minutes), and `https://book.carolanne.link` is live.
+## Option B — Fly.io (adds server-rendered WeasyPrint PDFs)
 
-After that, every push to `main` redeploys automatically, and the
-workflow can be rerun manually any time.
+For one-click, full-fidelity print PDFs (running heads, TOC page numbers,
+recto chapter openers), run the container on Fly and point the subdomain
+there instead. The repo ships `Dockerfile`, `fly.toml`, and a GitHub
+Actions workflow (`.github/workflows/deploy.yml`) that does the whole
+deployment.
+
+1. Create a Fly.io account, make a deploy token (dashboard → Tokens).
+2. Add GitHub repo secrets: `FLY_API_TOKEN` (required),
+   `BOOKFORMATTER_PASSCODE` (recommended).
+3. Run the *Deploy to Fly.io* workflow from the Actions tab. It creates
+   app `carolanne-bookpress`, deploys, and requests the certificate for
+   `book.carolanne.link`.
+4. DNS: in Vercel → Domains → `carolanne.link` → DNS Records, add
+   `CNAME book → carolanne-bookpress.fly.dev.` (an explicit record
+   overrides the wildcard).
+
+Cost: the machine stops when idle; typically cents per month.
+
+Both options can coexist (e.g. Vercel at `book.` and Fly at `press.`),
+and switching later is just moving the DNS/domain attachment.
 
 ## Serving under a path instead (`carolanne.link/book`)
 
-Also supported. Deploy the same app with the base-path env set
-(`fly secrets set BOOKFORMATTER_BASE_PATH=/book` or the env var on any
-host), then add rewrites to the Vercel project that serves the domain:
+Supported by the local/Fly server via `BOOKFORMATTER_BASE_PATH=/book`,
+proxied with rewrites from the Vercel project that serves the domain:
 
 ```json
 {
@@ -79,22 +94,23 @@ nginx.
 
 ## What public mode does
 
-`BOOKFORMATTER_PUBLIC=1` (default in the Docker image) turns on:
+`BOOKFORMATTER_PUBLIC=1` (always on in the serverless function; default
+in the Docker image) turns on:
 
 - **SSRF guard** — user-submitted URLs that resolve to private/internal
   addresses (localhost, 10.x, 192.168.x, 169.254.x, …) are refused, on
   every redirect hop, so visitors can't use the server to probe its
   network.
-- **Rate limiting** — 6 builds per 15 minutes per client IP (reads
-  `X-Forwarded-For` when behind a proxy).
-- Existing caps apply everywhere: 100 MB request body, 100 inputs per
-  build, 20 MB per fetched resource, 2 concurrent builds (others queue),
-  20 retained jobs.
+- **Rate limiting** (long-running server only) — 6 builds per 15 minutes
+  per client IP (reads `X-Forwarded-For` behind a proxy). The serverless
+  function relies on the passcode instead.
+- Caps everywhere: 100 inputs per build, 20 MB per fetched resource,
+  request-body limits, 2 concurrent builds on the long-running server.
 
 `BOOKFORMATTER_PASSCODE` adds a passcode field to the page; builds
 without the right passcode are rejected.
 
-Honest limitations of the hosted setup: jobs live in memory (a restart
-forgets in-flight builds), TLS comes from the platform (Fly/Vercel), and
+Honest limitations of hosting: long-running-server jobs live in memory (a
+restart forgets in-flight builds), TLS comes from the platform, and
 DNS-rebinding SSRF is out of scope. For a personal press behind a
 passcode, that's a reasonable trade.
