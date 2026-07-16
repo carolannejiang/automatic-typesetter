@@ -119,6 +119,12 @@ class PasscodeTests(unittest.TestCase):
         self.assertIn(b'class="locked"', body)
         self.assertIn(b">Unlock</button>", body)
 
+    def test_gate_offers_touch_id(self):
+        _, body, _ = self.fx.get("/")
+        self.assertIn(b"Unlock with Touch ID", body)
+        self.assertIn(b"Set up Touch ID", body)
+        self.assertIn(b"navigator.credentials", body)
+
     def test_unlock_rejects_wrong_password(self):
         code, resp = self.fx.post("/unlock", {"passcode": "nope"})
         self.assertEqual(code, 403)
