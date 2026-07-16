@@ -608,61 +608,67 @@ PAGE = r"""<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>bookformatter — make a book</title>
 <style>
+/* Palette + type mirror carolanne.link/admin (the link shortener). */
 :root {
-  --paper: #f7f3ea; --card: #fffdf8; --ink: #26211a; --muted: #6f6656;
-  --line: #e2d9c6; --accent: #7a2e1d; --accent-ink: #fff;
-  --ok: #2e6b34; --warn: #8a6d1a; --err: #a03123;
+  color-scheme: light dark;
+  --paper: #fff; --card: #fff; --field: #fff; --ink: #111; --muted: #6b7280;
+  --line: #e5e7eb; --accent: #111; --accent-ink: #fff; --link: #2563eb;
+  --ok: #2e6b34; --warn: #8a6d1a; --err: #b42318;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #191713; --card: #211e19; --ink: #ece5d8; --muted: #a89c86;
-    --line: #3a352c; --accent: #c96f4a; --accent-ink: #1b1712;
-    --ok: #7fc487; --warn: #d9b95c; --err: #e08578;
+    --paper: #0b0b0c; --card: #161618; --field: #161618; --ink: #f4f4f5; --muted: #9ca3af;
+    --line: #27272a; --accent: #f4f4f5; --accent-ink: #0b0b0c; --link: #60a5fa;
+    --ok: #7fc487; --warn: #d9b95c; --err: #f97066;
   }
 }
 * { box-sizing: border-box; }
 body {
   margin: 0; background: var(--paper); color: var(--ink);
-  font: 16px/1.55 Georgia, "Iowan Old Style", "Times New Roman", serif;
+  font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
-.wrap { max-width: 780px; margin: 0 auto; padding: 2.2rem 1.2rem 4rem; }
-header.masthead { text-align: center; margin-bottom: 2rem; }
-header.masthead h1 {
-  font-variant: small-caps; letter-spacing: 0.06em; font-weight: normal;
-  font-size: 2rem; margin: 0 0 0.2rem;
-}
-header.masthead .rule { color: var(--muted); letter-spacing: 0.5em; }
-header.masthead p { color: var(--muted); margin: 0.5rem 0 0; font-style: italic; }
+.wrap { max-width: 780px; margin: 0 auto; padding: min(5vh, 2.5rem) 1.25rem 4rem; }
+header.masthead { margin-bottom: 1.75rem; }
+header.masthead h1 { font-size: 1.6rem; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+header.masthead p { color: var(--muted); margin: 0.35rem 0 0; }
 .card {
-  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
-  padding: 1.4rem 1.5rem; margin-bottom: 1.2rem;
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 1.4rem 1.5rem; margin-bottom: 1rem;
 }
 .card h2 {
-  font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.18em;
-  color: var(--muted); margin: 0 0 0.9rem; font-weight: normal;
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--muted); margin: 0 0 1rem; font-weight: 700;
 }
-label { display: block; font-size: 0.85rem; color: var(--muted); margin: 0.8rem 0 0.25rem; }
+label { display: block; font-size: 0.85rem; color: var(--muted); margin: 0.9rem 0 0.3rem; }
 input[type=text], textarea, select {
-  width: 100%; padding: 0.55rem 0.7rem; border: 1px solid var(--line);
-  border-radius: 6px; background: var(--paper); color: var(--ink);
-  font: inherit; font-size: 0.95rem;
+  width: 100%; padding: 0.6rem 0.75rem; border: 1px solid var(--line);
+  border-radius: 8px; background: var(--field); color: var(--ink);
+  font: inherit; font-size: 1rem;
 }
 textarea { resize: vertical; }
 input[type=file] { font-size: 0.9rem; color: var(--muted); margin-top: 0.2rem; }
+input[type=checkbox] { accent-color: var(--accent); }
+a:focus-visible, button:focus-visible, input:focus-visible,
+textarea:focus-visible, select:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--link); outline-offset: 2px;
+}
 .row { display: flex; gap: 1rem; flex-wrap: wrap; }
 .row > div { flex: 1 1 160px; }
 .checks { display: flex; gap: 1.2rem; flex-wrap: wrap; margin-top: 0.4rem; }
-.checks label { display: inline-flex; gap: 0.4rem; align-items: center; margin: 0; color: var(--ink); font-size: 0.95rem; }
+.checks label { display: inline-flex; gap: 0.4rem; align-items: center; margin: 0; color: var(--ink); font-size: 0.9rem; }
 details { margin-top: 0.9rem; }
-summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; }
+summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
 button.build {
-  display: block; width: 100%; padding: 0.85rem; margin-top: 0.4rem;
+  display: block; width: 100%; padding: 0.7rem 1rem; margin-top: 0.4rem;
   background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 8px;
-  font: inherit; font-size: 1.05rem; letter-spacing: 0.04em; cursor: pointer;
+  font: inherit; font-size: 1rem; font-weight: 600; cursor: pointer;
+  transition: opacity .15s, transform 50ms;
 }
-button.build:disabled { opacity: 0.6; cursor: wait; }
+button.build:not(:disabled):hover { opacity: 0.82; }
+button.build:not(:disabled):active { transform: translateY(1px); }
+button.build:disabled { opacity: 0.55; cursor: wait; }
 #status { display: none; }
-#status .msg { font-style: italic; }
+#status .msg { color: var(--muted); }
 #status .spin::after { content: "…"; animation: dots 1.2s steps(4) infinite; }
 @keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
 .stats { color: var(--muted); font-size: 0.9rem; }
@@ -670,8 +676,8 @@ ul.warnings { color: var(--warn); font-size: 0.85rem; padding-left: 1.2rem; }
 .error { color: var(--err); }
 .downloads { display: flex; gap: 0.8rem; flex-wrap: wrap; margin-top: 0.8rem; }
 .downloads a {
-  padding: 0.6rem 1.1rem; border: 1px solid var(--line); border-radius: 8px;
-  background: var(--paper); color: var(--ink); text-decoration: none; font-size: 0.95rem;
+  padding: 0.55rem 0.9rem; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--field); color: var(--ink); text-decoration: none; font-size: 0.9rem; font-weight: 600;
 }
 .downloads a strong { color: var(--accent); }
 footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 2.5rem; }
@@ -724,7 +730,6 @@ body.locked { background: #fff; color: #111; }
 <div class="wrap">
   <header class="masthead">
     <h1>bookformatter</h1>
-    <div class="rule">&#8258; &#8258; &#8258;</div>
     <p>Turn websites, blogs, and manuscripts into traditional books.</p>
   </header>
 
