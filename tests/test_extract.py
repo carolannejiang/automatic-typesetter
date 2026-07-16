@@ -89,6 +89,28 @@ class ExtractTests(unittest.TestCase):
         doc = extract_article("<html><body><p>short page</p></body></html>")
         self.assertIn("short page", doc.html)
 
+    def test_main_column_named_sidebar_survives(self):
+        # Bootstrap-style themes (e.g. Strange Horizons) name the wide main
+        # content column with a layout word like "sidebar":
+        # `col-md-8 col-md-push-4 index-right-sidebar`. The article body must
+        # survive even though the class carries the word "sidebar", while a
+        # real, link-dense sidebar is still dropped.
+        prose = ("The tour guide toweled him off and recited the welcome "
+                 "script, all Fear Not and You are a citizen, while the pod "
+                 "hissed and dripped onto the polished floor. " * 4)
+        page = f"""<!DOCTYPE html><html><head><title>Utopia</title></head><body>
+        <div class="row">
+          <div class="col-md-4 col-md-pull-8 index-left-sidebar">
+            <ul><li><a href="/a">Recent one</a></li><li><a href="/b">Recent two</a></li></ul>
+          </div>
+          <div class="col-md-8 col-md-push-4 index-right-sidebar">
+            <div class="content"><p>{prose}</p><p>{prose}</p></div>
+          </div>
+        </div></body></html>"""
+        doc = extract_article(page, base_url="https://strangehorizons.example/x")
+        self.assertIn("toweled him off", doc.html)
+        self.assertNotIn("Recent one", doc.html)
+
     def test_clean_fragment_wraps_stray_text(self):
         out = clean_fragment("plain leading text<p>then a paragraph</p>")
         self.assertTrue(out.startswith("<p>plain leading text</p>"))

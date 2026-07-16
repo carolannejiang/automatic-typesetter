@@ -37,6 +37,13 @@ _POSITIVE_HINT = re.compile(
 )
 _AD_HINT = re.compile(r"(^|[-_ ])ads?([-_ ]|$)", re.I)
 
+# Layout words that can legitimately name a *main content* column in
+# Bootstrap-style themes. Strange Horizons, for instance, wraps the story in
+# <div class="col-md-8 col-md-push-4 index-right-sidebar"> — a wide column
+# pushed to the right of a left sidebar — so the bare word "sidebar" trips
+# _NEGATIVE_HINT even though this container is the article body.
+_LAYOUT_HINT = re.compile(r"(^|[-_ ])(side-?bar)([-_ ]|$)", re.I)
+
 # A footnote *definition* container, as emitted by Substack and similar:
 # <div class="footnote"><a id="footnote-1">1</a><div class="footnote-content">
 # …</div></div>. The class carries the singular word "footnote" (the plural
@@ -112,6 +119,22 @@ def _link_density(node: Node) -> float:
     return min(1.0, linked / total)
 
 
+def _is_main_column(node: Node, ident: str) -> bool:
+    """True for a negative-hinted container that is really the article body.
+
+    A genuine sidebar/nav/related/comment widget is short and/or link-dense;
+    a mislabeled main column (a layout class merely carrying the word
+    "sidebar") is long-form prose with almost no links. Only *layout* hints
+    get this escape hatch, so content-type hints like "comment"/"related"
+    still drop even when they hold substantial text.
+    """
+    if not _LAYOUT_HINT.search(ident):
+        return False
+    if _link_density(node) >= 0.25:
+        return False
+    return len(htmldom.normalize_ws(node.text_content())) >= 200
+
+
 def _hint_multiplier(node: Node) -> float:
     ident = node.classes()
     mult = 1.0
@@ -158,7 +181,7 @@ def _remove_noise(root: Node) -> None:
         if node.tag in ("div", "section", "ul", "ol", "span", "a", "p", "table"):
             ident = node.classes()
             if ident and (_NEGATIVE_HINT.search(ident) or _AD_HINT.search(ident)):
-                if not _POSITIVE_HINT.search(ident):
+                if not _POSITIVE_HINT.search(ident) and not _is_main_column(node, ident):
                     node.detach()
         if node.tag is not None and (node.get("hidden") is not None or "display:none" in (node.get("style") or "").replace(" ", "")):
             node.detach()
