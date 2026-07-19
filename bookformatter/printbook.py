@@ -154,6 +154,11 @@ def _pdf_weasyprint(html_path: str, pdf_path: str) -> None:
         from weasyprint import HTML  # type: ignore
     except ImportError as exc:
         raise PdfError("weasyprint is not installed") from exc
+    except OSError as exc:
+        # weasyprint is installed but its native libraries (Pango et al.)
+        # failed to load — e.g. an arch mismatch on macOS. Keep this inside
+        # the engine ladder so `auto` can still fall back to Chrome.
+        raise PdfError(f"weasyprint could not load its libraries: {exc}") from exc
     HTML(filename=html_path).write_pdf(pdf_path)
 
 
