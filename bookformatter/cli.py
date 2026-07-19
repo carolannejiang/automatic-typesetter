@@ -51,8 +51,11 @@ def build_parser() -> argparse.ArgumentParser:
                         help="PDF renderer (default: auto = weasyprint, then headless Chrome)")
 
     design = parser.add_argument_group("design")
-    design.add_argument("--theme", default="classic", choices=["classic", "modern"],
-                        help="typography theme (default: classic)")
+    design.add_argument("--theme", default="classic",
+                        choices=["classic", "modern", "bringhurst", "classical"],
+                        help="typography theme; bringhurst sets the page after The Elements "
+                             "of Typographic Style, classical after WeasyPrint's "
+                             "book-classical sample (default: classic)")
     design.add_argument("--trim", default="6x9", choices=sorted(themes.TRIM_SIZES),
                         help="print trim size in inches (default: 6x9)")
     design.add_argument("--font-size", default="11pt", help="print body size (default: 11pt)")

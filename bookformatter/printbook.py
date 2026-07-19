@@ -107,7 +107,7 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = "6x9",
         parts.append(f'<section class="chapter" id="chapter-{i}">')
         parts.append('<header class="chapter-head">')
         if chapter_numbers:
-            parts.append(f'<span class="chapter-number">Chapter {i}</span>')
+            parts.append(f'<span class="chapter-number">{themes.chapter_label(theme, i)}</span>')
         parts.append(f'<h1 class="chapter-title">{_esc(chapter.title)}</h1>')
         parts.append("</header>")
         parts.append(content)
@@ -154,6 +154,11 @@ def _pdf_weasyprint(html_path: str, pdf_path: str) -> None:
         from weasyprint import HTML  # type: ignore
     except ImportError as exc:
         raise PdfError("weasyprint is not installed") from exc
+    except OSError as exc:
+        # weasyprint is installed but its native libraries (Pango et al.)
+        # failed to load — e.g. an arch mismatch on macOS. Keep this inside
+        # the engine ladder so `auto` can still fall back to Chrome.
+        raise PdfError(f"weasyprint could not load its libraries: {exc}") from exc
     HTML(filename=html_path).write_pdf(pdf_path)
 
 

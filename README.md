@@ -28,6 +28,16 @@ python3 -m bookformatter https://example.com/feed.xml --max-items 30 --fetch-ful
 # Choose formats, trim size, theme
 python3 -m bookformatter chapters/ -t "Essays" -f epub,pdf,html \
     --trim 5.5x8.5 --theme classic --chapter-start right --drop-caps
+
+# Set the page after Bringhurst's Elements of Typographic Style:
+# spaced-caps chapter heads over a rule, marginal running heads down a
+# wide fore-edge margin, oldstyle folios, no dot leaders in the contents
+python3 -m bookformatter chapters/ -t "Essays" --theme bringhurst
+
+# Set the page after WeasyPrint's book-classical sample: small-cap
+# chapter heads at text size, every paragraph indented, folios in the
+# top outer corners, chapter openers stripped of all page furniture
+python3 -m bookformatter chapters/ -t "Essays" --theme classical
 ```
 
 Outputs land in `./build/` (change with `-o`): `<slug>.epub`, `<slug>.pdf`,
