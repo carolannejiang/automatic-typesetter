@@ -389,7 +389,7 @@ class Handler(BaseHTTPRequestHandler):
         """Sliding-window build limit per client IP (public mode only)."""
         if not getattr(self.server, "public", False):
             return False
-        limit, window = getattr(self.server, "rate_limit", (6, 900))
+        limit, window = getattr(self.server, "rate_limit", (20, 900))
         now = time.time()
         buckets = self.server.rate_buckets
         with self.server.rate_lock:
@@ -525,7 +525,7 @@ def _normalize_base_path(base: str) -> str:
 
 def make_server(host: str = "127.0.0.1", port: int = 8000, base_path: str = "",
                 public: bool = False, passcode: str = "",
-                rate_limit=(6, 900)) -> ThreadingHTTPServer:
+                rate_limit=(20, 900)) -> ThreadingHTTPServer:
     try:
         server = ThreadingHTTPServer((host, port), Handler)
     except OSError:
