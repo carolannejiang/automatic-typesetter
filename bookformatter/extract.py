@@ -37,6 +37,20 @@ _POSITIVE_HINT = re.compile(
 )
 _AD_HINT = re.compile(r"(^|[-_ ])ads?([-_ ]|$)", re.I)
 
+# Responsive-breakpoint utility classes describe the viewport, not the
+# content. Wix, for instance, stamps the wrapper around the whole page with
+# classes like "gt-740 lte-w980 lte-banner-w1564" — and the word "banner"
+# inside such a token must not count as a hint, or the entire article drops.
+_BREAKPOINT_TOKEN = re.compile(r"^(?:lte?|gte?)(?:-|$)|^w?\d", re.I)
+
+
+def _hint_ident(node: Node) -> str:
+    """id+class string for hint matching, minus breakpoint utility tokens."""
+    return " ".join(
+        t for t in node.classes().split() if not _BREAKPOINT_TOKEN.match(t)
+    )
+
+
 # Layout words that can legitimately name a *main content* column in
 # Bootstrap-style themes. Strange Horizons, for instance, wraps the story in
 # <div class="col-md-8 col-md-push-4 index-right-sidebar"> — a wide column
@@ -136,7 +150,7 @@ def _is_main_column(node: Node, ident: str) -> bool:
 
 
 def _hint_multiplier(node: Node) -> float:
-    ident = node.classes()
+    ident = _hint_ident(node)
     mult = 1.0
     if _POSITIVE_HINT.search(ident):
         mult *= 1.35
@@ -152,12 +166,19 @@ def _score_candidates(body: Node) -> Optional[Node]:
         if len(text) < 25:
             continue
         score = 1.0 + min(len(text) / 100.0, 3.0) + text.count(",") + text.count("、")
-        parent = p.parent
-        grand = parent.parent if parent else None
-        if parent is not None and parent.tag not in (None, "#document"):
-            scores[id(parent)] = (parent, scores.get(id(parent), (parent, 0.0))[1] + score)
-        if grand is not None and grand.tag not in (None, "#document"):
-            scores[id(grand)] = (grand, scores.get(id(grand), (grand, 0.0))[1] + score / 2.0)
+        # Vote for up to five ancestor levels with decaying weight (parent
+        # full, grandparent half, then 1/(level*3), as in Arc90 readability).
+        # Sites that wrap every paragraph in its own <div> (Wix nests each one
+        # 2-4 divs deep) never accumulate votes on the real article container
+        # if only the parent and grandparent are scored.
+        ancestor, level = p.parent, 0
+        while ancestor is not None and level < 5:
+            if ancestor.tag in (None, "#document", "html", "body"):
+                break
+            weight = 1.0 if level == 0 else (2.0 if level == 1 else level * 3.0)
+            prev = scores.get(id(ancestor), (ancestor, 0.0))[1]
+            scores[id(ancestor)] = (ancestor, prev + score / weight)
+            ancestor, level = ancestor.parent, level + 1
     if not scores:
         return None
     best, best_score = None, 0.0
@@ -179,7 +200,7 @@ def _remove_noise(root: Node) -> None:
             node.detach()
             continue
         if node.tag in ("div", "section", "ul", "ol", "span", "a", "p", "table"):
-            ident = node.classes()
+            ident = _hint_ident(node)
             if ident and (_NEGATIVE_HINT.search(ident) or _AD_HINT.search(ident)):
                 if not _POSITIVE_HINT.search(ident) and not _is_main_column(node, ident):
                     node.detach()
