@@ -29,7 +29,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import epub as epub_writer
 from . import ingest as ingester
-from . import printbook, themes
+from . import designs, printbook, themes
 from .fetch import sniff_image
 from .models import Asset, Book, BookMeta, slugify
 
@@ -212,7 +212,9 @@ def run_build(params: dict, uploads: list, workdir: str,
         + (f" · {len(book.assets)} image(s)" if book.assets else "")
     )
 
-    theme = _first(params, "theme", "classic")
+    theme = _first(params, "theme", designs.DEFAULT_DESIGN)
+    if theme not in designs.DESIGNS:
+        theme = designs.DEFAULT_DESIGN
     trim = _first(params, "trim", "6x9")
     if trim not in themes.TRIM_SIZES:
         trim = "6x9"
@@ -780,8 +782,7 @@ body.locked { background: #fff; color: #111; }
       <div class="row">
         <div><label for="theme">Theme</label>
           <select id="theme" name="theme">
-            <option value="classic">Classic — serif, indents, centered heads</option>
-            <option value="modern">Modern — sans heads, spaced paragraphs</option>
+<!--THEME_OPTIONS-->
           </select></div>
         <div><label for="trim">Trim size (print)</label>
           <select id="trim" name="trim">
@@ -939,6 +940,20 @@ function showError(text) {
 </body>
 </html>
 """
+
+
+def _theme_options() -> str:
+    """<option> rows for the Theme menu, one per design in designs.py."""
+    rows = []
+    for name in designs.names():
+        label = designs.get(name)["label"] or name.title()
+        selected = " selected" if name == designs.DEFAULT_DESIGN else ""
+        rows.append('            <option value="%s"%s>%s</option>'
+                    % (html.escape(name, quote=True), selected, html.escape(label)))
+    return "\n".join(rows)
+
+
+PAGE = PAGE.replace("<!--THEME_OPTIONS-->", _theme_options(), 1)
 
 
 # The unlock gate shown when a passcode is configured. Mirrors the locked

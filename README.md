@@ -180,7 +180,10 @@ different treatment from the same theme: e-readers own the page geometry
 (so EPUB CSS stays out of the way), while print asserts trim, margins,
 hyphenation, folios, and running heads. The conventions themselves
 (indents-not-gaps, recto openers, verso/recto running heads, front matter
-outside the page count) are centuries old; see `themes.py`.
+outside the page count) are centuries old; see `themes.py`. The design
+templates themselves live in `designs.py` — copy an entry, rename it, and
+adjust fonts, indents, or raw CSS to add a new theme; it shows up in
+`--theme` and the web form automatically.
 
 **Decisions you still own** when making a real book: trim size and theme;
 whether chapters must open recto (adds blank pages, but that's how trade

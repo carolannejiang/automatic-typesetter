@@ -9,7 +9,7 @@ import sys
 
 from . import epub as epub_writer
 from . import ingest as ingester
-from . import printbook, themes
+from . import designs, printbook, themes
 from .fetch import sniff_image
 from .models import Asset, Book, BookMeta, slugify
 
@@ -51,8 +51,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="PDF renderer (default: auto = weasyprint, then headless Chrome)")
 
     design = parser.add_argument_group("design")
-    design.add_argument("--theme", default="classic", choices=["classic", "modern"],
-                        help="typography theme (default: classic)")
+    design.add_argument("--theme", default=designs.DEFAULT_DESIGN, choices=designs.names(),
+                        help="design template from designs.py (default: %(default)s)")
     design.add_argument("--trim", default="6x9", choices=sorted(themes.TRIM_SIZES),
                         help="print trim size in inches (default: 6x9)")
     design.add_argument("--font-size", default="11pt", help="print body size (default: 11pt)")

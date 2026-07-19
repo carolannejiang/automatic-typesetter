@@ -6,11 +6,17 @@ openers). Print output adds CSS Paged Media rules — @page geometry, running
 heads, folios, TOC leaders. Running heads and TOC page numbers use margin
 boxes / target-counter, which WeasyPrint and Prince honor; headless Chrome
 ignores them gracefully and still produces correct trim, margins, and breaks.
+
+The design decisions themselves — fonts, indents, heading treatment, extra
+rules — live in designs.py; edit that file to restyle books or add designs.
 """
 
 from __future__ import annotations
 
 from string import Template
+
+from . import designs
+from .designs import MONO_STACK, SANS_STACK, SERIF_STACK  # noqa: F401 (re-export)
 
 # (width_in, height_in) — common trade trim sizes plus ISO A5.
 TRIM_SIZES = {
@@ -20,10 +26,6 @@ TRIM_SIZES = {
     "6x9": (6.0, 9.0),
     "a5": (5.83, 8.27),
 }
-
-SERIF_STACK = '"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif'
-SANS_STACK = '"Avenir Next", Avenir, "Segoe UI", Helvetica, Arial, sans-serif'
-MONO_STACK = '"SF Mono", Menlo, Consolas, "Liberation Mono", monospace'
 
 
 _SHARED = Template(
@@ -254,9 +256,6 @@ span.footnote::footnote-marker { font-weight: normal; }
 """
 )
 
-_MODERN_PARA = "p + p { margin-top: 0.6em; }"
-
-
 def _geometry(trim: str):
     width, height = TRIM_SIZES[trim]
     # Margin heuristics: inner (gutter) largest, generous head/foot.
@@ -271,51 +270,44 @@ def _geometry(trim: str):
 
 
 def _theme_params(theme: str, font_size: str, line_height: str):
-    if theme == "modern":
-        return {
-            "THEME_NAME": "modern",
-            "BODY_FONT": SERIF_STACK,
-            "HEADING_FONT": SANS_STACK,
-            "MONO_FONT": MONO_STACK,
-            "HEADING_WEIGHT": "600",
-            "HEADING_ALIGN": "left",
-            "FONT_SIZE": font_size,
-            "LINE_HEIGHT": line_height,
-            "INDENT": "0",
-            "PARA_EXTRA": _MODERN_PARA,
-            "TITLE_EXTRA": "",
-            "CHAPTER_DROP": "2.4em",
-            "TITLE_DROP": "1.8in",
-        }
+    design = designs.get(theme)
+    spacing = design["paragraph_spacing"]
     return {
-        "THEME_NAME": "classic",
-        "BODY_FONT": SERIF_STACK,
-        "HEADING_FONT": SERIF_STACK,
-        "MONO_FONT": MONO_STACK,
-        "HEADING_WEIGHT": "normal",
-        "HEADING_ALIGN": "center",
+        "THEME_NAME": theme if theme in designs.DESIGNS else designs.DEFAULT_DESIGN,
+        "BODY_FONT": design["body_font"],
+        "HEADING_FONT": design["heading_font"],
+        "MONO_FONT": design["mono_font"],
+        "HEADING_WEIGHT": design["heading_weight"],
+        "HEADING_ALIGN": design["heading_align"],
         "FONT_SIZE": font_size,
         "LINE_HEIGHT": line_height,
-        "INDENT": "1.35em",
-        "PARA_EXTRA": "",
-        "TITLE_EXTRA": "font-variant: small-caps; letter-spacing: 0.04em;",
-        "CHAPTER_DROP": "2.8em",
-        "TITLE_DROP": "1.6in",
+        "INDENT": design["paragraph_indent"] or "0",
+        "PARA_EXTRA": (
+            "p + p { margin-top: %s; }" % spacing
+            if spacing not in ("", "0", "none") else ""
+        ),
+        "TITLE_EXTRA": design["title_css"],
+        "CHAPTER_DROP": design["chapter_drop"],
+        "TITLE_DROP": design["title_drop"],
     }
 
 
 def epub_css(theme: str = "classic", font_size: str = "1em",
              line_height: str = "1.5", drop_caps: bool = False) -> str:
+    design = designs.get(theme)
     params = _theme_params(theme, font_size, line_height)
     css = _SHARED.substitute(params) + _EPUB_EXTRA.substitute(params)
     if drop_caps:
         css += _DROP_CAP
+    # Raw design rules go in after substitution so they may contain "$".
+    css += design["extra_css"] + design["extra_epub_css"]
     return css
 
 
 def print_css(theme: str = "classic", trim: str = "6x9", font_size: str = "11pt",
               line_height: str = "1.45", book_title: str = "",
               chapter_start: str = "right", drop_caps: bool = False) -> str:
+    design = designs.get(theme)
     params = _theme_params(theme, font_size, line_height)
     params.update(_geometry(trim))
     params["BOOK_TITLE_STRING"] = book_title.replace("\\", "").replace('"', "'")
@@ -324,4 +316,5 @@ def print_css(theme: str = "classic", trim: str = "6x9", font_size: str = "11pt"
     css = _SHARED.substitute(params) + _PRINT_EXTRA.substitute(params)
     if drop_caps:
         css += _DROP_CAP
+    css += design["extra_css"] + design["extra_print_css"]
     return css
