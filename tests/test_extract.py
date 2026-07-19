@@ -201,6 +201,76 @@ class ExtractTests(unittest.TestCase):
         self.assertIn('<span class="footnote">The actual note text.</span>', out)
         self.assertNotIn("<li", out)
 
+    def test_blogger_noscript_body_survives(self):
+        # Blogger's Dynamic Views themes ship the post body only inside
+        # <noscript> (JS assembles the visible copy from a template), in
+        # Google-Docs markup: bare divs and spans, never a <p>. The
+        # "enable JavaScript" notice noscript must still drop.
+        para = ("Since the very beginning, millions of people, writers and "
+                "hobbyists alike, have expressed themselves here, at length, "
+                "with care. " * 3)
+        page = f"""<html><head><title>Post Title - My Blog</title></head><body>
+        <noscript><style>.m{{color:red}}</style>
+          <p>JavaScript must be enabled in order to use this site.<br/>
+          Please enable JavaScript to continue.</p></noscript>
+        <div class="widget Blog"><div class="post">
+        <script type="text/template">template copy here</script>
+        <noscript>
+          <div dir="ltr"><span style="font-family: arial;">{para}</span></div>
+          <div dir="ltr"><span style="font-family: arial;">{para}</span></div>
+        </noscript>
+        </div></div></body></html>"""
+        doc = extract_article(page, base_url="https://example.blogspot.com/2020/05/x.html")
+        self.assertIn("millions of people", doc.html)
+        self.assertNotIn("enable JavaScript", doc.html)
+        self.assertNotIn("template copy", doc.html)
+
+    def test_lazy_image_noscript_replaces_placeholder(self):
+        prose = "A paragraph long enough to win scoring, with commas, etc. " * 4
+        page = f"""<html><body><article>
+        <p>{prose}</p>
+        <img src="data:image/gif;base64,R0lGOD" class="lazy" alt="x">
+        <noscript><img src="https://cdn.example/real.jpg" alt="x"></noscript>
+        <p>{prose}</p></article></body></html>"""
+        doc = extract_article(page, base_url="https://x.example/")
+        self.assertEqual(doc.html.count("<img"), 1)
+        self.assertIn('src="https://cdn.example/real.jpg"', doc.html)
+
+    def test_noscript_tracking_pixel_dropped(self):
+        prose = "A paragraph long enough to win scoring, with commas, etc. " * 4
+        page = f"""<html><body><article>
+        <p>{prose}</p>
+        <noscript><img src="https://tracker.example/pixel" height="1" width="1"></noscript>
+        </article></body></html>"""
+        doc = extract_article(page, base_url="https://x.example/")
+        self.assertNotIn("tracker.example", doc.html)
+
+    def test_jsonld_metadata_fills_gaps(self):
+        # Squarespace/Wix publish author and date only as JSON-LD, and write
+        # offsets without a colon ("-0400"), which fromisoformat rejects
+        # before Python 3.11.
+        prose = "Body prose with commas, long enough to extract cleanly here. " * 4
+        page = f"""<html><head><title>Ways of Seeing — Studio</title>
+        <script type="application/ld+json">{{"@context":"http://schema.org",
+          "@graph":[{{"@type":"WebPage","name":"x"}},
+                    {{"@type":"BlogPosting","headline":"Ways of Seeing",
+                      "author":[{{"@type":"Person","name":"June Park"}}],
+                      "datePublished":"2026-07-17T15:10:31-0400"}}]}}</script>
+        </head><body><article><p>{prose}</p></article></body></html>"""
+        doc = extract_article(page, base_url="https://studio.example/blog/ways")
+        self.assertEqual(doc.author, "June Park")
+        self.assertIsNotNone(doc.date)
+        self.assertEqual((doc.date.year, doc.date.month, doc.date.day), (2026, 7, 17))
+
+    def test_srcset_only_lazy_image(self):
+        prose = "A paragraph long enough to win scoring, with commas, etc. " * 4
+        page = f"""<html><body><article>
+        <p>{prose}</p>
+        <img srcset="https://cdn.example/a-640.jpg 640w, https://cdn.example/a-1280.jpg 1280w" alt="x">
+        <p>{prose}</p></article></body></html>"""
+        doc = extract_article(page, base_url="https://x.example/")
+        self.assertIn('src="https://cdn.example/a-640.jpg"', doc.html)
+
     def test_plain_text_paragraphs(self):
         out = plain_text_to_html("Para one\nstill one.\n\nPara two & <tag>.")
         self.assertEqual(

@@ -79,10 +79,29 @@ See **[docs/DEPLOY.md](docs/DEPLOY.md)** for both recipes.
 | Directories | All of the above, sorted by filename — one file per chapter |
 | Page URLs | Fetched and extracted: boilerplate (nav, sidebars, share buttons, comments) is scored away, the article kept |
 | Feed URLs (RSS 2.0 / Atom / RDF) | Each post becomes a chapter, ordered oldest-first by default (`--order`); `--fetch-full` follows each item's link for truncated feeds; `--max-items N` keeps the N most recent |
+| Blog homepage URLs | The blog's feed is discovered automatically (advertised `<link>` tags, then common feed paths) and ingested as above — pasting `https://someones.blog/` just works |
 
 Images are downloaded and embedded into the book by default
 (`--images download|link|strip`). Book title and author are auto-detected
 from feeds/pages when you don't pass `-t`/`-a`.
+
+### Blog platforms
+
+Verified against live blogs on the common hosts — both direct post URLs
+and pasted homepages (which import via the discovered feed):
+
+- **Works end to end:** WordPress (wordpress.com and self-hosted), Substack
+  (including footnotes), Ghost, Blogger/Blogspot (classic and Dynamic
+  Views themes), Squarespace, Wix, Tumblr, Dev.to, Hashnode, Bear Blog,
+  Beehiiv, LiveJournal, and static generators (Jekyll, Hugo, Astro …).
+- **Medium:** Medium serves pages only to full browsers, so post URLs are
+  imported through the author's/publication's public RSS feed instead
+  (automatic; only the ~10 most recent stories are available that way).
+- **Subscriber-only posts** (Substack paywalls and similar) publish only a
+  stub to the feed; these are skipped with a warning rather than bound in
+  as near-empty chapters.
+- **Notion public pages** (and other fully JavaScript-rendered sites)
+  expose no article HTML at all; these fail with a clear warning.
 
 ## What comes out
 
@@ -191,7 +210,7 @@ permission to reproduce.
 ## Development
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 78 tests, no dependencies
+python3 -m unittest discover -s tests -t .   # 141 tests, no dependencies
 python3 -m bookformatter examples/field-notes -t "Field Notes on Book Making" -a "You"
 ```
 

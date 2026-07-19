@@ -2,8 +2,12 @@ import base64
 import os
 import tempfile
 import unittest
+from unittest import mock
 
-from bookformatter.ingest import IngestOptions, ingest
+from bookformatter import fetch
+from bookformatter.ingest import (IngestOptions, _looks_like_index_url,
+                                  _match_feed_item, ingest)
+from bookformatter.feeds import FeedItem
 
 PNG_1PX = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
@@ -112,6 +116,166 @@ class IngestTests(unittest.TestCase):
         result = ingest(["/nonexistent/path.md"])
         self.assertEqual(result.chapters, [])
         self.assertTrue(result.warnings)
+
+
+PROSE = ("A reasonably long paragraph, with commas, that scores well in "
+         "extraction and stands in for real writing. " * 4)
+
+FEED_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+<channel><title>Example Blog</title><link>https://blog.example/</link>
+<item><title>First Post</title><link>https://blog.example/posts/first</link>
+  <content:encoded><![CDATA[<p>%s</p>]]></content:encoded>
+  <pubDate>Mon, 04 Mar 2024 10:00:00 +0000</pubDate></item>
+<item><title>Second Post</title><link>https://blog.example/posts/second</link>
+  <content:encoded><![CDATA[<p>%s</p>]]></content:encoded>
+  <pubDate>Tue, 05 Mar 2024 10:00:00 +0000</pubDate></item>
+</channel></rss>""" % (PROSE, PROSE)
+
+
+class _FakeWeb:
+    """Serve canned (text, content_type) responses through fetch.fetch_text,
+    recording every requested URL; unknown URLs 404."""
+
+    def __init__(self, pages: dict):
+        self.pages = pages
+        self.requested: list = []
+
+    def __call__(self, url, timeout=30.0):
+        self.requested.append(url)
+        if url not in self.pages:
+            raise fetch.FetchError(f"could not fetch {url}: HTTP Error 404: Not Found")
+        entry = self.pages[url]
+        if isinstance(entry, Exception):
+            raise entry
+        text, content_type = entry
+        return text, content_type, url
+
+
+class UrlIngestTests(unittest.TestCase):
+    def _ingest(self, fake, url, **opt_kwargs):
+        opts = IngestOptions(images="link", **opt_kwargs)
+        with mock.patch.object(fetch, "fetch_text", fake):
+            return ingest([url], opts)
+
+    def test_homepage_uses_advertised_feed(self):
+        home = """<html><head><title>Example Blog</title>
+        <link rel="alternate" type="application/rss+xml" href="/feed">
+        </head><body><nav><a href="/posts/first">First Post</a>
+        <a href="/posts/second">Second Post</a></nav></body></html>"""
+        fake = _FakeWeb({
+            "https://blog.example/": (home, "text/html"),
+            "https://blog.example/feed": (FEED_XML, "application/rss+xml"),
+        })
+        result = self._ingest(fake, "https://blog.example/")
+        self.assertEqual([c.title for c in result.chapters],
+                         ["First Post", "Second Post"])
+        self.assertEqual(result.title_hint, "Example Blog")
+
+    def test_index_url_guesses_common_feed_paths(self):
+        # Hashnode (and others) advertise no <link rel=alternate> at all.
+        home = """<html><head><title>Example Blog</title></head>
+        <body><a href="/posts/first">First Post</a></body></html>"""
+        fake = _FakeWeb({
+            "https://blog.example/": (home, "text/html"),
+            "https://blog.example/rss.xml": (FEED_XML, "application/rss+xml"),
+        })
+        result = self._ingest(fake, "https://blog.example/")
+        self.assertEqual(len(result.chapters), 2)
+        # /feed was tried (and 404ed) before /rss.xml hit.
+        self.assertIn("https://blog.example/feed", fake.requested)
+
+    def test_rich_article_page_is_not_switched_to_feed(self):
+        page = f"""<html><head><title>First Post — Example Blog</title>
+        <link rel="alternate" type="application/rss+xml" href="/feed">
+        </head><body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>"""
+        fake = _FakeWeb({"https://blog.example/posts/first": (page, "text/html")})
+        result = self._ingest(fake, "https://blog.example/posts/first")
+        self.assertEqual(len(result.chapters), 1)
+        self.assertEqual(result.chapters[0].title, "First Post")
+        self.assertNotIn("https://blog.example/feed", fake.requested)
+
+    def test_thin_post_page_imports_matching_feed_item(self):
+        # A page the extractor gets almost nothing from (JS-heavy theme)
+        # advertising a feed that carries the post: import just that item.
+        page = """<html><head><title>First Post</title>
+        <link rel="alternate" type="application/rss+xml" href="/feed">
+        </head><body><div id="app"></div></body></html>"""
+        fake = _FakeWeb({
+            "https://blog.example/posts/first": (page, "text/html"),
+            "https://blog.example/feed": (FEED_XML, "application/rss+xml"),
+        })
+        result = self._ingest(fake, "https://blog.example/posts/first")
+        self.assertEqual([c.title for c in result.chapters], ["First Post"])
+        self.assertTrue(any("feed" in w for w in result.warnings))
+
+    def test_thin_post_page_without_feed_match_keeps_page(self):
+        page = """<html><head><title>Elsewhere</title>
+        <link rel="alternate" type="application/rss+xml" href="/feed">
+        </head><body><article><p>A short note, barely a post, but real
+        writing that belongs in the book all the same.</p></body></html>"""
+        fake = _FakeWeb({
+            "https://blog.example/notes/elsewhere": (page, "text/html"),
+            "https://blog.example/feed": (FEED_XML, "application/rss+xml"),
+        })
+        result = self._ingest(fake, "https://blog.example/notes/elsewhere")
+        self.assertEqual(len(result.chapters), 1)
+        self.assertIn("barely a post", result.chapters[0].html)
+
+    def test_js_shell_page_warns_and_adds_nothing(self):
+        page = """<html><head><title>Notion | Where work happens</title></head>
+        <body><div id="notion-app"></div><script src="/app.js"></script></body></html>"""
+        fake = _FakeWeb({"https://someone.notion.example/Post-abc123": (page, "text/html")})
+        result = self._ingest(fake, "https://someone.notion.example/Post-abc123")
+        self.assertEqual(result.chapters, [])
+        self.assertTrue(any("JavaScript" in w for w in result.warnings))
+
+    def test_medium_403_imports_story_from_feed(self):
+        medium_feed = """<?xml version="1.0" encoding="UTF-8"?>
+        <rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+        <channel><title>Stories by Ana on Medium</title>
+        <item><title>The Story</title>
+          <link>https://medium.com/@ana/the-story-0123abcd4567?source=rss</link>
+          <content:encoded><![CDATA[<p>%s</p>]]></content:encoded>
+          <pubDate>Tue, 05 Mar 2024 10:00:00 +0000</pubDate></item>
+        <item><title>Older</title>
+          <link>https://medium.com/@ana/older-ffff0000aaaa</link>
+          <content:encoded><![CDATA[<p>%s</p>]]></content:encoded></item>
+        </channel></rss>""" % (PROSE, PROSE)
+        blocked = fetch.FetchError(
+            "could not fetch https://medium.com/@ana/the-story-0123abcd4567: "
+            "HTTP Error 403: Forbidden")
+        fake = _FakeWeb({
+            "https://medium.com/@ana/the-story-0123abcd4567": blocked,
+            "https://medium.com/feed/@ana": (medium_feed, "application/rss+xml"),
+        })
+        result = self._ingest(fake, "https://medium.com/@ana/the-story-0123abcd4567")
+        self.assertEqual([c.title for c in result.chapters], ["The Story"])
+        self.assertEqual(result.title_hint, "The Story")
+        self.assertTrue(any("Medium" in w for w in result.warnings))
+
+    def test_index_url_detection(self):
+        for url in ("https://a.example", "https://a.example/", "https://a.example/blog/",
+                    "https://a.example/Archive", "https://a.example/index.html"):
+            self.assertTrue(_looks_like_index_url(url), url)
+        for url in ("https://a.example/blog/2024/post", "https://a.example/?p=123",
+                    "https://a.example/a-standalone-essay"):
+            self.assertFalse(_looks_like_index_url(url), url)
+
+    def test_match_feed_item_ignores_tracking_but_keeps_permalink_query(self):
+        items = [FeedItem(title="A", link="https://b.example/?p=123&utm_source=rss"),
+                 FeedItem(title="B", link="https://b.example/?p=124")]
+        self.assertEqual(_match_feed_item(items, "https://b.example/?p=124").title, "B")
+        self.assertEqual(_match_feed_item(items, "http://b.example/?p=123").title, "A")
+        self.assertIsNone(_match_feed_item(items, "https://b.example/?p=999"))
+
+    def test_blocked_fetch_warns_with_feed_guidance(self):
+        blocked = fetch.FetchError(
+            "could not fetch https://walled.example/post: HTTP Error 403: Forbidden")
+        fake = _FakeWeb({"https://walled.example/post": blocked})
+        result = self._ingest(fake, "https://walled.example/post")
+        self.assertEqual(result.chapters, [])
+        self.assertTrue(any("RSS/Atom feed" in w for w in result.warnings))
 
 
 if __name__ == "__main__":

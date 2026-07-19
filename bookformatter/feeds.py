@@ -48,6 +48,12 @@ def _text(elem) -> str:
     return (elem.text or "").strip() if elem is not None else ""
 
 
+def _title_text(elem) -> str:
+    """Feed titles are text, but Tumblr (and some WordPress plugins) ship
+    them HTML-encoded inside the XML, so "’" arrives as "&rsquo;"."""
+    return html.unescape(_text(elem))
+
+
 def _parse_rfc822(value: str) -> Optional[_dt.datetime]:
     try:
         return email.utils.parsedate_to_datetime(value)
@@ -60,6 +66,42 @@ def _parse_iso(value: str) -> Optional[_dt.datetime]:
         return _dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
     except (TypeError, ValueError):
         return None
+
+
+# Where blogs keep their feed when the page doesn't advertise it, in rough
+# order of platform popularity: WordPress/Substack/Bear/Dev.to (feed),
+# Hashnode (rss.xml), Tumblr/Ghost (rss), Jekyll (atom.xml, feed.xml),
+# Hugo (index.xml), Wix (blog-feed.xml), Blogger (feeds/posts/default).
+COMMON_FEED_PATHS = (
+    "feed", "rss.xml", "rss", "atom.xml", "index.xml", "feed.xml",
+    "blog-feed.xml", "feeds/posts/default",
+)
+
+_FEED_LINK_TYPE = re.compile(r"application/(rss|atom)\+xml", re.I)
+
+
+def discover_feed_urls(html_text: str, base_url: str = "") -> list:
+    """Feed URLs a page advertises via <link rel="alternate">, in document
+    order (platforms list the main feed before secondary ones). Comment
+    feeds — WordPress advertises one on every page — are skipped.
+    """
+    from urllib.parse import urljoin
+
+    from . import htmldom
+
+    urls = []
+    for link in htmldom.parse(html_text).find_all("link"):
+        if "alternate" not in (link.get("rel") or "").lower().split():
+            continue
+        if not _FEED_LINK_TYPE.search(link.get("type") or ""):
+            continue
+        href = (link.get("href") or "").strip()
+        if not href or "comment" in href.lower():
+            continue
+        url = urljoin(base_url, href) if base_url else href
+        if url not in urls:
+            urls.append(url)
+    return urls
 
 
 def looks_like_feed(text: str, content_type: str = "") -> bool:
@@ -127,7 +169,7 @@ def parse_feed(text: str) -> Feed:
 
     if kind in ("rss", "rdf"):
         channel = _child(root, "channel") or root
-        feed.title = _text(_child(channel, "title"))
+        feed.title = _title_text(_child(channel, "title"))
         feed.link = _text(_child(channel, "link"))
         feed.description = _text(_child(channel, "description"))
         items = _children(channel, "item") or _children(root, "item")
@@ -147,7 +189,7 @@ def parse_feed(text: str) -> Feed:
                     break
             feed.items.append(
                 FeedItem(
-                    title=_text(_child(item, "title")) or "Untitled",
+                    title=_title_text(_child(item, "title")) or "Untitled",
                     link=_text(_child(item, "link")),
                     html=content or "",
                     author=author,
@@ -156,7 +198,7 @@ def parse_feed(text: str) -> Feed:
                 )
             )
     elif kind == "feed":
-        feed.title = _text(_child(root, "title"))
+        feed.title = _title_text(_child(root, "title"))
         feed.link = _atom_link(root)
         author_node = _child(root, "author")
         if author_node is not None:
@@ -168,7 +210,7 @@ def parse_feed(text: str) -> Feed:
                 author = _text(_child(a, "name"))
             feed.items.append(
                 FeedItem(
-                    title=_text(_child(entry, "title")) or "Untitled",
+                    title=_title_text(_child(entry, "title")) or "Untitled",
                     link=_atom_link(entry),
                     html=_atom_content(entry),
                     author=author or feed.author,

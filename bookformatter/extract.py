@@ -18,7 +18,7 @@ from . import htmldom
 from .htmldom import Node
 
 _STRIP_TAGS = {
-    "script", "style", "noscript", "template", "iframe", "object", "embed",
+    "script", "style", "template", "iframe", "object", "embed",
     "canvas", "video", "audio", "form", "button", "input", "select",
     "textarea", "nav", "footer", "aside", "dialog", "svg", "link", "meta",
 }
@@ -99,6 +99,57 @@ class ExtractedDoc:
     site_name: Optional[str] = None
 
 
+def _resolve_noscripts(root: Node) -> None:
+    """Keep the usable content of <noscript> fallbacks instead of stripping.
+
+    Blogger's Dynamic Views themes ship the whole post body only inside
+    <noscript> (JS assembles the visible copy from a script template), and
+    lazy-image plugins put the real <img> there next to a placeholder.
+    "Enable JavaScript" notices and 1×1 tracking pixels are dropped.
+    """
+    for ns in list(root.find_all("noscript")):
+        if ns.parent is None:
+            continue
+        # Inline CSS both pollutes the text measure and would leak as
+        # visible text if the noscript is unwrapped.
+        for junk in ns.find_all({"style", "script", "link", "meta"}):
+            junk.detach()
+        text = htmldom.normalize_ws(ns.text_content())
+        # A JS-required notice (Notion's carries the product logo <img>, so
+        # image presence alone must not save it).
+        if len(text) < 300 and re.search(
+                r"(enable|requires?|must (be )?enabled?|turn on|need[s]? )[^.]{0,40}javascript"
+                r"|javascript[^.]{0,40}(enabled?|required|to run|to continue)",
+                text, re.I):
+            ns.detach()
+            continue
+        imgs = [
+            img for img in ns.find_all("img")
+            if img.get("width") != "1" and img.get("height") != "1"
+        ]
+        if not imgs and len(text) < 120:
+            ns.detach()
+            continue
+        if imgs and len(text) < 120:
+            # An image-fallback noscript: drop the lazy placeholder it
+            # duplicates — the nearest preceding sibling that is (or only
+            # wraps) an <img>. Content-bearing noscripts (a whole Blogger
+            # post) leave their neighbors alone.
+            siblings = ns.parent.children
+            for prev in reversed(siblings[: siblings.index(ns)]):
+                if prev.is_text:
+                    if (prev.text or "").strip():
+                        break
+                    continue
+                if prev.tag == "img" or (
+                    len(prev.find_all("img")) == 1
+                    and not htmldom.normalize_ws(prev.text_content())
+                ):
+                    prev.detach()
+                break
+        ns.replace_with_children()
+
+
 def _meta_content(root: Node, names: list) -> Optional[str]:
     for meta in root.find_all("meta"):
         key = (meta.get("property") or meta.get("name") or "").lower()
@@ -113,8 +164,11 @@ def _parse_date(value: str) -> Optional[_dt.datetime]:
     if not value:
         return None
     value = value.strip()
+    # Colon-less UTC offsets ("2026-07-17T15:10:31-0400", Squarespace et al.)
+    # are rejected by fromisoformat before Python 3.11.
+    iso = re.sub(r"([+-]\d{2})(\d{2})$", r"\1:\2", value.replace("Z", "+00:00"))
     try:
-        return _dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return _dt.datetime.fromisoformat(iso)
     except ValueError:
         pass
     for fmt in ("%Y-%m-%d", "%B %d, %Y", "%b %d, %Y", "%d %B %Y", "%Y/%m/%d"):
@@ -123,6 +177,70 @@ def _parse_date(value: str) -> Optional[_dt.datetime]:
         except ValueError:
             continue
     return None
+
+
+def _jsonld_name(value) -> Optional[str]:
+    """The name(s) inside a schema.org author/creator value: a string, a
+    {"name": ...} object, or a list of either."""
+    if isinstance(value, list):
+        names = [n for n in (_jsonld_name(v) for v in value) if n]
+        return ", ".join(names[:3]) or None
+    if isinstance(value, dict):
+        value = value.get("name")
+    if isinstance(value, str):
+        return htmldom.normalize_ws(value) or None
+    return None
+
+
+def _jsonld_article_meta(root: Node) -> dict:
+    """Title/author/date from <script type="application/ld+json"> blocks.
+
+    Squarespace, Wix, Blogger, and many WordPress themes publish article
+    metadata only here, with no equivalent <meta> tags. Pages often carry
+    several blocks (and several Article objects) that each know part of the
+    story, so fields merge across all of them in document order.
+    """
+    import json as _json
+
+    meta: dict = {}
+    for script in root.find_all("script"):
+        if "ld+json" not in (script.get("type") or "").lower():
+            continue
+        raw = "".join(c.text or "" for c in script.children if c.is_text).strip()
+        if not raw:
+            continue
+        try:
+            data = _json.loads(raw)
+        except ValueError:
+            continue
+        queue = [data]
+        while queue:
+            obj = queue.pop(0)
+            if isinstance(obj, list):
+                queue = obj + queue
+                continue
+            if not isinstance(obj, dict):
+                continue
+            if "@graph" in obj:
+                queue.append(obj["@graph"])
+            types = obj.get("@type") or []
+            if isinstance(types, str):
+                types = [types]
+            # Article/NewsArticle/TechArticle/..., BlogPosting/LiveBlogPosting/...
+            if not any(str(t).endswith(("Article", "Posting")) for t in types):
+                continue
+            fields = (
+                ("title", _jsonld_name(obj.get("headline") or obj.get("name"))),
+                ("author", _jsonld_name(obj.get("author") or obj.get("creator"))),
+                ("date", _parse_date(str(obj.get("datePublished")
+                                         or obj.get("dateCreated") or ""))),
+            )
+            for key, value in fields:
+                if value is not None and key not in meta:
+                    meta[key] = value
+            if len(meta) == 3:
+                return meta
+    return meta
 
 
 def _link_density(node: Node) -> float:
@@ -159,9 +277,28 @@ def _hint_multiplier(node: Node) -> float:
     return mult
 
 
+# Tags that make a <div> a container rather than a paragraph substitute.
+_DIV_BLOCK_CHILDREN = {
+    "p", "div", "section", "article", "ul", "ol", "table", "blockquote",
+    "pre", "figure", "header", "footer", "aside", "nav", "dl",
+    "h1", "h2", "h3", "h4", "h5", "h6",
+}
+
+
+def _is_paragraph_div(node: Node) -> bool:
+    """True for a <div> with no block children. Blogger posts (Google-Docs
+    flavored markup) and old hand-authored pages set body text in bare divs
+    with never a <p>, so such divs must vote like paragraphs."""
+    return not any(
+        not c.is_text and c.tag in _DIV_BLOCK_CHILDREN for c in node.children
+    )
+
+
 def _score_candidates(body: Node) -> Optional[Node]:
     scores: dict = {}
-    for p in body.find_all({"p", "pre", "blockquote", "li"}):
+    for p in body.find_all({"p", "pre", "blockquote", "li", "div"}):
+        if p.tag == "div" and not _is_paragraph_div(p):
+            continue
         text = htmldom.normalize_ws(p.text_content())
         if len(text) < 25:
             continue
@@ -212,7 +349,7 @@ def _fix_lazy_images(root: Node) -> None:
     for img in root.find_all("img"):
         src = img.get("src") or ""
         if not src or src.startswith("data:image/gif") or "placeholder" in src or "blank." in src:
-            for attr in ("data-src", "data-lazy-src", "data-original", "data-srcset", "data-actualsrc"):
+            for attr in ("data-src", "data-lazy-src", "data-original", "data-srcset", "data-actualsrc", "srcset"):
                 alt = img.get(attr)
                 if alt:
                     img.attrs["src"] = alt.split()[0].split(",")[0]
@@ -378,20 +515,27 @@ def extract_article(html_text: str, base_url: str = "") -> ExtractedDoc:
     if not title and title_tag is not None:
         title = htmldom.normalize_ws(title_tag.text_content())
     author = _meta_content(root, ["author", "article:author", "og:article:author", "dc.creator", "sailthru.author"])
-    if author and re.match(r"^https?://", author):
-        author = None
     date = _parse_date(
         _meta_content(root, ["article:published_time", "og:article:published_time",
                              "date", "dc.date", "sailthru.date", "article:modified_time"]) or ""
     )
     site_name = _meta_content(root, ["og:site_name"])
 
+    if not author or date is None or not title:
+        ld = _jsonld_article_meta(root)
+        title = title or ld.get("title")
+        author = author or ld.get("author")
+        if date is None:
+            date = ld.get("date")
+    if author and re.match(r"^https?://", author):
+        author = None
     if date is None:
         time_tag = root.find("time")
         if time_tag is not None:
             date = _parse_date(time_tag.get("datetime") or time_tag.text_content())
 
     body = root.find("body") or root
+    _resolve_noscripts(body)
     _remove_noise(body)
     _fix_lazy_images(body)
 
@@ -451,6 +595,7 @@ def clean_fragment(html_text: str, base_url: str = "") -> str:
     """Clean an HTML fragment that is already article content (e.g. a feed
     item): fix lazy images, absolutize URLs, reduce to book-safe markup."""
     root = htmldom.parse(html_text)
+    _resolve_noscripts(root)
     for node in list(root.walk()):
         if not node.is_text and node.tag in _STRIP_TAGS and node.parent is not None:
             node.detach()

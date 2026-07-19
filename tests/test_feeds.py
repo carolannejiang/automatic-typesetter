@@ -1,6 +1,6 @@
 import unittest
 
-from bookformatter.feeds import looks_like_feed, parse_feed
+from bookformatter.feeds import discover_feed_urls, looks_like_feed, parse_feed
 
 RSS = """<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"
@@ -82,6 +82,27 @@ class FeedTests(unittest.TestCase):
     def test_bad_xml_raises(self):
         with self.assertRaises(ValueError):
             parse_feed("<rss><unclosed>")
+
+    def test_html_encoded_titles_unescaped(self):
+        # Tumblr double-encodes titles: the XML text still holds "&rsquo;".
+        rss = RSS.replace("<title>The Long Ridge</title>",
+                          "<title>Where&amp;rsquo;s that comment?</title>", 1)
+        feed = parse_feed(rss)
+        self.assertEqual(feed.items[0].title, "Where’s that comment?")
+
+    def test_discover_feed_urls(self):
+        page = """<html><head>
+        <link rel="alternate" type="application/rss+xml" href="/feed">
+        <link rel="alternate" type="application/rss+xml"
+              href="https://blog.example/comments/feed/">
+        <link rel="alternate" type="application/atom+xml" href="/atom.xml">
+        <link rel="alternate" type="application/rss+xml" href="/feed">
+        <link rel="alternate" type="text/html" href="/mobile">
+        <link rel="stylesheet" href="/style.css">
+        </head><body></body></html>"""
+        urls = discover_feed_urls(page, "https://blog.example/post/1")
+        self.assertEqual(urls, ["https://blog.example/feed",
+                                "https://blog.example/atom.xml"])
 
 
 if __name__ == "__main__":

@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import sys
 from dataclasses import dataclass, field
 from typing import Optional
-from urllib.parse import urlparse, unquote
+from urllib.parse import urljoin, urlparse, unquote
 
 from . import extract, feeds, fetch, htmldom, mini_markdown
 from .models import Asset, Chapter, prettify_name
@@ -150,9 +151,7 @@ def _ingest_dir(path: str, opts: IngestOptions, result: IngestResult) -> None:
 # URL / feed ingestion
 
 
-def _ingest_page(url: str, text: str, final_url: str,
-                 opts: IngestOptions, result: IngestResult) -> None:
-    doc = extract.extract_article(text, base_url=final_url)
+def _ingest_page(url: str, doc, opts: IngestOptions, result: IngestResult) -> None:
     _log(opts, f"page: {url} -> \"{doc.title}\"")
     result.chapters.append(
         Chapter(title=doc.title, html=doc.html, source=url,
@@ -204,8 +203,10 @@ def _ingest_feed(url: str, feed: feeds.Feed, opts: IngestOptions, result: Ingest
                 result.warn(str(exc))
         if base:
             html_text = extract.clean_fragment(html_text, base_url=base)
-        if not html_text.strip():
-            result.warn(f"skipping empty feed item: {item.title}")
+        if _visible_len(html_text) < 40 and "<img" not in html_text:
+            # Paid-subscriber Substack posts, link-only Tumblr reblogs, and
+            # the like put a stub (or nothing) in the feed.
+            result.warn(f"skipping near-empty feed item: {item.title}")
             continue
         result.chapters.append(
             Chapter(title=item.title, html=html_text, source=item.link or url,
@@ -221,18 +222,183 @@ def _ingest_feed(url: str, feed: feeds.Feed, opts: IngestOptions, result: Ingest
         result.source_url = feed.link or url
 
 
+# Paths whose purpose is to list posts rather than be one: site roots and
+# section fronts. For these the blog's feed is the better source — one clean
+# chapter per post instead of a scrape of the listing page.
+_INDEX_PATHS = {
+    "", "blog", "posts", "articles", "news", "writing", "essays",
+    "journal", "archive", "archives", "home", "latest",
+    "index.html", "index.htm",
+}
+
+
+def _looks_like_index_url(url: str) -> bool:
+    parts = urlparse(url)
+    if parts.query:  # e.g. WordPress "?p=123" permalinks name a single post
+        return False
+    return unquote(parts.path).strip("/").lower() in _INDEX_PATHS
+
+
+def _visible_len(html_text: str) -> int:
+    return len(htmldom.normalize_ws(htmldom.parse(html_text).text_content()))
+
+
+def _fetch_feed(feed_url: str):
+    """Fetch and parse a candidate feed URL; None if it isn't a live feed."""
+    try:
+        text, content_type, _ = fetch.fetch_text(feed_url, timeout=15)
+    except fetch.FetchError:
+        return None
+    if not feeds.looks_like_feed(text, content_type):
+        return None
+    try:
+        parsed = feeds.parse_feed(text)
+    except ValueError:
+        return None
+    return parsed if parsed.items else None
+
+
+def _match_feed_item(items: list, page_url: str):
+    """The feed item whose link is the given page. The scheme and tracking
+    params are ignored; the rest of the query is kept — "?p=123" permalinks
+    distinguish posts by it."""
+    def key(u: str):
+        parts = urlparse(u or "")
+        query = "&".join(sorted(
+            p for p in parts.query.split("&")
+            if p and not p.startswith(("utm_", "source=", "ref=", "mc_cid=", "mc_eid="))
+        ))
+        return parts.netloc.lower(), (parts.path.rstrip("/") or "/"), query
+
+    want = key(page_url)
+    for item in items:
+        if item.link and key(item.link) == want:
+            return item
+    return None
+
+
+# A Medium story URL carries the story's hex id as the slug's last segment;
+# the same id appears in the story's link within the author/publication feed.
+_MEDIUM_POST_ID = re.compile(r"-([0-9a-f]{8,16})$")
+
+
+def _medium_feed_url(url: str):
+    """The public RSS equivalent of a Medium page URL, plus the story id if
+    the URL names a single story: (feed_url, story_id_or_None)."""
+    parts = urlparse(url)
+    host = (parts.hostname or "").lower()
+    segments = [s for s in parts.path.split("/") if s]
+    if host in ("medium.com", "www.medium.com"):
+        # medium.com/@user/story-slug-id or medium.com/publication/story-slug-id
+        if not segments or segments[0] in ("feed", "p", "m"):
+            return None, None
+        feed = f"https://medium.com/feed/{segments[0]}"
+        slug = segments[1] if len(segments) > 1 else ""
+    elif host.endswith(".medium.com"):
+        # user.medium.com/story-slug-id or a custom publication subdomain
+        feed = f"https://{host}/feed"
+        slug = segments[0] if segments else ""
+    else:
+        return None, None
+    match = _MEDIUM_POST_ID.search(slug)
+    return feed, (match.group(1) if match else None)
+
+
+def _medium_ingest_from_feed(url: str, opts: IngestOptions,
+                             result: IngestResult) -> bool:
+    """Medium serves pages only to full browsers (HTTP 403, or an empty
+    JS shell on subdomains) but publishes complete story HTML in its RSS
+    feeds. Import a Medium URL from the matching feed instead."""
+    feed_url, story_id = _medium_feed_url(url)
+    if not feed_url:
+        return False
+    try:
+        text, _, _ = fetch.fetch_text(feed_url)
+        parsed = feeds.parse_feed(text)
+    except (fetch.FetchError, ValueError):
+        return False
+    if story_id:
+        wanted = [it for it in parsed.items if story_id in (it.link or "")]
+        if not wanted:
+            result.warn(
+                f"{url}: Medium refuses non-browser readers, and this story is "
+                f"no longer among the recent items in its feed ({feed_url}) — "
+                f"only recent Medium stories can be imported")
+            return True
+        parsed.items = wanted
+        if not result.title_hint:
+            result.title_hint = wanted[0].title or None
+    result.warn(f"{url}: Medium refuses non-browser readers; "
+                f"imported from its public feed {feed_url} instead")
+    _ingest_feed(feed_url, parsed, opts, result)
+    return True
+
+
 def _ingest_url(url: str, opts: IngestOptions, result: IngestResult) -> None:
-    text, content_type, final_url = fetch.fetch_text(url)
+    try:
+        text, content_type, final_url = fetch.fetch_text(url)
+    except fetch.FetchError as exc:
+        if "HTTP Error 403" in str(exc) and _medium_ingest_from_feed(url, opts, result):
+            return
+        raise
     if feeds.looks_like_feed(text, content_type):
         try:
             parsed = feeds.parse_feed(text)
         except ValueError as exc:
             result.warn(f"{url}: {exc}; treating as a page")
-            _ingest_page(url, text, final_url, opts, result)
+            doc = extract.extract_article(text, base_url=final_url)
+            _ingest_page(url, doc, opts, result)
             return
         _ingest_feed(url, parsed, opts, result)
-    else:
-        _ingest_page(url, text, final_url, opts, result)
+        return
+
+    doc = extract.extract_article(text, base_url=final_url)
+    content_len = _visible_len(doc.html)
+
+    # A Medium page that came back as a near-empty JS shell: use its feed.
+    if content_len < 300:
+        if _medium_ingest_from_feed(url, opts, result):
+            return
+        if final_url != url and _medium_ingest_from_feed(final_url, opts, result):
+            return
+
+    # An index page is better served by the feed it advertises: one clean
+    # chapter per post, in order. A *post* page the extractor got almost
+    # nothing from switches to its feed too, but only to the matching item —
+    # never a surprise import of the whole blog.
+    indexy = _looks_like_index_url(final_url)
+    if content_len < 300 or indexy:
+        candidates = feeds.discover_feed_urls(text, final_url)[:3]
+        if not candidates and indexy:
+            base = final_url if final_url.endswith("/") else final_url + "/"
+            candidates = [urljoin(base, p) for p in feeds.COMMON_FEED_PATHS]
+        for feed_url in candidates:
+            parsed = _fetch_feed(feed_url)
+            if parsed is None:
+                continue
+            if indexy:
+                _log(opts, f"{url}: using its feed {feed_url}")
+                _ingest_feed(feed_url, parsed, opts, result)
+                return
+            item = (_match_feed_item(parsed.items, final_url)
+                    or _match_feed_item(parsed.items, url))
+            if item is not None:
+                parsed.items = [item]
+                if not result.title_hint:
+                    result.title_hint = item.title or None
+                result.warn(f"{url}: the page yielded almost no content; "
+                            f"imported this post from the site's feed {feed_url}")
+                _ingest_feed(feed_url, parsed, opts, result)
+                return
+            break  # a live feed without this post: keep the page result
+
+    if content_len < 40:
+        result.warn(
+            f"{url}: no readable article content found — the page likely "
+            f"renders with JavaScript; if the blog offers an RSS/Atom feed, "
+            f"try that URL")
+        return
+    _ingest_page(url, doc, opts, result)
 
 
 # ---------------------------------------------------------------------------
@@ -319,7 +485,11 @@ def ingest(inputs: list, opts: Optional[IngestOptions] = None) -> IngestResult:
             try:
                 _ingest_url(raw, opts, result)
             except fetch.FetchError as exc:
-                result.warn(str(exc))
+                message = str(exc)
+                if re.search(r"HTTP Error (403|406|429)", message):
+                    message += (" — the site may refuse automated readers; "
+                                "if the blog offers an RSS/Atom feed, try that URL")
+                result.warn(message)
         elif os.path.isdir(raw):
             _ingest_dir(raw, opts, result)
         elif os.path.isfile(raw):
