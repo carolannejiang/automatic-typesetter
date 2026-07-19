@@ -111,6 +111,49 @@ class ExtractTests(unittest.TestCase):
         self.assertIn("toweled him off", doc.html)
         self.assertNotIn("Recent one", doc.html)
 
+    def test_breakpoint_classes_are_not_content_hints(self):
+        # Wix stamps the wrapper around the whole page with responsive
+        # breakpoint utilities like "gt-740 lte-w980 lte-banner-w1564". The
+        # word "banner" inside such a token must not drop the wrapper — but a
+        # real cookie banner still must.
+        prose = ("This is the post I wish someone had sent me earlier, with "
+                 "commas, and enough length to win the scoring pass easily. " * 4)
+        page = f"""<!DOCTYPE html><html><head><title>Advice</title></head><body>
+        <div class="cookie-banner"><p>We use cookies, please accept them, thanks.</p></div>
+        <div class="md lt-lg gt-740 lte-w980 lte-banner-w1564 lte-banner-w980 urt2wh">
+          <div class="post-body"><p>{prose}</p><p>{prose}</p></div>
+        </div></body></html>"""
+        doc = extract_article(page, base_url="https://wixsite.example/post/advice")
+        self.assertIn("someone had sent me", doc.html)
+        self.assertNotIn("We use cookies", doc.html)
+
+    def test_per_paragraph_wrappers_still_find_whole_article(self):
+        # Wix nests every paragraph in its own stack of divs (some one deep,
+        # some three deep), so votes never accumulate on the real article
+        # container when only the parent and grandparent are scored — a
+        # comma-rich list inside the post, whose items all share one <ol>,
+        # outscores it and the extractor returns just that list fragment.
+        # With decaying votes up to five levels the whole post must win.
+        prose = ("A reasonably long paragraph, with commas, that should count "
+                 "toward the article container's score when votes decay. " * 2)
+        shallow = "".join(f"<div><p>{prose}</p></div>" for _ in range(6))
+        deep = "".join(
+            f"<div><div><div><p>{prose}</p></div></div></div>" for _ in range(9)
+        )
+        items = "".join(
+            f"<li>Advice item {i}: be able to point to relevant work, ask "
+            f"crisp questions, follow up afterwards, and thank your mentors "
+            f"for the time they spend on you.</li>"
+            for i in range(8)
+        )
+        page = f"""<!DOCTYPE html><html><head><title>Post</title></head><body>
+        <div class="uJ2mK"><div class="xR8wQ">
+        {shallow}<ol>{items}</ol>{deep}
+        </div></div></body></html>"""
+        doc = extract_article(page, base_url="https://wixsite.example/post/x")
+        self.assertIn("when votes decay", doc.html)
+        self.assertIn("Advice item 0", doc.html)
+
     def test_clean_fragment_wraps_stray_text(self):
         out = clean_fragment("plain leading text<p>then a paragraph</p>")
         self.assertTrue(out.startswith("<p>plain leading text</p>"))

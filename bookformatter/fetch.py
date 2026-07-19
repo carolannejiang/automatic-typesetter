@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import http.client
 import ipaddress
 import re
 import socket
@@ -58,8 +59,21 @@ class _GuardedRedirectHandler(urllib.request.HTTPRedirectHandler):
 _opener = urllib.request.build_opener(_GuardedRedirectHandler)
 
 
+def _requote_url(url: str) -> str:
+    """Percent-encode characters browsers tolerate raw in href/src but
+    http.client rejects — old hand-authored pages link uploads like
+    "nme goth.jpg" with a literal space. Existing %-escapes are preserved.
+    """
+    parts = urllib.parse.urlsplit(url)
+    path = urllib.parse.quote(parts.path, safe="/%:@!$&'()*+,;=~._-")
+    query = urllib.parse.quote(parts.query, safe="=&%:@!$'()*+,;/?~._-")
+    return urllib.parse.urlunsplit(
+        (parts.scheme, parts.netloc, path, query, parts.fragment))
+
+
 def fetch(url: str, timeout: float = 30.0):
     """Fetch a URL. Returns (bytes, content_type, final_url). Caches per run."""
+    url = _requote_url(url)
     if url in _cache:
         return _cache[url]
     if PUBLIC_MODE:
@@ -79,7 +93,8 @@ def fetch(url: str, timeout: float = 30.0):
                 raise FetchError(f"{url}: response larger than {MAX_BYTES} bytes")
             content_type = resp.headers.get("Content-Type", "")
             result = (data, content_type, resp.geturl())
-    except (urllib.error.URLError, OSError, ValueError) as exc:
+    except (urllib.error.URLError, http.client.HTTPException,
+            OSError, ValueError) as exc:
         raise FetchError(f"could not fetch {url}: {exc}") from exc
     _cache[url] = result
     return result
@@ -88,6 +103,18 @@ def fetch(url: str, timeout: float = 30.0):
 _META_CHARSET = re.compile(
     rb"""<meta[^>]+charset\s*=\s*["']?\s*([a-zA-Z0-9_.:-]+)""", re.I
 )
+
+
+# Pages authored with old Windows tooling routinely declare iso-8859-1 (or
+# ascii) while actually holding windows-1252 punctuation — curly quotes,
+# en-dashes, ellipses in 0x80-0x9f. Decoded per the label those bytes become
+# invisible C1 controls, so the punctuation silently vanishes from the book.
+# Browsers apply the WHATWG rule and read these labels as windows-1252 (a
+# superset of what the label promises); do the same.
+_CP1252_LABELS = {
+    "iso-8859-1", "iso8859-1", "iso_8859-1", "latin-1", "latin1",
+    "us-ascii", "ascii",
+}
 
 
 def decode_body(data: bytes, content_type: str) -> str:
@@ -99,6 +126,8 @@ def decode_body(data: bytes, content_type: str) -> str:
     sniffed = _META_CHARSET.search(data[:4096])
     if sniffed:
         encodings.append(sniffed.group(1).decode("ascii", "ignore"))
+    encodings = ["cp1252" if e.lower() in _CP1252_LABELS else e
+                 for e in encodings]
     encodings += ["utf-8", "latin-1"]
     for enc in encodings:
         try:
