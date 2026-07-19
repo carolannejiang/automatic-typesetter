@@ -107,7 +107,7 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = "6x9",
         parts.append(f'<section class="chapter" id="chapter-{i}">')
         parts.append('<header class="chapter-head">')
         if chapter_numbers:
-            parts.append(f'<span class="chapter-number">Chapter {i}</span>')
+            parts.append(f'<span class="chapter-number">{themes.chapter_label(theme, i)}</span>')
         parts.append(f'<h1 class="chapter-title">{_esc(chapter.title)}</h1>')
         parts.append("</header>")
         parts.append(content)

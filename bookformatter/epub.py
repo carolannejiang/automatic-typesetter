@@ -58,10 +58,11 @@ def _build_date() -> str:
     return now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _chapter_body(number: int, title: str, content_html: str, show_number: bool) -> str:
+def _chapter_body(number: int, title: str, content_html: str, show_number: bool,
+                  theme: str = "classic") -> str:
     head = ['<header class="chapter-head">']
     if show_number:
-        head.append(f'<span class="chapter-number">Chapter {number}</span>')
+        head.append(f'<span class="chapter-number">{themes.chapter_label(theme, number)}</span>')
     head.append(f'<h1 class="chapter-title">{_esc(title)}</h1>')
     head.append("</header>")
     return (
@@ -149,7 +150,7 @@ def write_epub(book: Book, path: str, theme: str = "classic",
             if src.startswith("images/"):
                 img.attrs["src"] = "../" + src
         content = htmldom.inner_html(root)
-        body = _chapter_body(i, chapter.title, content, chapter_numbers)
+        body = _chapter_body(i, chapter.title, content, chapter_numbers, theme)
         href = f"text/chapter-{i:03d}.xhtml"
         files.append((f"OEBPS/{href}", _xhtml(chapter.title, body, lang)))
         manifest.append((f"ch{i:03d}", href, "application/xhtml+xml", None))
