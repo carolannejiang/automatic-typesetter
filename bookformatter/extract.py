@@ -43,11 +43,21 @@ _AD_HINT = re.compile(r"(^|[-_ ])ads?([-_ ]|$)", re.I)
 # inside such a token must not count as a hint, or the entire article drops.
 _BREAKPOINT_TOKEN = re.compile(r"^(?:lte?|gte?)(?:-|$)|^w?\d", re.I)
 
+# Tailwind variant and arbitrary-value utilities likewise describe geometry
+# or state, never content. Forethought wraps its whole article in a section
+# classed "scroll-mt-[var(--scroll-nav-offset-y)]" — the "nav" inside that
+# CSS variable name must not read as a navigation hint. Brackets, parens,
+# and the variant colon never appear in semantic class names, so any token
+# carrying one is a utility.
+_UTILITY_CHAR = re.compile(r"[\[\]():]")
+
 
 def _hint_ident(node: Node) -> str:
-    """id+class string for hint matching, minus breakpoint utility tokens."""
+    """id+class string for hint matching, minus utility tokens that describe
+    layout rather than content (breakpoints, Tailwind arbitrary values)."""
     return " ".join(
-        t for t in node.classes().split() if not _BREAKPOINT_TOKEN.match(t)
+        t for t in node.classes().split()
+        if not _BREAKPOINT_TOKEN.match(t) and not _UTILITY_CHAR.search(t)
     )
 
 
