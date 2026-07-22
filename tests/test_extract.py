@@ -170,6 +170,69 @@ class ExtractTests(unittest.TestCase):
         self.assertIn("when votes decay", doc.html)
         self.assertIn("Advice item 0", doc.html)
 
+    def test_article_split_across_sibling_wrappers(self):
+        # Single-winner selection with no sibling merge: when a layout splits
+        # one article across sibling wrapper divs (Medium sections, Wix column
+        # rows, hero-intro-then-body themes), the wrapper holding the majority
+        # of the text used to win outright and the rest was silently dropped.
+        p1 = "First-half paragraph with plenty of text, commas, and length to vote strongly here. " * 3
+        p2 = "Second-half paragraph, equally real content, that a reader would certainly miss badly. " * 3
+        first = "".join(f"<p>{p1}</p>" for _ in range(6))
+        second = "".join(f"<p>{p2}</p>" for _ in range(3))
+        page = f"""<html><head><title>T</title></head><body>
+        <div class="a1b2c"><div class="x9y8z">{first}</div><div class="q7w6e">{second}</div></div>
+        </body></html>"""
+        doc = extract_article(page, base_url="https://x.example/")
+        self.assertIn("First-half", doc.html)
+        self.assertIn("Second-half", doc.html)
+
+    def test_article_split_at_two_levels(self):
+        # Medium's article > section > div stacks can split at two levels at
+        # once; reassembly must climb past the winner's immediate parent.
+        p1 = "First-half paragraph with plenty of text, commas, and length to vote strongly here. " * 3
+        p2 = "Second-half paragraph, equally real content, that a reader would certainly miss badly. " * 3
+        first = "".join(f"<p>{p1}</p>" for _ in range(6))
+        page = f"""<html><head><title>T</title></head><body><article>
+        <section><div class="w1">{first}</div><div class="w2"><p>{p1}</p></div></section>
+        <section><div class="w3"><p>{p2}</p></div></section>
+        </article></body></html>"""
+        doc = extract_article(page, base_url="https://x.example/")
+        self.assertIn("First-half", doc.html)
+        self.assertIn("Second-half", doc.html)
+
+    def test_heading_and_figure_in_own_sibling_wrappers(self):
+        # A mid-article heading or figure often sits in its own wrapper div
+        # between paragraph wrappers. Such wrappers never vote (headings and
+        # figures score nothing), so sibling reassembly must count them as
+        # content rather than strand them outside the winning container.
+        p1 = "First-half paragraph with plenty of text, commas, and length to vote strongly here. " * 3
+        p2 = "Second-half paragraph, equally real content, that a reader would certainly miss badly. " * 3
+        first = "".join(f"<p>{p1}</p>" for _ in range(6))
+        page = f"""<html><head><title>T</title></head><body><div class="outer">
+        <div>{first}</div>
+        <div><h2>A Mid-Article Heading</h2></div>
+        <div><figure><img src="/pic.jpg" alt="pic"><figcaption>The picture.</figcaption></figure></div>
+        <div><p>{p2}</p></div>
+        </div></body></html>"""
+        doc = extract_article(page, base_url="https://x.example/")
+        self.assertIn("Mid-Article Heading", doc.html)
+        self.assertIn("https://x.example/pic.jpg", doc.html)
+        self.assertIn("Second-half", doc.html)
+
+    def test_sibling_reassembly_still_drops_junk(self):
+        # Widening to siblings must not let link-dense boilerplate ride along:
+        # an unhinted related-links list next to the article body stays out.
+        p1 = "Article paragraph with plenty of text, commas, and length to vote strongly here. " * 3
+        first = "".join(f"<p>{p1}</p>" for _ in range(6))
+        links = "".join(f'<li><a href="/r{i}">Recommended piece number {i} you may enjoy</a></li>'
+                        for i in range(8))
+        page = f"""<html><head><title>T</title></head><body>
+        <div class="outer"><div class="x9y8z">{first}</div><div class="q7w6e"><ul>{links}</ul></div></div>
+        </body></html>"""
+        doc = extract_article(page, base_url="https://x.example/")
+        self.assertIn("Article paragraph", doc.html)
+        self.assertNotIn("Recommended piece", doc.html)
+
     def test_clean_fragment_wraps_stray_text(self):
         out = clean_fragment("plain leading text<p>then a paragraph</p>")
         self.assertTrue(out.startswith("<p>plain leading text</p>"))
