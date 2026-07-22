@@ -52,7 +52,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     design = parser.add_argument_group("design")
     design.add_argument("--theme", default="classic",
-                        choices=["classic", "modern", "bringhurst", "classical"],
+                        choices=themes.THEME_NAMES,
                         help="typography theme; bringhurst sets the page after The Elements "
                              "of Typographic Style, classical after WeasyPrint's "
                              "book-classical sample (default: classic)")
