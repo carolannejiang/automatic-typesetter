@@ -304,7 +304,8 @@ def _is_paragraph_div(node: Node) -> bool:
     )
 
 
-def _score_candidates(body: Node) -> Optional[Node]:
+def _score_candidates(body: Node) -> dict:
+    """Paragraph votes accumulated per ancestor: {id(node): (node, raw_score)}."""
     scores: dict = {}
     for p in body.find_all({"p", "pre", "blockquote", "li", "div"}):
         if p.tag == "div" and not _is_paragraph_div(p):
@@ -326,14 +327,76 @@ def _score_candidates(body: Node) -> Optional[Node]:
             prev = scores.get(id(ancestor), (ancestor, 0.0))[1]
             scores[id(ancestor)] = (ancestor, prev + score / weight)
             ancestor, level = ancestor.parent, level + 1
-    if not scores:
-        return None
+    return scores
+
+
+def _adjusted_score(node: Node, raw: float) -> float:
+    return raw * (1.0 - _link_density(node)) * _hint_multiplier(node)
+
+
+def _best_candidate(scores: dict):
     best, best_score = None, 0.0
     for node, score in scores.values():
-        adjusted = score * (1.0 - _link_density(node)) * _hint_multiplier(node)
+        adjusted = _adjusted_score(node, score)
         if adjusted > best_score:
             best, best_score = node, adjusted
-    return best
+    return best, best_score
+
+
+_HEADING_TAGS = {"h1", "h2", "h3", "h4", "h5", "h6"}
+
+
+def _is_content_sibling(sib: Node, scores: dict, threshold: float) -> bool:
+    """Does a sibling of the winning container look like more of the article?
+
+    Mirrors Arc90's sibling test, widened for wrappers that never vote:
+    a heading or figure sitting in its own div between two paragraph
+    wrappers has zero score but is unmistakably part of the piece.
+    """
+    if sib.is_text:
+        return False
+    entry = scores.get(id(sib))
+    if entry is not None and _adjusted_score(sib, entry[1]) >= threshold:
+        return True
+    if _link_density(sib) >= 0.25:
+        return False
+    text = htmldom.normalize_ws(sib.text_content())
+    if len(text) >= 80:
+        return True
+    if sib.tag in _HEADING_TAGS or sib.find(_HEADING_TAGS) is not None:
+        return len(text) < 200
+    if sib.tag in ("figure", "img") or sib.find({"figure", "img"}) is not None:
+        return len(text) < 300
+    return False
+
+
+def _widen_to_content_siblings(best: Node, best_adjusted: float,
+                               scores: dict, boundary: Node) -> Node:
+    """Arc90's missing sibling-merge step, done by promotion.
+
+    The voting winner is a single subtree, but many layouts split one
+    article across sibling wrappers (Medium's article > section > div
+    stacks, Wix column rows, hero-intro-then-body themes): the decay
+    weights give the shared parent only half of every vote, so whichever
+    wrapper holds the majority of the text wins outright and the rest of
+    the piece is silently dropped. While any sibling of the winner also
+    looks like article content, hand the win to the parent instead —
+    repeated, so multi-level splits reassemble too. Junk siblings picked
+    up along the way still face _remove_noise (already run) and
+    _clean_tree's link-density drop.
+    """
+    node = best
+    for _ in range(3):
+        parent = node.parent
+        if node is boundary or parent is None \
+                or parent.tag in (None, "#document", "html", "body"):
+            break
+        siblings = [s for s in parent.children if s is not node]
+        if not any(_is_content_sibling(s, scores, best_adjusted * 0.2)
+                   for s in siblings):
+            break
+        node = parent
+    return node
 
 
 def _remove_noise(root: Node) -> None:
@@ -558,9 +621,11 @@ def extract_article(html_text: str, base_url: str = "") -> ExtractedDoc:
         main = body.find("main")
         if main is not None and len(htmldom.normalize_ws(main.text_content())) > 140:
             container = main
-    scored = _score_candidates(container or body)
-    if scored is not None and (container is None or scored in list(container.walk())):
-        container = scored
+    scores = _score_candidates(container or body)
+    best, best_adjusted = _best_candidate(scores)
+    if best is not None and (container is None or best in list(container.walk())):
+        container = _widen_to_content_siblings(
+            best, best_adjusted, scores, container or body)
     if container is None:
         container = body
 
