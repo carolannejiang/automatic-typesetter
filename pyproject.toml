@@ -27,5 +27,5 @@ pdf = ["weasyprint>=60"]
 bookformatter = "bookformatter.cli:main"
 bookformatter-web = "bookformatter.web:main"
 
-[tool.setuptools]
-packages = ["bookformatter"]
+[tool.setuptools.packages.find]
+include = ["bookformatter*"]
