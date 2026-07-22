@@ -127,6 +127,22 @@ class ExtractTests(unittest.TestCase):
         self.assertIn("someone had sent me", doc.html)
         self.assertNotIn("We use cookies", doc.html)
 
+    def test_tailwind_utility_classes_are_not_content_hints(self):
+        # Forethought (Tailwind) wraps the entire article in a section whose
+        # scroll-margin utility references a CSS variable named
+        # --scroll-nav-offset-y. The "nav" inside that arbitrary-value token
+        # must not drop the section — but a real nav-classed menu still must.
+        prose = ("Automating AI research could compress decades of progress, "
+                 "with feedback loops, into a few short years of change. " * 4)
+        page = f"""<!DOCTYPE html><html><head><title>Explosion</title></head><body>
+        <div class="site-nav"><p>Research, About, Donate, Careers, Contact us now.</p></div>
+        <section class="px-[30px] md:pt-[80px] bg-ft-offwhite scroll-mt-[var(--scroll-nav-offset-y)] group-hover:opacity-100">
+          <div class="post-body"><p>{prose}</p><p>{prose}</p></div>
+        </section></body></html>"""
+        doc = extract_article(page, base_url="https://forethought.example/research/x")
+        self.assertIn("compress decades of progress", doc.html)
+        self.assertNotIn("Donate", doc.html)
+
     def test_per_paragraph_wrappers_still_find_whole_article(self):
         # Wix nests every paragraph in its own stack of divs (some one deep,
         # some three deep), so votes never accumulate on the real article
