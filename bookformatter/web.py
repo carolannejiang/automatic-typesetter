@@ -28,9 +28,12 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from . import epub as epub_writer
+from . import icml as icml_writer
+from . import idml as idml_writer
 from . import ingest as ingester
 from . import printbook, themes
 from .fetch import sniff_image
+from .indesign import extract_link_assets
 from .models import Asset, Book, BookMeta, slugify
 
 MAX_BODY = 100 * 1024 * 1024  # 100 MB upload cap
@@ -247,6 +250,30 @@ def run_build(params: dict, uploads: list, workdir: str,
                                chapter_numbers=chapter_numbers)
         out.files[f"{name}.epub"] = epub_path
 
+    if "icml" in formats:
+        progress("Writing InDesign story…")
+        icml_path = os.path.join(out_dir, f"{name}.icml")
+        icml_writer.write_icml(book, icml_path, theme=theme, font_size=font_size,
+                               line_height=line_height, chapter_numbers=chapter_numbers)
+        out.files[f"{name}.icml"] = icml_path
+
+    if "idml" in formats:
+        progress("Writing InDesign document…")
+        idml_path = os.path.join(out_dir, f"{name}.idml")
+        idml_writer.write_idml(book, idml_path, theme=theme, trim=trim,
+                               font_size=font_size, line_height=line_height,
+                               chapter_start=chapter_start, chapter_numbers=chapter_numbers)
+        out.files[f"{name}.idml"] = idml_path
+
+    if ({"icml", "idml"} & formats) and book.assets:
+        for path in extract_link_assets(book, out_dir):
+            out.files[os.path.relpath(path, out_dir).replace(os.sep, "/")] = path
+        out.warnings.append(
+            "InDesign files link images rather than embed them — download the "
+            "images too and keep the images/ folder beside the .icml/.idml file "
+            "so InDesign can relink them."
+        )
+
     if "pdf" in formats or "html" in formats:
         progress("Typesetting pages…")
         html_path = os.path.join(out_dir, f"{name}.html")
@@ -441,11 +468,13 @@ class Handler(BaseHTTPRequestHandler):
                 ".epub": "application/epub+zip",
                 ".pdf": "application/pdf",
                 ".html": "text/html; charset=utf-8",
+                ".icml": "application/xml",
+                ".idml": "application/vnd.adobe.indesign-idml-package",
             }.get(os.path.splitext(wanted)[1].lower(), "application/octet-stream")
             with open(path, "rb") as fh:
                 data = fh.read()
             self._send(200, data, media, {
-                "Content-Disposition": f'attachment; filename="{wanted}"',
+                "Content-Disposition": f'attachment; filename="{os.path.basename(wanted)}"',
             })
         else:
             self._json(404, {"error": "not found"})
@@ -799,6 +828,8 @@ body.locked { background: #fff; color: #111; }
         <label><input type="checkbox" name="formats" value="epub" checked> EPUB (e-readers)</label>
         <label><input type="checkbox" name="formats" value="pdf" checked> PDF (print)</label>
         <label><input type="checkbox" name="formats" value="html"> HTML (page source)</label>
+        <label><input type="checkbox" name="formats" value="icml"> ICML (InDesign/InCopy story &mdash; File &rarr; Place)</label>
+        <label><input type="checkbox" name="formats" value="idml"> IDML (InDesign document)</label>
       </div>
       <details>
         <summary>Fine print — typography, chapters, images, feeds, engine</summary>

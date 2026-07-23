@@ -8,9 +8,12 @@ import os
 import sys
 
 from . import epub as epub_writer
+from . import icml as icml_writer
+from . import idml as idml_writer
 from . import ingest as ingester
 from . import printbook, themes
 from .fetch import sniff_image
+from .indesign import extract_link_assets
 from .models import Asset, Book, BookMeta, slugify
 
 
@@ -19,7 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="bookformatter",
         description=(
             "Format text, Markdown, web pages, and blogs into traditional "
-            "book formats (EPUB and print-ready PDF)."
+            "book formats (EPUB, print-ready PDF, and InDesign ICML/IDML)."
         ),
         epilog=(
             "Examples:\n"
@@ -46,7 +49,9 @@ def build_parser() -> argparse.ArgumentParser:
     output.add_argument("-o", "--output-dir", default="build", help="output directory (default: ./build)")
     output.add_argument("-n", "--name", help="output basename (default: slug of the title)")
     output.add_argument("-f", "--formats", default="epub,pdf",
-                        help="comma-separated: epub,pdf,html (default: epub,pdf)")
+                        help="comma-separated: epub,pdf,html,icml,idml (default: epub,pdf); "
+                             "icml is an InCopy story to Place into an InDesign layout, "
+                             "idml a full InDesign document")
     output.add_argument("--pdf-engine", default="auto", choices=["auto", "weasyprint", "chrome", "none"],
                         help="PDF renderer (default: auto = weasyprint, then headless Chrome)")
 
@@ -97,7 +102,7 @@ def _load_cover(path: str):
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     formats = {f.strip().lower() for f in args.formats.split(",") if f.strip()}
-    unknown = formats - {"epub", "pdf", "html"}
+    unknown = formats - {"epub", "pdf", "html", "icml", "idml"}
     if unknown:
         raise SystemExit(f"error: unknown format(s): {', '.join(sorted(unknown))}")
 
@@ -142,6 +147,32 @@ def main(argv=None) -> int:
             chapter_numbers=not args.no_chapter_numbers,
         )
         written.append(epub_path)
+
+    if "icml" in formats:
+        icml_path = os.path.join(args.output_dir, f"{name}.icml")
+        icml_writer.write_icml(
+            book, icml_path, theme=args.theme, font_size=args.font_size,
+            line_height=args.line_height, chapter_numbers=not args.no_chapter_numbers,
+        )
+        written.append(icml_path)
+
+    if "idml" in formats:
+        idml_path = os.path.join(args.output_dir, f"{name}.idml")
+        idml_writer.write_idml(
+            book, idml_path, theme=args.theme, trim=args.trim,
+            font_size=args.font_size, line_height=args.line_height,
+            chapter_start=args.chapter_start,
+            chapter_numbers=not args.no_chapter_numbers,
+        )
+        written.append(idml_path)
+
+    if ({"icml", "idml"} & formats) and book.assets:
+        extract_link_assets(book, args.output_dir)
+        print(
+            "Wrote linked images to images/ in the output directory — keep that\n"
+            "  folder beside the .icml/.idml file and InDesign will relink them.",
+            file=sys.stderr,
+        )
 
     html_path = os.path.join(args.output_dir, f"{name}.html")
     if "pdf" in formats or "html" in formats:

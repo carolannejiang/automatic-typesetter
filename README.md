@@ -1,9 +1,9 @@
 # bookformatter
 
 Turn text, Markdown, web pages, and whole blogs into **traditional book
-formats**: a valid EPUB 3 for e-readers and a print-ready, properly
-typeset PDF (6×9″ trim, running heads, folios, front matter, recto
-chapter openers).
+formats**: a valid EPUB 3 for e-readers, a print-ready, properly typeset
+PDF (6×9″ trim, running heads, folios, front matter, recto chapter
+openers), and InDesign handoff files (ICML/IDML) for professional layout.
 
 The core is **pure Python standard library** — no dependencies to install.
 PDF rendering uses WeasyPrint if you have it, or any local Chrome/Chromium
@@ -38,6 +38,10 @@ python3 -m bookformatter chapters/ -t "Essays" --theme bringhurst
 # chapter heads at text size, every paragraph indented, folios in the
 # top outer corners, chapter openers stripped of all page furniture
 python3 -m bookformatter chapters/ -t "Essays" --theme classical
+
+# Hand off to a designer: an InCopy story to Place, plus a full
+# InDesign document
+python3 -m bookformatter manuscript.md -t "My Book" -f icml,idml
 ```
 
 Outputs land in `./build/` (change with `-o`): `<slug>.epub`, `<slug>.pdf`,
@@ -152,6 +156,28 @@ Rendering engines (`--pdf-engine auto|weasyprint|chrome|none`):
 
 \* recent Chromium-based browsers.
 
+## InDesign
+
+`-f icml,idml` writes two handoff files for professional layout:
+
+- **ICML** (InCopy story) — for a designer who owns the layout. They
+  File → Place it into their own InDesign document; the story's style
+  *names* (`Body`, `Chapter Title`, …) merge with theirs, and on a name
+  conflict the document's definition wins — the text snaps to their
+  typography.
+- **IDML** (full InDesign document) — a one-time scaffold when no layout
+  exists yet: trim-size pages, mirrored margins, folios, the whole book
+  threaded through. Opens in InDesign CS4+ (and Affinity Publisher 1.8+,
+  Scribus 1.5+); the designer saves it as their working `.indd`.
+
+Images arrive as links, not embeds — keep the generated `images/` folder
+beside the file. There's no baked-in TOC (page numbers only exist after
+layout); build one natively from the `Chapter Title` style with
+Layout → Table of Contents. Default fonts are Minion Pro / Myriad Pro /
+Courier New; InDesign's Missing Fonts dialog activates any absent ones
+from Adobe Fonts in one click. Full designer notes in
+**[docs/INDESIGN.md](docs/INDESIGN.md)**.
+
 ## How it works
 
 ```
@@ -164,6 +190,7 @@ web UI (…web)  ──────┘        │  readability-style extraction,
                 Book model (metadata + chapters of clean HTML + assets)
                               │
                               ├──► EPUB 3 writer (stdlib zipfile; polyglot XHTML)
+                              ├──► ICML / IDML writers (InDesign handoff)
                               └──► print HTML (CSS Paged Media) ──► WeasyPrint / Chrome ──► PDF
 ```
 

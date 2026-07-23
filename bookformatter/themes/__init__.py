@@ -41,6 +41,16 @@ def chapter_label(theme: str, number: int) -> str:
     return _theme(theme).chapter_label(number)
 
 
+def theme_params(theme: str, font_size: str, line_height: str) -> dict:
+    """Public accessor for a theme's template parameters."""
+    return _theme(theme).params(font_size, line_height)
+
+
+def theme_margins(theme: str, width: float, height: float) -> dict:
+    """Public accessor for a theme's page margins (inch strings)."""
+    return _theme(theme).margins(width, height)
+
+
 def epub_css(theme: str = "classic", font_size: str = "1em",
              line_height: str = "1.5", drop_caps: bool = False) -> str:
     mod = _theme(theme)
