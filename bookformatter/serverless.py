@@ -34,6 +34,8 @@ _MEDIA_TYPES = {
     ".epub": "application/epub+zip",
     ".pdf": "application/pdf",
     ".html": "text/html; charset=utf-8",
+    ".icml": "application/xml",
+    ".idml": "application/vnd.adobe.indesign-idml-package",
     ".zip": "application/zip",
 }
 
@@ -45,10 +47,12 @@ _PDF_ENGINE_BLOCK = re.compile(
 )
 _SCRIPT_BLOCK = re.compile(r"<script>.*?</script>", re.S)
 
-_SERVERLESS_FORMATS = """<label>Formats <span style="font-style:italic">(picking both delivers a .zip)</span></label>
+_SERVERLESS_FORMATS = """<label>Formats <span style="font-style:italic">(picking several delivers a .zip)</span></label>
       <div class="checks">
         <label><input type="checkbox" name="formats" value="epub" checked> EPUB (e-readers)</label>
         <label><input type="checkbox" name="formats" value="html"> Print HTML &mdash; open it and File &rarr; Print to make the PDF</label>
+        <label><input type="checkbox" name="formats" value="icml"> ICML (InDesign/InCopy story &mdash; File &rarr; Place)</label>
+        <label><input type="checkbox" name="formats" value="idml"> IDML (InDesign document)</label>
       </div>"""
 
 _SERVERLESS_SCRIPT = """<script>
