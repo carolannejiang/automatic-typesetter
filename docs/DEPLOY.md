@@ -21,12 +21,7 @@ Setup, all in the Vercel dashboard (~5 minutes):
    command, defaults as detected → **Deploy**. (The production branch is
    the repo's default branch; every push to it redeploys automatically.)
 
-2. **Set the passcode** (recommended — builds are real compute on your
-   account): Project → Settings → Environment Variables →
-   `BOOKFORMATTER_PASSCODE` = a phrase you like → save, then Deployments
-   → ⋯ on the latest → Redeploy so it takes effect.
-
-3. **Attach the subdomain**: Project → Settings → Domains → add
+2. **Attach the subdomain**: Project → Settings → Domains → add
    `book.carolanne.link`. Because the domain is on Vercel DNS in the same
    account, Vercel configures the record and certificate itself —
    no manual DNS.
@@ -50,8 +45,7 @@ Actions workflow (`.github/workflows/deploy.yml`) that does the whole
 deployment.
 
 1. Create a Fly.io account, make a deploy token (dashboard → Tokens).
-2. Add GitHub repo secrets: `FLY_API_TOKEN` (required),
-   `BOOKFORMATTER_PASSCODE` (recommended).
+2. Add the GitHub repo secret `FLY_API_TOKEN` (required).
 3. Run the *Deploy to Fly.io* workflow from the Actions tab. It creates
    app `carolanne-bookpress`, deploys, and requests the certificate for
    `book.carolanne.link`.
@@ -81,11 +75,11 @@ proxied with rewrites from the Vercel project that serves the domain:
 ## Other hosts
 
 Any Docker host works — Railway and Render can deploy this repo directly;
-set `BOOKFORMATTER_PUBLIC=1` (and optionally `BOOKFORMATTER_PASSCODE`,
-`BOOKFORMATTER_BASE_PATH`) in their dashboards. On your own VPS:
+set `BOOKFORMATTER_PUBLIC=1` (and optionally `BOOKFORMATTER_BASE_PATH`) in
+their dashboards. On your own VPS:
 
 ```bash
-BOOKFORMATTER_PUBLIC=1 BOOKFORMATTER_PASSCODE=... \
+BOOKFORMATTER_PUBLIC=1 \
     bookformatter-web --host 127.0.0.1 --port 8080 --no-browser
 ```
 
@@ -102,15 +96,11 @@ in the Docker image) turns on:
   every redirect hop, so visitors can't use the server to probe its
   network.
 - **Rate limiting** (long-running server only) — 6 builds per 15 minutes
-  per client IP (reads `X-Forwarded-For` behind a proxy). The serverless
-  function relies on the passcode instead.
+  per client IP (reads `X-Forwarded-For` behind a proxy).
 - Caps everywhere: 100 inputs per build, 20 MB per fetched resource,
   request-body limits, 2 concurrent builds on the long-running server.
 
-`BOOKFORMATTER_PASSCODE` adds a passcode field to the page; builds
-without the right passcode are rejected.
-
 Honest limitations of hosting: long-running-server jobs live in memory (a
 restart forgets in-flight builds), TLS comes from the platform, and
-DNS-rebinding SSRF is out of scope. For a personal press behind a
-passcode, that's a reasonable trade.
+DNS-rebinding SSRF is out of scope. For a personal press, that's a
+reasonable trade.

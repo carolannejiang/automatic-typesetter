@@ -71,7 +71,7 @@ port; `--host 0.0.0.0` makes it reachable from other devices on your
 network.
 
 Want it on your own domain? Two ready-made paths, both hardened for
-public use (SSRF guard, passcode, caps):
+public use (SSRF guard, caps):
 
 - **Vercel** (no extra accounts): a serverless adapter
   (`api/index.py` + `vercel.json`) builds books synchronously per

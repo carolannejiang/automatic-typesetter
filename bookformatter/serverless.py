@@ -6,8 +6,7 @@ the shared pipeline inside the request and streams the finished file back
 (one format directly; several formats as a .zip). Book metadata, stats,
 and warnings travel in the X-Book-Meta response header.
 
-Always runs in public mode (SSRF guard on). A passcode can be required by
-setting the BOOKFORMATTER_PASSCODE environment variable. PDF rendering
+Always runs in public mode (SSRF guard on). PDF rendering
 needs system libraries serverless Python hosts don't have, so requests
 for "pdf" become the print HTML plus a note about printing from the
 browser (run_build's allow_pdf=False path).
@@ -118,7 +117,7 @@ def _page() -> str:
         "Runs entirely on your machine &mdash; nothing is uploaded anywhere.",
         "Books are pressed on demand &mdash; nothing is stored on the server.",
     )
-    return _web.apply_passcode_gate(page, bool(os.environ.get("BOOKFORMATTER_PASSCODE")))
+    return page
 
 
 def _respond(start_response, code: int, body: bytes, content_type: str, extra=None):
@@ -155,10 +154,6 @@ def _build(environ, start_response):
     else:
         params = urllib.parse.parse_qs(body.decode("utf-8", "replace"))
         uploads = []
-
-    passcode = os.environ.get("BOOKFORMATTER_PASSCODE", "")
-    if passcode and _web._first(params, "passcode") != passcode:
-        return _json(start_response, 403, {"error": "Wrong or missing passcode."})
 
     workdir = tempfile.mkdtemp(prefix="bookformatter-fn-")
     try:
@@ -202,20 +197,6 @@ def _build(environ, start_response):
         shutil.rmtree(workdir, ignore_errors=True)
 
 
-def _unlock(environ, start_response):
-    """Verify a passcode for the unlock gate. Builds still re-check it."""
-    passcode = os.environ.get("BOOKFORMATTER_PASSCODE", "")
-    try:
-        length = int(environ.get("CONTENT_LENGTH") or 0)
-    except ValueError:
-        length = 0
-    body = environ["wsgi.input"].read(length) if 0 < length <= 4096 else b""
-    params = urllib.parse.parse_qs(body.decode("utf-8", "replace"))
-    if not passcode or _web._first(params, "passcode") == passcode:
-        return _json(start_response, 200, {"ok": True})
-    return _json(start_response, 403, {"error": "Wrong password."})
-
-
 def app(environ, start_response):
     """WSGI entry point."""
     fetch.PUBLIC_MODE = True  # hosted: never fetch internal addresses
@@ -225,10 +206,6 @@ def app(environ, start_response):
     if path in ("/", "/index.html", "/api/index") and method in ("GET", "HEAD"):
         body = b"" if method == "HEAD" else _page().encode("utf-8")
         return _respond(start_response, 200, body, "text/html; charset=utf-8")
-    if path.endswith("/unlock") or path == "/unlock":
-        if method != "POST":
-            return _json(start_response, 405, {"error": "POST here to unlock"})
-        return _unlock(environ, start_response)
     if path.endswith("/build") or path == "/build":
         if method != "POST":
             return _json(start_response, 405, {"error": "POST here to build a book"})

@@ -2,7 +2,6 @@
 #
 # One-time setup (repo Settings → Secrets and variables → Actions):
 #   FLY_API_TOKEN            required — from https://fly.io/dashboard → Tokens
-#   BOOKFORMATTER_PASSCODE   optional — passcode visitors must enter to build
 #
 # Run it from the Actions tab ("Run workflow"), or it runs automatically on
 # pushes to the default branch.
@@ -30,16 +29,6 @@ jobs:
 
       - name: Create the app on first run
         run: flyctl apps create "$FLY_APP" || true
-
-      - name: Set the build passcode (if the secret is configured)
-        env:
-          PASSCODE: ${{ secrets.BOOKFORMATTER_PASSCODE }}
-        run: |
-          if [ -n "$PASSCODE" ]; then
-            flyctl secrets set --app "$FLY_APP" --stage "BOOKFORMATTER_PASSCODE=$PASSCODE"
-          else
-            echo "No BOOKFORMATTER_PASSCODE secret set — the press will be open to anyone who finds it."
-          fi
 
       - name: Deploy
         run: flyctl deploy --remote-only --app "$FLY_APP"
