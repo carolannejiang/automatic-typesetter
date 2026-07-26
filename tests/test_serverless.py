@@ -1,6 +1,5 @@
 import io
 import json
-import os
 import unittest
 import urllib.parse
 import zipfile
@@ -51,7 +50,6 @@ def book_meta(headers):
 class ServerlessTests(unittest.TestCase):
     def tearDown(self):
         fetch.PUBLIC_MODE = False  # app() flips it on; keep other tests local
-        os.environ.pop("BOOKFORMATTER_PASSCODE", None)
 
     def test_page_served_and_adapted(self):
         code, headers, body = call("GET", "/")
@@ -104,16 +102,6 @@ class ServerlessTests(unittest.TestCase):
         self.assertIn(b"@page", body)
         warnings = book_meta(headers)["warnings"]
         self.assertTrue(any("Print" in w for w in warnings), warnings)
-
-    def test_passcode_enforced_from_env(self):
-        os.environ["BOOKFORMATTER_PASSCODE"] = "sesame"
-        code, _, body = post_form("/build", {"pasted": PASTED, "formats": "epub"})
-        self.assertEqual(code, 403)
-        code, _, _ = post_form("/build", {"pasted": PASTED, "formats": "epub",
-                                          "passcode": "sesame"})
-        self.assertEqual(code, 200)
-        _, _, page = call("GET", "/")
-        self.assertIn(b'name="passcode"', page)
 
     def test_no_input_rejected(self):
         code, _, body = post_form("/build", {"title": "Empty"})

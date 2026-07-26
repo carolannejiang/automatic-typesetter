@@ -100,54 +100,6 @@ class BasePathTests(unittest.TestCase):
         self.assertNotIn('fetch("/build"', page)
 
 
-class PasscodeTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.fx = ServerFixture().start(passcode="sesame")
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.fx.stop()
-
-    def test_page_shows_passcode_field(self):
-        _, body, _ = self.fx.get("/")
-        self.assertIn(b'name="passcode"', body)
-
-    def test_page_shows_unlock_gate(self):
-        _, body, _ = self.fx.get("/")
-        self.assertIn(b'<div id="gate">', body)
-        self.assertIn(b'class="locked"', body)
-        self.assertIn(b">Unlock</button>", body)
-
-    def test_gate_offers_touch_id(self):
-        _, body, _ = self.fx.get("/")
-        self.assertIn(b"Unlock with Touch ID", body)
-        self.assertIn(b"Set up Touch ID", body)
-        self.assertIn(b"navigator.credentials", body)
-
-    def test_unlock_rejects_wrong_password(self):
-        code, resp = self.fx.post("/unlock", {"passcode": "nope"})
-        self.assertEqual(code, 403)
-        self.assertEqual(resp["error"], "Wrong password.")
-
-    def test_unlock_accepts_right_password(self):
-        code, resp = self.fx.post("/unlock", {"passcode": "sesame"})
-        self.assertEqual(code, 200)
-        self.assertTrue(resp["ok"])
-
-    def test_build_without_passcode_rejected(self):
-        code, resp = self.fx.post("/build", {"pasted": "text"})
-        self.assertEqual(code, 403)
-        self.assertIn("passcode", resp["error"].lower())
-
-    def test_build_with_passcode_accepted(self):
-        code, resp = self.fx.post("/build", {"pasted": "One paragraph.", "passcode": "sesame",
-                                             "formats": "epub"})
-        self.assertEqual(code, 200)
-        status = self.fx.wait("", resp["id"])
-        self.assertEqual(status["status"], "done", status["message"])
-
-
 class RateLimitTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

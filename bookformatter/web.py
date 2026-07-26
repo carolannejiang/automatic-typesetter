@@ -447,8 +447,7 @@ class Handler(BaseHTTPRequestHandler):
         if path is None:
             return
         if path in ("", "/", "/index.html"):
-            page = apply_passcode_gate(PAGE, bool(getattr(self.server, "passcode", "")))
-            self._send(200, page.encode("utf-8"), "text/html; charset=utf-8")
+            self._send(200, PAGE.encode("utf-8"), "text/html; charset=utf-8")
         elif path == "/status":
             query = urllib.parse.parse_qs(parsed.query)
             job = _jobs.get(_first(query, "id"))
@@ -484,9 +483,6 @@ class Handler(BaseHTTPRequestHandler):
         path = self._route(parsed.path)
         if path is None:
             return
-        if path == "/unlock":
-            self._handle_unlock()
-            return
         if path != "/build":
             self._json(404, {"error": "not found"})
             return
@@ -508,11 +504,6 @@ class Handler(BaseHTTPRequestHandler):
             params = urllib.parse.parse_qs(body.decode("utf-8", "replace"))
             uploads = []
 
-        passcode = getattr(self.server, "passcode", "")
-        if passcode and _first(params, "passcode") != passcode:
-            self._json(403, {"error": "Wrong or missing passcode."})
-            return
-
         has_content = (
             _first(params, "urls")
             or _first(params, "pasted")
@@ -528,20 +519,6 @@ class Handler(BaseHTTPRequestHandler):
         thread.start()
         self._json(200, {"id": job.id})
 
-    def _handle_unlock(self):
-        """Verify a passcode for the unlock gate. Builds still re-check it."""
-        passcode = getattr(self.server, "passcode", "")
-        try:
-            length = int(self.headers.get("Content-Length") or 0)
-        except ValueError:
-            length = 0
-        body = self.rfile.read(length) if 0 < length <= 4096 else b""
-        params = urllib.parse.parse_qs(body.decode("utf-8", "replace"))
-        if not passcode or _first(params, "passcode") == passcode:
-            self._json(200, {"ok": True})
-        else:
-            self._json(403, {"error": "Wrong password."})
-
 
 def _normalize_base_path(base: str) -> str:
     base = (base or "").strip()
@@ -553,8 +530,7 @@ def _normalize_base_path(base: str) -> str:
 
 
 def make_server(host: str = "127.0.0.1", port: int = 8000, base_path: str = "",
-                public: bool = False, passcode: str = "",
-                rate_limit=(20, 900)) -> ThreadingHTTPServer:
+                public: bool = False, rate_limit=(20, 900)) -> ThreadingHTTPServer:
     try:
         server = ThreadingHTTPServer((host, port), Handler)
     except OSError:
@@ -563,7 +539,6 @@ def make_server(host: str = "127.0.0.1", port: int = 8000, base_path: str = "",
     server.daemon_threads = True
     server.base_path = _normalize_base_path(base_path)
     server.public = public
-    server.passcode = passcode
     server.rate_limit = rate_limit
     server.rate_buckets = {}
     server.rate_lock = threading.Lock()
@@ -584,7 +559,7 @@ def main(argv=None) -> int:
         description="Run the bookformatter web interface.",
         epilog=(
             "Environment variables (used as defaults): PORT, "
-            "BOOKFORMATTER_BASE_PATH, BOOKFORMATTER_PUBLIC, BOOKFORMATTER_PASSCODE."
+            "BOOKFORMATTER_BASE_PATH, BOOKFORMATTER_PUBLIC."
         ),
     )
     parser.add_argument("--host", default="127.0.0.1",
@@ -599,23 +574,20 @@ def main(argv=None) -> int:
                         default=_env_flag("BOOKFORMATTER_PUBLIC"),
                         help="public-deployment mode: block fetches of internal addresses "
                              "and rate-limit builds per client IP")
-    parser.add_argument("--passcode",
-                        default=os.environ.get("BOOKFORMATTER_PASSCODE", ""),
-                        help="require this passcode to start builds")
     parser.add_argument("--no-browser", action="store_true", help="do not open a browser tab")
     parser.add_argument("-v", "--verbose", action="store_true", help="log requests")
     args = parser.parse_args(argv)
 
     Handler.verbose = args.verbose
     server = make_server(args.host, args.port, base_path=args.base_path,
-                         public=args.public, passcode=args.passcode)
+                         public=args.public)
     base = server.base_path or ""
     url = f"http://{args.host}:{server.server_address[1]}{base}/"
     mode = "public" if args.public else "local"
     print(f"bookformatter web ({mode} mode) is running at {url}  (Ctrl+C to stop)")
-    if args.public and not args.passcode:
-        print("  note: public mode without a passcode — anyone who can reach this "
-              "server can run builds on it.")
+    if args.public:
+        print("  note: public mode — anyone who can reach this server can run "
+              "builds on it.")
     if not args.no_browser and not args.public and args.host in ("127.0.0.1", "localhost"):
         threading.Timer(0.4, lambda: webbrowser.open(url)).start()
     try:
@@ -710,52 +682,9 @@ ul.warnings { color: var(--warn); font-size: 0.85rem; padding-left: 1.2rem; }
 }
 .downloads a strong { color: var(--accent); }
 footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 2.5rem; }
-
-/* Unlock gate — mirrors carolanne.link/admin */
-#gate { display: none; }
-body.locked .wrap { display: none; }
-body.locked #gate { display: block; }
-body.locked { background: #fff; color: #111; }
-@media (prefers-color-scheme: dark) { body.locked { background: #0b0b0c; color: #f4f4f5; } }
-#gate {
-  --g-bg: #fff; --g-fg: #111; --g-muted: #6b7280; --g-border: #e5e7eb;
-  --g-accent: #111; --g-accent-fg: #fff; --g-danger: #b42318; --g-field-bg: #fff;
-  font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-}
-@media (prefers-color-scheme: dark) {
-  #gate {
-    --g-bg: #0b0b0c; --g-fg: #f4f4f5; --g-muted: #9ca3af; --g-border: #27272a;
-    --g-accent: #f4f4f5; --g-accent-fg: #0b0b0c; --g-danger: #f97066; --g-field-bg: #161618;
-  }
-}
-#gate .g-main { min-height: 100dvh; display: grid; place-items: start center; padding: min(5vh, 2.5rem) 1.25rem; }
-#gate .g-wrap { width: 100%; max-width: 560px; }
-#gate .g-head { display: flex; align-items: center; justify-content: space-between; margin: 0 0 1.25rem; }
-#gate .g-h1 { font-size: 1.5rem; font-weight: 600; margin: 0; color: var(--g-fg); }
-#gate .g-alert { margin: 0 0 1.25rem; padding: .6rem .75rem; font-size: .9rem; color: var(--g-danger); border: 1px solid var(--g-danger); border-radius: 8px; }
-#gate .g-form { display: grid; gap: 1rem; }
-#gate .g-label { display: grid; gap: .4rem; font-size: .85rem; color: var(--g-muted); }
-#gate .g-input { width: 100%; padding: .65rem .75rem; font-size: 1rem; color: var(--g-fg); background: var(--g-field-bg); border: 1px solid var(--g-border); border-radius: 8px; font-family: inherit; }
-#gate .g-btn { width: 100%; padding: .65rem 1rem; font-size: 1rem; font-weight: 600; color: var(--g-accent-fg); background: var(--g-accent); border: none; border-radius: 8px; cursor: pointer; font-family: inherit; transition: opacity .15s, transform 50ms; }
-#gate .g-btn:disabled { cursor: default; opacity: .55; }
-#gate .g-btn:not(:disabled):hover { opacity: .82; }
-#gate .g-btn:not(:disabled):active { transform: translateY(1px); }
-#gate .g-btn.g-btn-secondary { color: var(--g-fg); background: transparent; border: 1px solid var(--g-border); }
-#gate .g-btn.g-btn-secondary:not(:disabled):hover { opacity: 1; background: var(--g-field-bg); }
-#gate .g-input:focus-visible, #gate .g-btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
-#gate .g-divider { display: grid; place-items: center; position: relative; margin: 1rem 0; }
-#gate .g-divider::before { content: ""; position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: var(--g-border); }
-#gate .g-divider span { position: relative; font-size: .8rem; color: var(--g-muted); background: var(--g-bg); padding: 0 .6rem; }
-#gate .g-setup { display: grid; gap: .75rem; }
-#gate .g-note { margin: 0; font-size: .9rem; color: var(--g-muted); }
-#gate .g-link { justify-self: center; padding: .35rem; font: inherit; font-size: .85rem; color: var(--g-muted); background: none; border: none; text-decoration: underline; cursor: pointer; }
-#gate .g-alert.g-alert-ok { color: var(--g-fg); border-color: var(--g-border); }
-#gate .g-passkey { margin: 0 0 1rem; }
-#gate [hidden] { display: none; }
 </style>
 </head>
 <body>
-<!--GATE-->
 <div class="wrap">
   <header class="masthead">
     <h1>bookformatter</h1>
@@ -811,7 +740,6 @@ body.locked { background: #fff; color: #111; }
           <select id="theme" name="theme">
             <option value="classic">Classic — serif, indents, centered heads</option>
             <option value="modern">Modern — sans heads, spaced paragraphs</option>
-            <option value="bringhurst">Bringhurst — spaced caps, marginal heads, oldstyle folios</option>
             <option value="classical">Classical — small-cap heads, top-corner folios, quiet openers</option>
           </select></div>
         <div><label for="trim">Trim size (print)</label>
@@ -888,7 +816,6 @@ body.locked { background: #fff; color: #111; }
       </details>
     </div>
 
-    <!--EXTRA_FIELDS-->
     <button class="build" id="go" type="submit">Make the book</button>
   </form>
 
@@ -972,199 +899,6 @@ function showError(text) {
 </body>
 </html>
 """
-
-
-# The unlock gate shown when a passcode is configured. Mirrors the locked
-# screen at carolanne.link/admin: password unlock plus an optional "Unlock with
-# Touch ID" path. There is no server-side WebAuthn store here, so Touch ID is a
-# per-device convenience — after a password unlock we register a real platform
-# passkey and keep the verified passcode in this browser's localStorage; a later
-# biometric assertion replays that passcode to /unlock (which still checks it,
-# as every build does). It never weakens the gate: the passcode stays the only
-# server-side secret, and the passkey just guards the local copy behind Touch ID.
-GATE_HTML = r"""<div id="gate">
-  <main class="g-main">
-    <div class="g-wrap">
-      <div class="g-head"><h1 class="g-h1" id="g-h1">book.carolanne.link</h1></div>
-      <p class="g-alert" id="g-alert" role="alert" hidden></p>
-
-      <button class="g-btn g-passkey" type="button" id="g-passkey" hidden>&#128274; Unlock with Touch ID</button>
-      <div class="g-divider" id="g-divider" hidden><span>or use your password</span></div>
-
-      <form class="g-form" id="g-form">
-        <label class="g-label">Password
-          <input class="g-input" type="password" id="g-pass" autocomplete="current-password">
-        </label>
-        <button class="g-btn" type="submit" id="g-btn">Unlock</button>
-      </form>
-
-      <div class="g-setup" id="g-setup" hidden>
-        <p class="g-note" id="g-setup-note">Skip the password next time:</p>
-        <button class="g-btn" type="button" id="g-setup-btn">Set up Touch ID</button>
-        <button class="g-link" type="button" id="g-setup-skip">Continue without</button>
-      </div>
-    </div>
-  </main>
-</div>
-<script>
-(function () {
-  var STORE_KEY = "bookformatter.passkey";
-  var host = location.host || "book.carolanne.link";
-  var h1 = document.getElementById("g-h1");
-  if (h1) h1.textContent = host;
-
-  var alertEl = document.getElementById("g-alert");
-  var form = document.getElementById("g-form");
-  var pass = document.getElementById("g-pass");
-  var btn = document.getElementById("g-btn");
-  var passkeyBtn = document.getElementById("g-passkey");
-  var divider = document.getElementById("g-divider");
-  var setup = document.getElementById("g-setup");
-  var setupBtn = document.getElementById("g-setup-btn");
-  var setupSkip = document.getElementById("g-setup-skip");
-
-  function b64u(buf) {
-    var b = new Uint8Array(buf), s = "";
-    for (var i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
-    return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  }
-  function unb64u(str) {
-    str = str.replace(/-/g, "+").replace(/_/g, "/");
-    while (str.length % 4) str += "=";
-    var bin = atob(str), out = new Uint8Array(bin.length);
-    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-    return out;
-  }
-  function rand(n) { var a = new Uint8Array(n); crypto.getRandomValues(a); return a; }
-
-  function loadStored() { try { return JSON.parse(localStorage.getItem(STORE_KEY) || "null"); } catch (e) { return null; } }
-  function saveStored(v) { try { localStorage.setItem(STORE_KEY, JSON.stringify(v)); } catch (e) {} }
-  function clearStored() { try { localStorage.removeItem(STORE_KEY); } catch (e) {} }
-
-  function showError(msg) { alertEl.textContent = msg; alertEl.className = "g-alert"; alertEl.hidden = false; }
-  function showInfo(msg) { alertEl.textContent = msg; alertEl.className = "g-alert g-alert-ok"; alertEl.hidden = false; }
-
-  async function platformAvailable() {
-    if (typeof window.PublicKeyCredential === "undefined" ||
-        !PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) return false;
-    try { return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); }
-    catch (e) { return false; }
-  }
-
-  // Re-check a passcode server-side (relative URL so the gate works at any mount
-  // point, e.g. /book/). Throws on rejection; returns the passcode on success.
-  async function verify(passcode) {
-    var resp = await fetch("unlock", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: "passcode=" + encodeURIComponent(passcode),
-    });
-    var data = await resp.json().catch(function () { return {}; });
-    if (!resp.ok) throw new Error(data.error || "Wrong password.");
-    return passcode;
-  }
-  function enter(passcode) {
-    document.getElementById("passcode").value = passcode;
-    document.body.classList.remove("locked");
-  }
-
-  // Password unlock — then offer Touch ID setup on capable devices.
-  form.addEventListener("submit", async function (ev) {
-    ev.preventDefault();
-    alertEl.hidden = true;
-    if (!pass.value) return;
-    btn.disabled = true; btn.textContent = "Checking…";
-    try {
-      var code = await verify(pass.value);
-      if (!loadStored() && await platformAvailable()) offerSetup(code);
-      else enter(code);
-    } catch (err) {
-      showError(err.message); pass.focus(); pass.select();
-      btn.disabled = false; btn.textContent = "Unlock";
-    }
-  });
-
-  // Touch ID unlock — a biometric assertion gates the locally-stored passcode.
-  passkeyBtn.addEventListener("click", async function () {
-    var stored = loadStored();
-    if (!stored) return;
-    alertEl.hidden = true;
-    passkeyBtn.disabled = true; passkeyBtn.textContent = "Waiting for Touch ID…";
-    try {
-      await navigator.credentials.get({ publicKey: {
-        challenge: rand(32),
-        allowCredentials: [{ id: unb64u(stored.id), type: "public-key" }],
-        userVerification: "required",
-        timeout: 60000,
-      } });
-      enter(await verify(stored.passcode));
-    } catch (err) {
-      if (err && err.name === "NotAllowedError") showError("Touch ID was cancelled.");
-      else if (err && String(err.message).indexOf("Wrong") === 0) {
-        clearStored(); renderPasskey();
-        showError("The saved passcode no longer works — enter it again.");
-      } else showError(err.message || "Touch ID failed.");
-      passkeyBtn.disabled = false; passkeyBtn.textContent = "🔓 Unlock with Touch ID";
-    }
-  });
-
-  // Post-password setup panel.
-  function offerSetup(code) {
-    form.hidden = true; passkeyBtn.hidden = true; divider.hidden = true;
-    setup.hidden = false;
-    setupBtn.onclick = function () { doSetup(code); };
-    setupSkip.onclick = function () { enter(code); };
-  }
-  async function doSetup(code) {
-    alertEl.hidden = true;
-    setupBtn.disabled = true; setupBtn.textContent = "Waiting for Touch ID…";
-    try {
-      var cred = await navigator.credentials.create({ publicKey: {
-        challenge: rand(32),
-        rp: { name: host, id: location.hostname },
-        user: { id: rand(16), name: host, displayName: host },
-        pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
-        authenticatorSelection: { authenticatorAttachment: "platform", residentKey: "preferred", userVerification: "required" },
-        attestation: "none",
-        timeout: 60000,
-      } });
-      saveStored({ id: b64u(cred.rawId), passcode: code });
-      showInfo("Touch ID is set up on this device. You can use it to unlock next time.");
-      setupSkip.hidden = true;
-      setupBtn.disabled = false; setupBtn.textContent = "Continue";
-      setupBtn.onclick = function () { enter(code); };
-    } catch (err) {
-      showError(err && err.name === "NotAllowedError"
-        ? "Touch ID setup was cancelled." : (err.message || "Passkey setup failed."));
-      setupBtn.disabled = false; setupBtn.textContent = "Set up Touch ID";
-    }
-  }
-
-  // When a passkey is stored, lead with Touch ID and demote the password form.
-  function renderPasskey() {
-    var have = !!loadStored();
-    passkeyBtn.hidden = !have;
-    divider.hidden = !have;
-    btn.classList.toggle("g-btn-secondary", have);
-    (have ? passkeyBtn : pass).focus();
-  }
-  renderPasskey();
-})();
-</script>"""
-
-
-def apply_passcode_gate(page: str, locked: bool) -> str:
-    """Reveal the unlock gate (and stash a hidden passcode field for builds)
-    when a passcode is configured; otherwise leave the placeholders inert."""
-    if not locked:
-        return page
-    page = page.replace("<body>", '<body class="locked">', 1)
-    page = page.replace("<!--GATE-->", GATE_HTML, 1)
-    page = page.replace(
-        "<!--EXTRA_FIELDS-->",
-        '<input type="hidden" id="passcode" name="passcode">', 1,
-    )
-    return page
 
 
 if __name__ == "__main__":

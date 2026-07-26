@@ -8,7 +8,7 @@ boxes / target-counter, which WeasyPrint and Prince honor; headless Chrome
 ignores them gracefully and still produces correct trim, margins, and breaks.
 
 Each theme lives in its own module beside this one (classic, modern,
-bringhurst, classical) and layers overrides on top of these templates.
+classical) and layers overrides on top of these templates.
 """
 
 from __future__ import annotations
