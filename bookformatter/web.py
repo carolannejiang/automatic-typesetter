@@ -740,7 +740,6 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
           <select id="theme" name="theme">
             <option value="classic">Classic — serif, indents, centered heads</option>
             <option value="modern">Modern — sans heads, spaced paragraphs</option>
-            <option value="bringhurst">Bringhurst — spaced caps, marginal heads, oldstyle folios</option>
             <option value="classical">Classical — small-cap heads, top-corner folios, quiet openers</option>
           </select></div>
         <div><label for="trim">Trim size (print)</label>

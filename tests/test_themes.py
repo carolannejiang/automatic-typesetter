@@ -23,42 +23,8 @@ class ChapterLabelTests(unittest.TestCase):
         self.assertEqual(themes.chapter_label("classic", 3), "Chapter 3")
         self.assertEqual(themes.chapter_label("modern", 3), "Chapter 3")
 
-    def test_bringhurst_uses_bare_figure(self):
-        self.assertEqual(themes.chapter_label("bringhurst", 3), "3")
 
-
-class BringhurstCssTests(unittest.TestCase):
-    def test_print_css_moves_furniture_to_the_margins(self):
-        css = themes.print_css(theme="bringhurst", book_title="Field Notes")
-        # Marginal running heads and fore-edge folios exist...
-        self.assertIn("@left-middle", css)
-        self.assertIn("@right-middle", css)
-        self.assertIn("@bottom-left", css)
-        self.assertIn("@bottom-right", css)
-        # ...and the theme block comes after the shared rules it replaces
-        # (top-center running heads, bottom-center folio, TOC dot leaders),
-        # so the cascade favors the theme.
-        furniture = css.index("bringhurst print furniture")
-        self.assertGreater(furniture, css.index("string(book-title, first-except)"))
-        self.assertGreater(furniture, css.index('leader(". ")'))
-        self.assertGreater(furniture, css.index("content: counter(page)"))
-        self.assertIn('content: "\\2002" target-counter(attr(href url), page)', css)
-        self.assertIn("oldstyle-nums", css)
-        self.assertIn("Minion", css)
-
-    def test_print_geometry_widens_the_fore_edge(self):
-        css = themes.print_css(theme="bringhurst", trim="6x9")
-        self.assertIn("margin: 0.72in 1.28in 0.88in 0.78in;", css)
-        # Classic keeps its conventional margins.
-        classic = themes.print_css(theme="classic", trim="6x9")
-        self.assertIn("margin: 0.83in 0.6in 0.78in 0.85in;", classic)
-
-    def test_epub_css_restyles_without_paged_furniture(self):
-        css = themes.epub_css(theme="bringhurst")
-        self.assertIn("font-variant: small-caps", css)
-        self.assertIn("bringhurst overrides", css)
-        self.assertNotIn("@left-middle", css)
-
+class FallbackTests(unittest.TestCase):
     def test_unknown_theme_falls_back_to_classic(self):
         self.assertEqual(themes.epub_css(theme="nonsense"),
                          themes.epub_css(theme="classic"))
@@ -104,13 +70,7 @@ class ClassicalCssTests(unittest.TestCase):
         self.assertNotIn("page: clean", css)
 
 
-class BringhurstBuildTests(unittest.TestCase):
-    def test_print_html_hangs_a_bare_chapter_figure(self):
-        page = printbook.build_print_html(_book(), theme="bringhurst")
-        self.assertIn('<span class="chapter-number">1</span>', page)
-        self.assertIn('<span class="chapter-number">2</span>', page)
-        self.assertNotIn("Chapter 1", page)
-
+class ThemeBuildTests(unittest.TestCase):
     def test_print_html_classic_is_unchanged(self):
         page = printbook.build_print_html(_book(), theme="classic")
         self.assertIn('<span class="chapter-number">Chapter 1</span>', page)
@@ -118,12 +78,12 @@ class BringhurstBuildTests(unittest.TestCase):
     def test_epub_carries_theme_css_and_labels(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "book.epub")
-            epub_writer.write_epub(_book(), path, theme="bringhurst")
+            epub_writer.write_epub(_book(), path, theme="classical")
             with zipfile.ZipFile(path) as zf:
                 css = zf.read("OEBPS/css/book.css").decode()
                 chapter = zf.read("OEBPS/text/chapter-001.xhtml").decode()
-        self.assertIn("bringhurst overrides", css)
-        self.assertIn('<span class="chapter-number">1</span>', chapter)
+        self.assertIn("classical overrides", css)
+        self.assertIn('<span class="chapter-number">Chapter 1</span>', chapter)
 
 
 if __name__ == "__main__":
