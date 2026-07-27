@@ -34,7 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("inputs", nargs="+",
-                        help="files (.md/.txt/.html), directories, page URLs, or RSS/Atom feed URLs")
+                        help="files (.md/.txt/.html/.docx), directories, page URLs, or RSS/Atom feed URLs")
 
     meta = parser.add_argument_group("book metadata")
     meta.add_argument("-t", "--title", help="book title (default: detected from input)")

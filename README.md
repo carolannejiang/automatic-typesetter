@@ -35,8 +35,10 @@ python3 -m bookformatter chapters/ -t "Essays" -f epub,pdf,html \
 # top outer corners, chapter openers stripped of all page furniture
 python3 -m bookformatter chapters/ -t "Essays" --theme classical
 
-# An editable Word manuscript beside the book, for revising in Word
+# An editable Word manuscript beside the book, for revising in Word —
+# and when you're done editing, the .docx reads back in as an input
 python3 -m bookformatter manuscript.md -t "My Book" -f epub,pdf,docx
+python3 -m bookformatter build/my-book.docx -f epub,pdf
 
 # Hand off to a designer: an InCopy story to Place, plus a full
 # InDesign document
@@ -89,6 +91,7 @@ See **[docs/DEPLOY.md](docs/DEPLOY.md)** for both recipes.
 | `.md` files | Converted with the built-in Markdown engine; a file with 2+ `# h1`s is split into chapters (`--split h1/h2/none/auto`) |
 | `.txt` files | Blank-line-separated paragraphs; filename becomes the chapter title |
 | `.html` files | Readability-style article extraction; local images are pulled in |
+| `.docx` files | Word manuscripts — including books this tool made that you then edited in Word. Heading 1s split into chapters, footnotes/endnotes, lists, tables, images, and links all come back in; tracked changes import as accepted; a bookformatter title page becomes metadata again |
 | Directories | All of the above, sorted by filename — one file per chapter |
 | Page URLs | Fetched and extracted: boilerplate (nav, sidebars, share buttons, comments) is scored away, the article kept |
 | Feed URLs (RSS 2.0 / Atom / RDF) | Each post becomes a chapter, ordered oldest-first by default (`--order`); `--fetch-full` follows each item's link for truncated feeds; `--max-items N` keeps the N most recent |
@@ -133,9 +136,10 @@ theme (restyle the book by editing a style), footnotes are real Word
 footnotes that renumber as you edit, lists and tables are native,
 hyperlinks stay live, images are embedded. Page size and mirrored
 margins follow the chosen trim, so the page count roughly tracks the
-print edition. Edit it, then export from Word directly (KDP accepts
-.docx) — or fold the changes back into your sources and rebuild for the
-fully typeset PDF/EPUB.
+print edition. Edit it, then either export from Word directly (KDP
+accepts .docx) — or simply feed the edited file back in:
+`bookformatter my-book.docx` reads it as an input and rebuilds the fully
+typeset PDF/EPUB, chapters split at the Heading 1s.
 
 **Print HTML → PDF** — a single self-contained HTML file typeset with CSS
 Paged Media:
@@ -261,7 +265,7 @@ permission to reproduce.
 ## Development
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 209 tests, no dependencies
+python3 -m unittest discover -s tests -t .   # 226 tests, no dependencies
 python3 -m bookformatter examples/field-notes -t "Field Notes on Book Making" -a "You"
 ```
 

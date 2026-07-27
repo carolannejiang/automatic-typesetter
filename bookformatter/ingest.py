@@ -15,13 +15,14 @@ from dataclasses import dataclass, field
 from typing import Optional
 from urllib.parse import urljoin, urlparse, unquote
 
-from . import extract, feeds, fetch, htmldom, mini_markdown
+from . import docxread, extract, feeds, fetch, htmldom, mini_markdown
 from .models import Asset, Chapter, prettify_name
 
 MARKDOWN_EXTS = {".md", ".markdown", ".mdown", ".mkd"}
 HTML_EXTS = {".html", ".htm", ".xhtml"}
 TEXT_EXTS = {".txt", ".text"}
-ALL_EXTS = MARKDOWN_EXTS | HTML_EXTS | TEXT_EXTS
+DOCX_EXTS = {".docx"}
+ALL_EXTS = MARKDOWN_EXTS | HTML_EXTS | TEXT_EXTS | DOCX_EXTS
 
 
 @dataclass
@@ -111,6 +112,25 @@ def _chapters_from_markup(html_text: str, fallback_title: str,
 def _ingest_file(path: str, opts: IngestOptions, result: IngestResult) -> None:
     ext = os.path.splitext(path)[1].lower()
     fallback = prettify_name(os.path.splitext(os.path.basename(path))[0])
+
+    if ext in DOCX_EXTS:  # binary — must not go through the text read below
+        _log(opts, f"docx: {path}")
+        try:
+            doc = docxread.read_docx(path)
+        except docxread.DocxError as exc:
+            result.warn(f"{path}: {exc}")
+            return
+        chapters = _chapters_from_markup(doc.html, doc.title or fallback, path, opts)
+        if doc.author:
+            for chapter in chapters:
+                chapter.author = chapter.author or doc.author
+        result.chapters.extend(chapters)
+        if doc.title and not result.title_hint:
+            result.title_hint = doc.title
+        if doc.author and not result.author_hint:
+            result.author_hint = doc.author
+        return
+
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
         text = fh.read()
 
@@ -141,7 +161,7 @@ def _ingest_dir(path: str, opts: IngestOptions, result: IngestResult) -> None:
         and not e.startswith(".")
     )
     if not entries:
-        result.warn(f"{path}: no .md/.txt/.html files found")
+        result.warn(f"{path}: no .md/.txt/.html/.docx files found")
         return
     for entry in entries:
         _ingest_file(os.path.join(path, entry), opts, result)
