@@ -75,6 +75,44 @@ _LAYOUT_HINT = re.compile(r"(^|[-_ ])(side-?bar)([-_ ]|$)", re.I)
 # _normalize_footnote_defs).
 _FOOTNOTE_DEF_HINT = re.compile(r"(^|[-_ ])footnote([-_ ]|$)", re.I)
 
+# Share/follow icon links that ride in from the source page — an anchor to a
+# social platform (a follow button, an author's profile) or a pre-filled
+# share intent (Tweet/Share-on-Facebook widgets). These carry no article
+# value, so they are dropped structurally on every extraction path (see
+# _drop_social_links). Matched against the anchor's href.
+_SOCIAL_HREF = re.compile(
+    r"""(?ix) ^ (?:
+        (?:https?:)? // (?:[\w-]+\.)*
+        (?:
+            twitter\.com | x\.com | t\.co |
+            facebook\.com | fb\.com | fb\.me | facebook\.me |
+            instagram\.com | linkedin\.com | lnkd\.in |
+            pinterest\.[\w.]+ | reddit\.com | redd\.it |
+            tumblr\.com | mastodon\.[\w.]+ | threads\.(?:net|com) |
+            bsky\.app | youtube\.com | youtu\.be | tiktok\.com |
+            snapchat\.com | whatsapp\.com | wa\.me |
+            telegram\.(?:me|org) | t\.me |
+            vk\.com | weibo\.com | flipboard\.com | getpocket\.com |
+            digg\.com | xing\.com | line\.me | buffer\.com
+        ) (?: [:/?#] | $ )
+      | mailto:\?          # a share-by-email intent, not a real address
+      | (?:whatsapp|fb-messenger|tg|sms) ://
+      | \#(?:respond|comments?)$
+    )""",
+)
+
+# Share/follow intents whose anchor text (rather than href) gives them away:
+# an icon exposed as accessible text, or a bare button label. Only anchors
+# that are already icon-like — no other visible text — are matched.
+_SOCIAL_LABEL = re.compile(
+    r"^(?:share(?:\s+this)?(?:\s+on\s+\w+)?|tweet|share\s+on\s+\w+|"
+    r"follow(?:\s+\w+)?|pin\s+it|save\s+to\s+pinterest|"
+    r"twitter|facebook|instagram|linkedin|pinterest|reddit|tumblr|"
+    r"mastodon|threads|bluesky|youtube|tiktok|whatsapp|telegram|"
+    r"email\s+this|print\s+this)$",
+    re.I,
+)
+
 # Tags kept in cleaned chapter content; everything else is unwrapped.
 _KEEP_TAGS = {
     "p", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "blockquote",
@@ -493,8 +531,97 @@ def _normalize_footnote_defs(container: Node, referenced: set) -> None:
     container.append(ol)
 
 
+def _drop_social_links(container: Node) -> None:
+    """Remove share/follow icon links carried over from the source page.
+
+    Icon-only anchors to a social platform (or a share intent) are detached
+    outright — including any image they wrap. A social anchor that also holds
+    real prose text is unwrapped instead, keeping the words and dropping only
+    the link, so a genuine in-sentence citation to a tweet never loses its
+    text.
+    """
+    for a in list(container.find_all("a")):
+        if a.parent is None:
+            continue
+        href = a.get("href") or ""
+        if not href or _SOCIAL_HREF.match(href) is None:
+            continue
+        label = htmldom.normalize_ws(a.text_content())
+        # Icon-only (no text, or just a wrapped image) or a bare button
+        # label: drop the anchor and anything it wraps. A social link that
+        # also carries real prose keeps its words, losing only the link.
+        if not label or _SOCIAL_LABEL.match(label):
+            a.detach()
+        else:
+            a.replace_with_children()
+
+
+def _adopt_reference_notes(body: Node, container: Node) -> None:
+    """Rewrite a self-anchored reference marker + separate notes container into
+    the canonical call + ``<ol class="footnotes">`` form.
+
+    Some custom themes (e.g. joecarlsmith.com) invert the usual footnote
+    convention: the in-text marker anchors *itself*
+    ``<sup id="ref-1"><a href="#ref-1">1</a></sup>`` and the note body lives in
+    a separate CSS-grid area keyed by a *different*, never-referenced id
+    (``<div id="reference-item-1">…<div class="reference__text">…</div></div>``).
+    Readability drops that separate container, and even kept the marker's href
+    resolves to itself rather than the note — so nothing inlines.
+
+    Pair each marker with the note that links back to it, move the note prose
+    into ``<li id="ref-1">`` under a trailing ``<ol class="footnotes">``, and
+    drop the marker's self-anchor id so ``#ref-1`` now resolves to the note.
+    """
+    markers = []
+    for sup in container.find_all("sup"):
+        ident = sup.get("id")
+        if not ident:
+            continue
+        inner = sup.find("a")
+        if inner is not None and (inner.get("href") or "") == "#" + ident:
+            markers.append((ident, sup))
+    if not markers:
+        return
+
+    wanted = {ident for ident, _ in markers}
+    # The note body links back to the marker's id (the references item's index
+    # link); the in-body marker anchor points there too, so skip it.
+    notes: dict = {}
+    for a in body.find_all("a"):
+        href = a.get("href") or ""
+        if not href.startswith("#"):
+            continue
+        target = href[1:]
+        if target not in wanted or target in notes:
+            continue
+        if a.parent is None or a.parent.tag == "sup":
+            continue
+        notes[target] = a
+    if not notes:
+        return
+
+    ol = Node("ol", {"class": "footnotes"})
+    for ident, sup in markers:
+        index_link = notes.get(ident)
+        if index_link is None:
+            continue
+        item = index_link.parent
+        li = Node("li", {"id": ident})
+        for child in list(item.children):
+            child.detach()
+            if child is index_link or (child.is_text and not (child.text or "").strip()):
+                continue
+            li.append(child)
+        item.detach()
+        ol.append(li)
+        del sup.attrs["id"]  # drop the self-anchor so #ident now names the note
+    if ol.children:
+        container.append(ol)
+
+
 def _clean_tree(container: Node) -> None:
     """Reduce the winning container to book-safe semantic markup."""
+    _drop_social_links(container)
     # In-document fragment links: remember which targets are referenced so
     # their anchors survive attribute stripping (footnotes, endnotes).
     referenced = set()
@@ -629,6 +756,7 @@ def extract_article(html_text: str, base_url: str = "") -> ExtractedDoc:
     if container is None:
         container = body
 
+    _adopt_reference_notes(body, container)
     _absolutize(container, base_url)
     _clean_tree(container)
     _wrap_stray_text(container)

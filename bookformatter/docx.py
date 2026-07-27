@@ -771,7 +771,7 @@ def write_docx(book: Book, path: str, theme: str = "classic",
                line_height: str = "1.45", chapter_numbers: bool = True) -> None:
     catalog = build_styles(theme, font_size, line_height)
     items = book_to_story_items(book, theme, chapter_numbers,
-                                converter_cls=_WordConverter)
+                                converter_cls=_WordConverter, link_notes=False)
     ordered_lists = _renumber_ordered_lists(items)
 
     width_in, height_in = themes.TRIM_SIZES.get(trim, themes.TRIM_SIZES["6x9"])
