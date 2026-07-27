@@ -30,6 +30,16 @@ class FallbackTests(unittest.TestCase):
                          themes.epub_css(theme="classic"))
 
 
+class DefaultTrimTests(unittest.TestCase):
+    def test_vsi_declares_its_pocket_page(self):
+        self.assertEqual(themes.default_trim("vsi"), "vsi")
+
+    def test_other_themes_default_to_trade(self):
+        self.assertEqual(themes.default_trim("classic"), "6x9")
+        self.assertEqual(themes.default_trim("classical"), "6x9")
+        self.assertEqual(themes.default_trim("nonsense"), "6x9")
+
+
 class ClassicalCssTests(unittest.TestCase):
     def test_chapter_label_spells_out_chapter(self):
         self.assertEqual(themes.chapter_label("classical", 3), "Chapter 3")

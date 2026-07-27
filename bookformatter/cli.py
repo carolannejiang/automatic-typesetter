@@ -61,8 +61,9 @@ def build_parser() -> argparse.ArgumentParser:
                         help="typography theme; classical sets the page after "
                              "WeasyPrint's book-classical sample, vsi after Oxford's "
                              "Very Short Introduction series (default: classic)")
-    design.add_argument("--trim", default="6x9", choices=sorted(themes.TRIM_SIZES),
-                        help="print trim size in inches (default: 6x9)")
+    design.add_argument("--trim", default=None, choices=sorted(themes.TRIM_SIZES),
+                        help="print trim size in inches (default: the theme's own "
+                             "page — 4.37x6.85 for vsi, 6x9 otherwise)")
     design.add_argument("--font-size", default="11pt", help="print body size (default: 11pt)")
     design.add_argument("--line-height", default="1.45", help="body leading (default: 1.45)")
     design.add_argument("--chapter-start", default="right", choices=["right", "any"],
@@ -101,6 +102,8 @@ def _load_cover(path: str):
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
+    if args.trim is None:
+        args.trim = themes.default_trim(args.theme)
     formats = {f.strip().lower() for f in args.formats.split(",") if f.strip()}
     unknown = formats - {"epub", "pdf", "html", "icml", "idml"}
     if unknown:

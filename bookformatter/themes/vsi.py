@@ -97,6 +97,10 @@ from . import base
 
 NAME = "vsi"
 
+# The page this design was measured on (base.TRIM_SIZES["vsi"], 111 x 174 mm);
+# the CLI and web form fall back to it when the theme is chosen without a trim.
+DEFAULT_TRIM = "vsi"
+
 # ---------------------------------------------------------------- fonts ----
 # Miller Text is commercial; Georgia is the closest widely installed Scotch
 # Roman (same designer). Argo is commercial and rare; the stack falls back
