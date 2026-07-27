@@ -60,7 +60,8 @@ def build_parser() -> argparse.ArgumentParser:
                         choices=themes.THEME_NAMES,
                         help="typography theme; classical sets the page after "
                              "WeasyPrint's book-classical sample, vsi after Oxford's "
-                             "Very Short Introduction series (default: classic)")
+                             "Very Short Introduction series, classicthesis after "
+                             "Miede's ClassicThesis LaTeX style (default: classic)")
     design.add_argument("--trim", default=None, choices=sorted(themes.TRIM_SIZES),
                         help="print trim size in inches (default: the theme's own "
                              "page — 4.37x6.85 for vsi, 6x9 otherwise)")

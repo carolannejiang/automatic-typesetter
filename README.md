@@ -34,6 +34,12 @@ python3 -m bookformatter chapters/ -t "Essays" -f epub,pdf,html \
 # top outer corners, chapter openers stripped of all page furniture
 python3 -m bookformatter chapters/ -t "Essays" --theme classical
 
+# Or after André Miede's ClassicThesis LaTeX style (an homage to
+# Bringhurst): Palatino, letterspaced small-cap heads, outsize gray
+# chapter numbers over a title rule, folio and running head sharing
+# the top outer corner, dot-leaderless contents
+python3 -m bookformatter chapters/ -t "Essays" --theme classicthesis
+
 # Oxford Very Short Introduction pocket design (see themes/vsi.py for the
 # measured spec): gray sans openers over a deep sink, block paragraphs,
 # rotated running heads riding the outer margins; these settings match
