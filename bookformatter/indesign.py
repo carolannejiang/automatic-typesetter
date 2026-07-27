@@ -434,14 +434,23 @@ class _Converter:
                 sub = flags | {_FLAG_TAGS[tag]}
                 for child in node.children:
                     rec(child, sub)
+            elif tag == "a":
+                sub = self._link_flags(node, flags)
+                for child in node.children:
+                    rec(child, sub)
             else:
-                # a, small, unknown inline, stray blocks: recurse as containers
+                # small, unknown inline, stray blocks: recurse as containers
                 for child in node.children:
                     rec(child, flags)
 
         for node in nodes:
             rec(node, frozenset())
         return _trim_runs(out)
+
+    def _link_flags(self, node, flags):
+        """Flags for text inside <a>. InDesign interchange carries links as
+        plain text; writers that keep them live (docx) override this."""
+        return flags
 
     def _image(self, node):
         src = (node.get("src") or "").strip()
@@ -592,10 +601,13 @@ def _copyright_lines(book: Book) -> list:
 
 
 def book_to_story_items(book: Book, theme: str = "classic",
-                        chapter_numbers: bool = True) -> list:
+                        chapter_numbers: bool = True,
+                        converter_cls=None) -> list:
     """The whole book as a flat list of Para items: front matter, then the
     chapters. Chapter openers carry start="NextOddPage" (write_idml maps that
-    to "NextPage" when chapter_start is not "right")."""
+    to "NextPage" when chapter_start is not "right"). converter_cls swaps in
+    a _Converter subclass (the docx writer keeps links, lists, and tables
+    that InDesign interchange flattens)."""
     meta = book.meta
     assets = {a.filename: a for a in book.assets}
 
@@ -622,7 +634,7 @@ def book_to_story_items(book: Book, theme: str = "classic",
                            attrs=title_attrs))
         opener[0].start = "NextOddPage"
         items.extend(opener)
-        converter = _Converter(assets)
+        converter = (converter_cls or _Converter)(assets)
         items.extend(converter.convert(root))
     return items
 
