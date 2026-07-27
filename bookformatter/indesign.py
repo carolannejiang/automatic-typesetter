@@ -12,8 +12,11 @@ inside <Content> (<?ACE 4?> is the footnote marker, <?ACE 18?> the auto page
 number) and ElementTree would escape or drop them.
 
 Limitations noted for callers: nested lists are flattened (each item keeps a
-literal marker, indented one em space per level), tables degrade to one
-tab-separated paragraph per row, and hyperlinks become plain text.
+literal marker, indented one em space per level), and tables degrade to one
+tab-separated paragraph per row. Hyperlinks keep their text as plain runs;
+with link_notes on (the default) each destination URL is preserved as a
+native InDesign footnote after the linked text — numbered by InDesign's own
+footnote settings, not the L series the other outputs use.
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ import re
 import struct
 
 from . import footnotes, htmldom, themes
+from .linknotes import annotate_links
 from .models import Book
 
 # Text measure assumed when no trim is known (ICML): 6x9 classic, in points.
@@ -592,7 +596,8 @@ def _copyright_lines(book: Book) -> list:
 
 
 def book_to_story_items(book: Book, theme: str = "classic",
-                        chapter_numbers: bool = True) -> list:
+                        chapter_numbers: bool = True,
+                        link_notes: bool = True) -> list:
     """The whole book as a flat list of Para items: front matter, then the
     chapters. Chapter openers carry start="NextOddPage" (write_idml maps that
     to "NextPage" when chapter_start is not "right")."""
@@ -611,7 +616,10 @@ def book_to_story_items(book: Book, theme: str = "classic",
                           start="NextPage" if i == 0 else None))
 
     for number, chapter in enumerate(book.chapters, 1):
-        root = htmldom.parse(footnotes.inline_footnotes(chapter.html))
+        markup = footnotes.inline_footnotes(chapter.html)
+        if link_notes:
+            markup, _ = annotate_links(markup, mode="native")
+        root = htmldom.parse(markup)
         opener: list = []
         title_attrs = None
         if chapter_numbers:

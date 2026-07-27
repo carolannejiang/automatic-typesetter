@@ -487,11 +487,11 @@ def _designmap_xml(spread_srcs, pages: int) -> str:
 def write_idml(book: Book, path: str, theme: str = "classic",
                trim: str = "6x9", font_size: str = "11pt",
                line_height: str = "1.45", chapter_start: str = "right",
-               chapter_numbers: bool = True) -> None:
+               chapter_numbers: bool = True, link_notes: bool = True) -> None:
     catalog = build_styles(theme, font_size, line_height)
     geometry = _Geometry(trim, theme)
 
-    items = book_to_story_items(book, theme, chapter_numbers)
+    items = book_to_story_items(book, theme, chapter_numbers, link_notes)
     if chapter_start != "right":
         for para in items:
             if para.start == "NextOddPage":

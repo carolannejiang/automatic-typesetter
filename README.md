@@ -117,7 +117,12 @@ and pasted homepages (which import via the discovered feed):
 **EPUB 3** — built directly with the standard library (an EPUB is a zip
 with rules), with title page, copyright page, navigation document (plus
 NCX for older readers), embedded images, optional cover (`--cover art.jpg`),
-and metadata. Output validates clean against W3C `epubcheck`.
+and metadata. Output validates clean against W3C `epubcheck`. The
+hyperlink rule applies here too: each external link becomes an `L1`,
+`L2`, … note reference whose URL lives in an `epub:type="footnote"`
+aside — a pop-up footnote in modern readers, a back-linked note list at
+the chapter's end in older ones (`--no-link-notes` keeps ordinary
+hyperlinks).
 
 **Print HTML → PDF** — a single self-contained HTML file typeset with CSS
 Paged Media:
@@ -136,6 +141,11 @@ Paged Media:
   reference markers and end-of-piece note lists (the Markdown/Pandoc/web
   convention) are folded into page-bottom notes; `--no-footnotes` keeps them
   as an end-of-chapter list instead
+- a universal hyperlink rule: paper can't be clicked, so every external
+  link keeps its text and gains a small `L1`, `L2`, … call, with the
+  destination URL set as a matching note at the foot of the page (a live
+  link in the PDF). The L series is separate from content footnotes, which
+  keep their own 1, 2, 3; `--no-link-notes` turns the rule off
 - `* * *` scene-break ornaments for `---`/`<hr>`, styled blockquotes,
   tables, figures with captions, code blocks
 
@@ -148,6 +158,7 @@ Rendering engines (`--pdf-engine auto|weasyprint|chrome|none`):
 | Recto chapter openers (blank versos) | ✓ | — (falls back to plain page break) | ✓* |
 | Running heads, TOC page numbers | ✓ | — | — |
 | Foot-of-page footnotes | ✓ | — (notes fall back to inline text) | — |
+| Foot-of-page link notes (`L1`, `L2` …) | ✓ | — (URL falls back to inline text) | — |
 
 \* recent Chromium-based browsers.
 
@@ -165,6 +176,9 @@ Rendering engines (`--pdf-engine auto|weasyprint|chrome|none`):
   threaded through. Opens in InDesign CS4+ (and Affinity Publisher 1.8+,
   Scribus 1.5+); the designer saves it as their working `.indd`.
 
+Hyperlink URLs survive the handoff as native InDesign footnotes set after
+the linked text — numbered by the document's own footnote settings rather
+than the `L` series the other outputs use (`--no-link-notes` drops them).
 Images arrive as links, not embeds — keep the generated `images/` folder
 beside the file. There's no baked-in TOC (page numbers only exist after
 layout); build one natively from the `Chapter Title` style with
@@ -242,7 +256,7 @@ permission to reproduce.
 ## Development
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 141 tests, no dependencies
+python3 -m unittest discover -s tests -t .   # 209 tests, no dependencies
 python3 -m bookformatter examples/field-notes -t "Field Notes on Book Making" -a "You"
 ```
 

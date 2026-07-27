@@ -16,6 +16,7 @@ import uuid
 import zipfile
 
 from . import htmldom, themes
+from .linknotes import annotate_links
 from .models import Book
 
 _XHTML_SHELL = """<?xml version="1.0" encoding="utf-8"?>
@@ -104,7 +105,8 @@ def _copyright_body(book: Book) -> str:
 
 
 def write_epub(book: Book, path: str, theme: str = "classic",
-               drop_caps: bool = False, chapter_numbers: bool = True) -> None:
+               drop_caps: bool = False, chapter_numbers: bool = True,
+               link_notes: bool = True) -> None:
     meta = book.meta
     lang = meta.language or "en"
     book_id = "urn:uuid:" + str(
@@ -141,6 +143,7 @@ def write_epub(book: Book, path: str, theme: str = "classic",
     spine.append("copyright")
 
     chapter_hrefs: list = []
+    next_link_note = 1
     for i, chapter in enumerate(book.chapters, 1):
         # Round-trip through the DOM to guarantee well-formed XHTML, and
         # repoint asset srcs: chapters live in text/, assets in images/.
@@ -150,6 +153,9 @@ def write_epub(book: Book, path: str, theme: str = "classic",
             if src.startswith("images/"):
                 img.attrs["src"] = "../" + src
         content = htmldom.inner_html(root)
+        if link_notes:
+            content, next_link_note = annotate_links(
+                content, start=next_link_note, mode="aside")
         body = _chapter_body(i, chapter.title, content, chapter_numbers, theme)
         href = f"text/chapter-{i:03d}.xhtml"
         files.append((f"OEBPS/{href}", _xhtml(chapter.title, body, lang)))

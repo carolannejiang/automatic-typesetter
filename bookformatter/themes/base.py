@@ -166,6 +166,12 @@ body { margin: 0 5%; }
 header.chapter-head { margin-top: 3em; }
 section.titlepage .book-title { margin-top: 15%; }
 @page { margin: 0; }
+
+/* Link notes: readers with pop-up footnote support show each aside on tap
+   of its L call; others render them as a note list at the chapter's end. */
+aside.linknote { font-size: 0.85em; margin: 0.4em 0; }
+aside.linknote p { text-indent: 0; margin: 0; }
+aside.linknote a.linknote-url { overflow-wrap: anywhere; word-break: break-all; }
 """
 )
 
@@ -254,6 +260,28 @@ span.footnote::footnote-call {
   vertical-align: super; font-size: 0.7em; line-height: 0;
 }
 span.footnote::footnote-marker { font-weight: normal; }
+
+/* Link notes: the universal hyperlink rule. Every external link keeps its
+   text and gains a subscript L-numbered call (L1, L2, ...); the matching
+   note at the foot of the page carries the destination URL, itself a live
+   link in PDF. Both labels are baked into the markup by linknotes.py — not
+   drawn from the footnote counter — so content footnotes keep their own
+   numbering and the Chrome fallback still shows the URL inline. The
+   auto-generated call and marker are therefore suppressed here. */
+span.linknote {
+  float: footnote;
+  /* WeasyPrint bumps the footnote counter for every footnote float; this
+     -1 cancels that, so content footnotes keep an unbroken 1, 2, 3. */
+  counter-increment: footnote -1;
+  font-size: 0.8em;
+  line-height: 1.3;
+  text-align: left;
+  text-indent: 0;
+  hyphens: none; -webkit-hyphens: none;
+}
+span.linknote::footnote-call { content: none; }
+span.linknote::footnote-marker { content: none; }
+span.linknote a.linknote-url { overflow-wrap: anywhere; }
 """
 )
 
