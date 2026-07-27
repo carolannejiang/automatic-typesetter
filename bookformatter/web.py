@@ -27,6 +27,7 @@ import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from . import docx as docx_writer
 from . import epub as epub_writer
 from . import icml as icml_writer
 from . import idml as idml_writer
@@ -250,6 +251,14 @@ def run_build(params: dict, uploads: list, workdir: str,
                                chapter_numbers=chapter_numbers)
         out.files[f"{name}.epub"] = epub_path
 
+    if "docx" in formats:
+        progress("Writing Word document…")
+        docx_path = os.path.join(out_dir, f"{name}.docx")
+        docx_writer.write_docx(book, docx_path, theme=theme, trim=trim,
+                               font_size=font_size, line_height=line_height,
+                               chapter_numbers=chapter_numbers)
+        out.files[f"{name}.docx"] = docx_path
+
     if "icml" in formats:
         progress("Writing InDesign story…")
         icml_path = os.path.join(out_dir, f"{name}.icml")
@@ -467,6 +476,8 @@ class Handler(BaseHTTPRequestHandler):
                 ".epub": "application/epub+zip",
                 ".pdf": "application/pdf",
                 ".html": "text/html; charset=utf-8",
+                ".docx": "application/vnd.openxmlformats-officedocument"
+                         ".wordprocessingml.document",
                 ".icml": "application/xml",
                 ".idml": "application/vnd.adobe.indesign-idml-package",
             }.get(os.path.splitext(wanted)[1].lower(), "application/octet-stream")
@@ -756,6 +767,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
         <label><input type="checkbox" name="formats" value="epub" checked> EPUB (e-readers)</label>
         <label><input type="checkbox" name="formats" value="pdf" checked> PDF (print)</label>
         <label><input type="checkbox" name="formats" value="html"> HTML (page source)</label>
+        <label><input type="checkbox" name="formats" value="docx"> Word (.docx &mdash; editable manuscript)</label>
         <label><input type="checkbox" name="formats" value="icml"> ICML (InDesign/InCopy story &mdash; File &rarr; Place)</label>
         <label><input type="checkbox" name="formats" value="idml"> IDML (InDesign document)</label>
       </div>

@@ -7,6 +7,7 @@ import datetime as _dt
 import os
 import sys
 
+from . import docx as docx_writer
 from . import epub as epub_writer
 from . import icml as icml_writer
 from . import idml as idml_writer
@@ -49,8 +50,9 @@ def build_parser() -> argparse.ArgumentParser:
     output.add_argument("-o", "--output-dir", default="build", help="output directory (default: ./build)")
     output.add_argument("-n", "--name", help="output basename (default: slug of the title)")
     output.add_argument("-f", "--formats", default="epub,pdf",
-                        help="comma-separated: epub,pdf,html,icml,idml (default: epub,pdf); "
-                             "icml is an InCopy story to Place into an InDesign layout, "
+                        help="comma-separated: epub,pdf,html,docx,icml,idml (default: epub,pdf); "
+                             "docx is an editable Word manuscript, "
+                             "icml an InCopy story to Place into an InDesign layout, "
                              "idml a full InDesign document")
     output.add_argument("--pdf-engine", default="auto", choices=["auto", "weasyprint", "chrome", "none"],
                         help="PDF renderer (default: auto = weasyprint, then headless Chrome)")
@@ -101,7 +103,7 @@ def _load_cover(path: str):
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     formats = {f.strip().lower() for f in args.formats.split(",") if f.strip()}
-    unknown = formats - {"epub", "pdf", "html", "icml", "idml"}
+    unknown = formats - {"epub", "pdf", "html", "docx", "icml", "idml"}
     if unknown:
         raise SystemExit(f"error: unknown format(s): {', '.join(sorted(unknown))}")
 
@@ -146,6 +148,15 @@ def main(argv=None) -> int:
             chapter_numbers=not args.no_chapter_numbers,
         )
         written.append(epub_path)
+
+    if "docx" in formats:
+        docx_path = os.path.join(args.output_dir, f"{name}.docx")
+        docx_writer.write_docx(
+            book, docx_path, theme=args.theme, trim=args.trim,
+            font_size=args.font_size, line_height=args.line_height,
+            chapter_numbers=not args.no_chapter_numbers,
+        )
+        written.append(docx_path)
 
     if "icml" in formats:
         icml_path = os.path.join(args.output_dir, f"{name}.icml")

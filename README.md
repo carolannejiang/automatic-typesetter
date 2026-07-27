@@ -3,7 +3,8 @@
 Turn text, Markdown, web pages, and whole blogs into **traditional book
 formats**: a valid EPUB 3 for e-readers, a print-ready, properly typeset
 PDF (6×9″ trim, running heads, folios, front matter, recto chapter
-openers), and InDesign handoff files (ICML/IDML) for professional layout.
+openers), an editable Word manuscript (.docx), and InDesign handoff
+files (ICML/IDML) for professional layout.
 
 The core is **pure Python standard library** — no dependencies to install.
 PDF rendering uses WeasyPrint if you have it, or any local Chrome/Chromium
@@ -34,6 +35,9 @@ python3 -m bookformatter chapters/ -t "Essays" -f epub,pdf,html \
 # top outer corners, chapter openers stripped of all page furniture
 python3 -m bookformatter chapters/ -t "Essays" --theme classical
 
+# An editable Word manuscript beside the book, for revising in Word
+python3 -m bookformatter manuscript.md -t "My Book" -f epub,pdf,docx
+
 # Hand off to a designer: an InCopy story to Place, plus a full
 # InDesign document
 python3 -m bookformatter manuscript.md -t "My Book" -f icml,idml
@@ -58,7 +62,7 @@ your browser): paste article/feed links, upload `.md`/`.txt`/`.html`
 files, or paste text directly; set the title, author, cover image, and
 every option the CLI has (theme, trim size, formats, fonts, chapter
 behavior, feed handling, PDF engine); click **Make the book**; download
-the EPUB/PDF/HTML when the build finishes.
+the EPUB/PDF/HTML/Word file when the build finishes.
 
 It runs entirely on your machine — nothing is uploaded anywhere. It's
 standard library only, like the rest of the tool. `--port` changes the
@@ -70,8 +74,8 @@ public use (SSRF guard, caps):
 
 - **Vercel** (no extra accounts): a serverless adapter
   (`api/index.py` + `vercel.json`) builds books synchronously per
-  request — EPUBs identical, PDFs delivered as print HTML you print from
-  the browser.
+  request — EPUB and Word files identical, PDFs delivered as print HTML
+  you print from the browser.
 - **Fly.io / any Docker host** (`Dockerfile`, `fly.toml`, deploy
   workflow): the full server with WeasyPrint, for one-click print-perfect
   PDFs; supports mounting under a path (`--base-path /book`).
@@ -118,6 +122,20 @@ and pasted homepages (which import via the discovered feed):
 with rules), with title page, copyright page, navigation document (plus
 NCX for older readers), embedded images, optional cover (`--cover art.jpg`),
 and metadata. Output validates clean against W3C `epubcheck`.
+
+**Word (.docx)** — an editable manuscript of the whole book, for the
+pass where you want to *revise* rather than print. Everything is native
+Word machinery, so the file behaves like a document typed in Word:
+chapter titles are real `Heading 1`s (the navigation pane lists your
+chapters; References → Table of Contents just works), body/quote/
+code/caption formatting rides on named styles derived from the chosen
+theme (restyle the book by editing a style), footnotes are real Word
+footnotes that renumber as you edit, lists and tables are native,
+hyperlinks stay live, images are embedded. Page size and mirrored
+margins follow the chosen trim, so the page count roughly tracks the
+print edition. Edit it, then export from Word directly (KDP accepts
+.docx) — or fold the changes back into your sources and rebuild for the
+fully typeset PDF/EPUB.
 
 **Print HTML → PDF** — a single self-contained HTML file typeset with CSS
 Paged Media:
@@ -185,6 +203,7 @@ web UI (…web)  ──────┘        │  readability-style extraction,
                 Book model (metadata + chapters of clean HTML + assets)
                               │
                               ├──► EPUB 3 writer (stdlib zipfile; polyglot XHTML)
+                              ├──► DOCX writer (editable Word manuscript)
                               ├──► ICML / IDML writers (InDesign handoff)
                               └──► print HTML (CSS Paged Media) ──► WeasyPrint / Chrome ──► PDF
 ```
@@ -242,7 +261,7 @@ permission to reproduce.
 ## Development
 
 ```bash
-python3 -m unittest discover -s tests -t .   # 141 tests, no dependencies
+python3 -m unittest discover -s tests -t .   # 209 tests, no dependencies
 python3 -m bookformatter examples/field-notes -t "Field Notes on Book Making" -a "You"
 ```
 
@@ -251,6 +270,8 @@ common constructs (headings, emphasis, links, images, code, quotes, lists,
 tables, footnote-style anchors) but not full CommonMark; extraction is
 heuristic; fonts are not embedded in the PDF (system serif stacks are
 used); EPUB is the only ebook target (KDP accepts EPUB directly these
-days). Natural next steps: a `book.toml` project file, font embedding,
+days); the Word export deliberately skips print furniture (no running
+heads, chapters open with a plain page break rather than a recto
+section) because it is a manuscript for editing, not a final layout. Natural next steps: a `book.toml` project file, font embedding,
 footnote conversion for print, hyphenation dictionaries, index/colophon
 pages.

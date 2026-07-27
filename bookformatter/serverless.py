@@ -33,6 +33,8 @@ _MEDIA_TYPES = {
     ".epub": "application/epub+zip",
     ".pdf": "application/pdf",
     ".html": "text/html; charset=utf-8",
+    ".docx": "application/vnd.openxmlformats-officedocument"
+             ".wordprocessingml.document",
     ".icml": "application/xml",
     ".idml": "application/vnd.adobe.indesign-idml-package",
     ".zip": "application/zip",
@@ -50,6 +52,7 @@ _SERVERLESS_FORMATS = """<label>Formats <span style="font-style:italic">(picking
       <div class="checks">
         <label><input type="checkbox" name="formats" value="epub" checked> EPUB (e-readers)</label>
         <label><input type="checkbox" name="formats" value="html"> Print HTML &mdash; open it and File &rarr; Print to make the PDF</label>
+        <label><input type="checkbox" name="formats" value="docx"> Word (.docx &mdash; editable manuscript)</label>
         <label><input type="checkbox" name="formats" value="icml"> ICML (InDesign/InCopy story &mdash; File &rarr; Place)</label>
         <label><input type="checkbox" name="formats" value="idml"> IDML (InDesign document)</label>
       </div>"""
