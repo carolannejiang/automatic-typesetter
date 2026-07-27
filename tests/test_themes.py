@@ -70,6 +70,54 @@ class ClassicalCssTests(unittest.TestCase):
         self.assertNotIn("page: clean", css)
 
 
+class ClassicthesisCssTests(unittest.TestCase):
+    def test_chapter_label_is_the_bare_figure(self):
+        self.assertEqual(themes.chapter_label("classicthesis", 3), "3")
+
+    def test_palatino_with_oldstyle_figures(self):
+        css = themes.epub_css(theme="classicthesis")
+        self.assertIn("Palatino", css)
+        self.assertIn("font-variant-numeric: oldstyle-nums;", css)
+
+    def test_opener_hangs_a_halfgray_figure_on_a_titlerule(self):
+        css = themes.epub_css(theme="classicthesis")
+        # halfgray is classicthesis.sty's {gray}{0.55}
+        self.assertIn("color: #8c8c8c;", css)
+        self.assertIn("border-bottom: 0.4pt solid currentColor;", css)
+        # the title page carries dvipsnames Maroon
+        self.assertIn("color: #ad1737;", css)
+
+    def test_print_css_moves_the_folio_into_the_headline(self):
+        css = themes.print_css(theme="classicthesis", book_title="Field Notes")
+        # One box per outer corner: folio and running title together...
+        self.assertIn('content: counter(page) "\\2003" string(chapter-title, first-except);', css)
+        self.assertIn('content: string(chapter-title, first-except) "\\2003" counter(page);', css)
+        # ...replacing the shared furniture it comes after.
+        furniture = css.index("classicthesis print furniture")
+        self.assertGreater(furniture, css.index("string(book-title, first-except)"))
+        self.assertGreater(furniture, css.index('leader(". ")'))
+        self.assertGreater(furniture, css.index("content: counter(page)"))
+        # Contents entries are leaderless with the folio after the text.
+        self.assertIn('content: "\\2003" target-counter(attr(href url), page);', css)
+
+    def test_openers_take_a_plain_page_with_a_foot_folio(self):
+        css = themes.print_css(theme="classicthesis")
+        self.assertIn("header.chapter-head { page: clean; }", css)
+        self.assertIn("section.chapter { page: auto; }", css)
+        self.assertIn("@page clean:right {\n  @bottom-right { content: counter(page);", css)
+        self.assertIn("@page clean:left {\n  @bottom-left { content: counter(page);", css)
+
+    def test_print_geometry_widens_the_fore_edge(self):
+        css = themes.print_css(theme="classicthesis", trim="6x9")
+        self.assertIn("margin: 0.85in 1.05in 0.95in 0.72in;", css)
+
+    def test_epub_css_restyles_without_paged_furniture(self):
+        css = themes.epub_css(theme="classicthesis")
+        self.assertIn("classicthesis overrides", css)
+        self.assertNotIn("@top-left", css)
+        self.assertNotIn("margin-right: -0.45in", css)
+
+
 class ThemeBuildTests(unittest.TestCase):
     def test_print_html_classic_is_unchanged(self):
         page = printbook.build_print_html(_book(), theme="classic")

@@ -17,10 +17,10 @@ Unknown theme names fall back to classic.
 
 from __future__ import annotations
 
-from . import base, classic, classical, modern
+from . import base, classic, classical, classicthesis, modern
 from .base import TRIM_SIZES
 
-_THEME_MODULES = (classic, modern, classical)
+_THEME_MODULES = (classic, modern, classical, classicthesis)
 _THEMES = {mod.NAME: mod for mod in _THEME_MODULES}
 
 THEME_NAMES = [mod.NAME for mod in _THEME_MODULES]
