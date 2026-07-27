@@ -556,6 +556,69 @@ def _drop_social_links(container: Node) -> None:
             a.replace_with_children()
 
 
+def _adopt_reference_notes(body: Node, container: Node) -> None:
+    """Rewrite a self-anchored reference marker + separate notes container into
+    the canonical call + ``<ol class="footnotes">`` form.
+
+    Some custom themes (e.g. joecarlsmith.com) invert the usual footnote
+    convention: the in-text marker anchors *itself*
+    ``<sup id="ref-1"><a href="#ref-1">1</a></sup>`` and the note body lives in
+    a separate CSS-grid area keyed by a *different*, never-referenced id
+    (``<div id="reference-item-1">…<div class="reference__text">…</div></div>``).
+    Readability drops that separate container, and even kept the marker's href
+    resolves to itself rather than the note — so nothing inlines.
+
+    Pair each marker with the note that links back to it, move the note prose
+    into ``<li id="ref-1">`` under a trailing ``<ol class="footnotes">``, and
+    drop the marker's self-anchor id so ``#ref-1`` now resolves to the note.
+    """
+    markers = []
+    for sup in container.find_all("sup"):
+        ident = sup.get("id")
+        if not ident:
+            continue
+        inner = sup.find("a")
+        if inner is not None and (inner.get("href") or "") == "#" + ident:
+            markers.append((ident, sup))
+    if not markers:
+        return
+
+    wanted = {ident for ident, _ in markers}
+    # The note body links back to the marker's id (the references item's index
+    # link); the in-body marker anchor points there too, so skip it.
+    notes: dict = {}
+    for a in body.find_all("a"):
+        href = a.get("href") or ""
+        if not href.startswith("#"):
+            continue
+        target = href[1:]
+        if target not in wanted or target in notes:
+            continue
+        if a.parent is None or a.parent.tag == "sup":
+            continue
+        notes[target] = a
+    if not notes:
+        return
+
+    ol = Node("ol", {"class": "footnotes"})
+    for ident, sup in markers:
+        index_link = notes.get(ident)
+        if index_link is None:
+            continue
+        item = index_link.parent
+        li = Node("li", {"id": ident})
+        for child in list(item.children):
+            child.detach()
+            if child is index_link or (child.is_text and not (child.text or "").strip()):
+                continue
+            li.append(child)
+        item.detach()
+        ol.append(li)
+        del sup.attrs["id"]  # drop the self-anchor so #ident now names the note
+    if ol.children:
+        container.append(ol)
+
+
 def _clean_tree(container: Node) -> None:
     """Reduce the winning container to book-safe semantic markup."""
     _drop_social_links(container)
@@ -693,6 +756,7 @@ def extract_article(html_text: str, base_url: str = "") -> ExtractedDoc:
     if container is None:
         container = body
 
+    _adopt_reference_notes(body, container)
     _absolutize(container, base_url)
     _clean_tree(container)
     _wrap_stray_text(container)
