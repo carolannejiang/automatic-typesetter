@@ -77,6 +77,9 @@ def build_parser() -> argparse.ArgumentParser:
     design.add_argument("--no-toc", action="store_true", help="omit the table of contents page in print output")
     design.add_argument("--no-footnotes", action="store_true",
                         help="keep footnotes as an end-of-chapter list instead of setting them at the foot of the page")
+    design.add_argument("--no-link-notes", action="store_true",
+                        help="keep hyperlinks as-is instead of presenting each as an "
+                             "L-numbered note carrying its URL at the foot of the page")
 
     content = parser.add_argument_group("content handling")
     content.add_argument("--split", default="auto", choices=["auto", "h1", "h2", "none"],
@@ -151,6 +154,7 @@ def main(argv=None) -> int:
         epub_writer.write_epub(
             book, epub_path, theme=args.theme, drop_caps=args.drop_caps,
             chapter_numbers=not args.no_chapter_numbers,
+            link_notes=not args.no_link_notes,
         )
         written.append(epub_path)
 
@@ -168,6 +172,7 @@ def main(argv=None) -> int:
         icml_writer.write_icml(
             book, icml_path, theme=args.theme, font_size=args.font_size,
             line_height=args.line_height, chapter_numbers=not args.no_chapter_numbers,
+            link_notes=not args.no_link_notes,
         )
         written.append(icml_path)
 
@@ -178,6 +183,7 @@ def main(argv=None) -> int:
             font_size=args.font_size, line_height=args.line_height,
             chapter_start=args.chapter_start,
             chapter_numbers=not args.no_chapter_numbers,
+            link_notes=not args.no_link_notes,
         )
         written.append(idml_path)
 
@@ -197,6 +203,7 @@ def main(argv=None) -> int:
             toc=not args.no_toc, drop_caps=args.drop_caps,
             chapter_numbers=not args.no_chapter_numbers,
             footnotes=not args.no_footnotes,
+            link_notes=not args.no_link_notes,
         )
         with open(html_path, "w", encoding="utf-8") as fh:
             fh.write(page)
