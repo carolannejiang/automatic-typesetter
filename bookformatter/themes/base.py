@@ -15,13 +15,15 @@ from __future__ import annotations
 
 from string import Template
 
-# (width_in, height_in) — common trade trim sizes plus ISO A5.
+# (width_in, height_in) — common trade trim sizes plus ISO A5 and the
+# Oxford Very Short Introduction pocket format (111 × 174 mm).
 TRIM_SIZES = {
     "5x8": (5.0, 8.0),
     "5.25x8": (5.25, 8.0),
     "5.5x8.5": (5.5, 8.5),
     "6x9": (6.0, 9.0),
     "a5": (5.83, 8.27),
+    "vsi": (4.37, 6.85),
 }
 
 SERIF_STACK = '"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif'

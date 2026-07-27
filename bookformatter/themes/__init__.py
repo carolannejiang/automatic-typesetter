@@ -10,6 +10,8 @@ module supplies:
     chapter_label  the text set in the chapter-number slot
     EXTRA          Template of CSS overrides for all output, or None
     PRINT_EXTRA    Template of print-only furniture overrides, or None
+    DEFAULT_TRIM   optional: the trim the design is drawn for; pickers
+                   default to it when no trim is chosen (else 6x9)
 
 To add a theme, write such a module and list it in `_THEME_MODULES` below.
 Unknown theme names fall back to classic.
@@ -17,10 +19,10 @@ Unknown theme names fall back to classic.
 
 from __future__ import annotations
 
-from . import base, classic, classical, modern
+from . import base, classic, classical, modern, vsi
 from .base import TRIM_SIZES
 
-_THEME_MODULES = (classic, modern, classical)
+_THEME_MODULES = (classic, modern, classical, vsi)
 _THEMES = {mod.NAME: mod for mod in _THEME_MODULES}
 
 THEME_NAMES = [mod.NAME for mod in _THEME_MODULES]
@@ -39,6 +41,11 @@ def _geometry(trim: str, theme: str = "classic") -> dict:
 
 def chapter_label(theme: str, number: int) -> str:
     return _theme(theme).chapter_label(number)
+
+
+def default_trim(theme: str) -> str:
+    """The trim a theme is designed around ("6x9" unless it declares one)."""
+    return getattr(_theme(theme), "DEFAULT_TRIM", "6x9")
 
 
 def theme_params(theme: str, font_size: str, line_height: str) -> dict:
