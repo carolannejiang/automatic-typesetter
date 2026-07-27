@@ -216,9 +216,9 @@ def run_build(params: dict, uploads: list, workdir: str,
     )
 
     theme = _first(params, "theme", "classic")
-    trim = _first(params, "trim", "6x9")
+    trim = _first(params, "trim", "")
     if trim not in themes.TRIM_SIZES:
-        trim = "6x9"
+        trim = themes.default_trim(theme)
     chapter_start = _first(params, "chapter_start", "right")
     drop_caps = _first(params, "drop_caps") == "on"
     chapter_numbers = _first(params, "no_chapter_numbers") != "on"
@@ -741,6 +741,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
             <option value="classic">Classic — serif, indents, centered heads</option>
             <option value="modern">Modern — sans heads, spaced paragraphs</option>
             <option value="classical">Classical — small-cap heads, top-corner folios, quiet openers</option>
+            <option value="vsi" data-trim="vsi">VSI — Oxford pocket style: gray sans openers, vertical margin running heads</option>
             <option value="classicthesis">ClassicThesis — Palatino, spaced small caps, gray chapter numbers</option>
           </select></div>
         <div><label for="trim">Trim size (print)</label>
@@ -750,6 +751,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
             <option value="5.25x8">5.25 &times; 8 in</option>
             <option value="5x8">5 &times; 8 in</option>
             <option value="a5">A5</option>
+            <option value="vsi">4.37 &times; 6.85 in (111 &times; 174 mm pocket)</option>
           </select></div>
       </div>
       <label>Formats</label>
@@ -840,6 +842,16 @@ const warnings = document.getElementById("warnings");
 const downloads = document.getElementById("downloads");
 const go = document.getElementById("go");
 let timer = null;
+
+// A theme can carry its natural page (data-trim on its option): picking the
+// theme sets the trim to match, until the trim is chosen by hand.
+const themeSel = document.getElementById("theme");
+const trimSel = document.getElementById("trim");
+let trimTouched = false;
+trimSel.addEventListener("change", () => { trimTouched = true; });
+themeSel.addEventListener("change", () => {
+  if (!trimTouched) trimSel.value = themeSel.selectedOptions[0].dataset.trim || "6x9";
+});
 
 form.addEventListener("submit", async (ev) => {
   ev.preventDefault();

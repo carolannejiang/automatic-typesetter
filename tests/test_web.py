@@ -124,6 +124,22 @@ class WebTests(unittest.TestCase):
         self.assertIn("line-height: 1.6", html)
         self.assertNotIn('<nav class="print-toc', html)  # TOC page disabled
 
+    def test_vsi_theme_defaults_to_its_pocket_trim(self):
+        form = urllib.parse.urlencode(
+            {"pasted": PASTED, "title": "Pocket Book", "theme": "vsi",
+             "formats": ["html"]},
+            doseq=True,
+        ).encode()
+        code, body = self._post("/build", form, "application/x-www-form-urlencoded")
+        self.assertEqual(code, 200)
+        job_id = json.loads(body)["id"]
+        status = self._wait_for_job(job_id)
+        self.assertEqual(status["status"], "done", status["message"])
+        name = status["files"][0]["name"]
+        code, page = self._get(f"/download?id={job_id}&file={name}")
+        self.assertEqual(code, 200)
+        self.assertIn("size: 4.37in 6.85in", page.decode())
+
     def test_build_multipart_with_file_and_cover(self):
         boundary = "testboundary42"
 
