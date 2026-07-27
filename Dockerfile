@@ -18,8 +18,7 @@ COPY bookformatter ./bookformatter
 RUN pip install --no-cache-dir .
 
 # Public-mode defaults: SSRF guard + rate limiting on. Set
-# BOOKFORMATTER_BASE_PATH=/book when proxying from a path, and
-# BOOKFORMATTER_PASSCODE=... to keep the press private.
+# BOOKFORMATTER_BASE_PATH=/book when proxying from a path.
 ENV BOOKFORMATTER_PUBLIC=1 \
     PORT=8080
 

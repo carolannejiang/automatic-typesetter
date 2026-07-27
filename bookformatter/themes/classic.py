@@ -10,6 +10,7 @@ from __future__ import annotations
 from . import base
 
 NAME = "classic"
+LABEL = "Classic — serif, indents, centered heads"
 
 EXTRA = None
 PRINT_EXTRA = None
@@ -19,18 +20,5 @@ chapter_label = base.default_chapter_label
 
 
 def params(font_size: str, line_height: str) -> dict:
-    return {
-        "THEME_NAME": NAME,
-        "BODY_FONT": base.SERIF_STACK,
-        "HEADING_FONT": base.SERIF_STACK,
-        "MONO_FONT": base.MONO_STACK,
-        "HEADING_WEIGHT": "normal",
-        "HEADING_ALIGN": "center",
-        "FONT_SIZE": font_size,
-        "LINE_HEIGHT": line_height,
-        "INDENT": "1.35em",
-        "PARA_EXTRA": "",
-        "TITLE_EXTRA": "font-variant: small-caps; letter-spacing: 0.04em;",
-        "CHAPTER_DROP": "2.8em",
-        "TITLE_DROP": "1.6in",
-    }
+    # Classic IS the default: base.default_params carries its values.
+    return base.default_params(NAME, font_size, line_height)

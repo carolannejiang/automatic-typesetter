@@ -10,6 +10,7 @@ from __future__ import annotations
 from . import base
 
 NAME = "modern"
+LABEL = "Modern — sans heads, spaced paragraphs"
 
 EXTRA = None
 PRINT_EXTRA = None
@@ -21,18 +22,15 @@ _MODERN_PARA = "p + p { margin-top: 0.6em; }"
 
 
 def params(font_size: str, line_height: str) -> dict:
-    return {
-        "THEME_NAME": NAME,
-        "BODY_FONT": base.SERIF_STACK,
+    values = base.default_params(NAME, font_size, line_height)
+    values.update({
         "HEADING_FONT": base.SANS_STACK,
-        "MONO_FONT": base.MONO_STACK,
         "HEADING_WEIGHT": "600",
         "HEADING_ALIGN": "left",
-        "FONT_SIZE": font_size,
-        "LINE_HEIGHT": line_height,
         "INDENT": "0",
         "PARA_EXTRA": _MODERN_PARA,
         "TITLE_EXTRA": "",
         "CHAPTER_DROP": "2.4em",
         "TITLE_DROP": "1.8in",
-    }
+    })
+    return values

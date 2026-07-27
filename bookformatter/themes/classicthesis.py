@@ -18,6 +18,7 @@ from string import Template
 from . import base
 
 NAME = "classicthesis"
+LABEL = "ClassicThesis — Palatino, spaced small caps, gray chapter numbers"
 
 # classicthesis loads mathpazo (Palatino) with old-style figures and real
 # small caps; put Palatino faces first and fall back to kindred serifs.
@@ -162,18 +163,14 @@ def chapter_label(number: int) -> str:
 
 
 def params(font_size: str, line_height: str) -> dict:
-    return {
-        "THEME_NAME": NAME,
+    values = base.default_params(NAME, font_size, line_height)
+    values.update({
         "BODY_FONT": SERIF_STACK,
         "HEADING_FONT": SERIF_STACK,
-        "MONO_FONT": base.MONO_STACK,
-        "HEADING_WEIGHT": "normal",
         "HEADING_ALIGN": "left",
-        "FONT_SIZE": font_size,
-        "LINE_HEIGHT": line_height,
         "INDENT": "1em",
-        "PARA_EXTRA": "",
         "TITLE_EXTRA": "text-transform: uppercase; letter-spacing: 0.16em; font-weight: normal;",
         "CHAPTER_DROP": "1.6em",
         "TITLE_DROP": "1.8in",
-    }
+    })
+    return values

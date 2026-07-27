@@ -17,7 +17,7 @@ import zipfile
 
 from . import htmldom, themes
 from .linknotes import annotate_links
-from .models import Book
+from .models import Book, copyright_lines
 
 _XHTML_SHELL = """<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
@@ -90,16 +90,8 @@ def _titlepage_body(book: Book) -> str:
 
 
 def _copyright_body(book: Book) -> str:
-    meta = book.meta
-    year = (meta.date or str(_dt.date.today()))[:4]
     lines = ['<section class="copyrightpage frontmatter" epub:type="copyright-page">']
-    if meta.author:
-        lines.append(f"<p>Copyright &#169; {year} {_esc(meta.author)}. All rights reserved.</p>")
-    if meta.rights:
-        lines.append(f"<p>{_esc(meta.rights)}</p>")
-    if meta.source_url:
-        lines.append(f"<p>Originally published at {_esc(meta.source_url)}.</p>")
-    lines.append("<p>Produced with bookformatter.</p>")
+    lines.extend(f"<p>{_esc(line)}</p>" for line in copyright_lines(book))
     lines.append("</section>")
     return "\n".join(lines)
 

@@ -27,12 +27,9 @@ import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import docx as docx_writer
-from . import epub as epub_writer
-from . import icml as icml_writer
-from . import idml as idml_writer
 from . import ingest as ingester
-from . import printbook, themes
+from . import themes
+from .build import write_formats
 from .fetch import sniff_image
 from .indesign import extract_link_assets
 from .models import Asset, Book, BookMeta, slugify
@@ -61,16 +58,21 @@ class Job:
         self.workdir = tempfile.mkdtemp(prefix="bookformatter-web-")
 
     def to_json(self) -> dict:
+        files = []
+        # Snapshot, then stat leniently: the build thread inserts into
+        # files while /status iterates, and eviction can delete a file
+        # between the listing and the stat.
+        for name, path in list(self.files.items()):
+            try:
+                files.append({"name": name, "size": os.path.getsize(path)})
+            except OSError:
+                pass
         return {
             "id": self.id,
             "status": self.status,
             "message": self.message,
             "warnings": self.warnings,
-            "files": [
-                {"name": name, "size": os.path.getsize(path)}
-                for name, path in self.files.items()
-                if os.path.exists(path)
-            ],
+            "files": files,
             "book_title": self.book_title,
             "stats": self.stats,
         }
@@ -79,10 +81,13 @@ class Job:
 def _register_job(job: Job) -> None:
     with _jobs_lock:
         _jobs[job.id] = job
-        # Evict the oldest jobs (and their temp dirs) beyond the cap.
+        # Evict the oldest finished jobs (and their temp dirs) beyond the
+        # cap. Queued/running jobs are kept even past the cap — deleting a
+        # live build's workdir out from under it would fail the build.
         if len(_jobs) > MAX_JOBS:
-            for old_id in sorted(_jobs, key=lambda j: _jobs[j].created)[: len(_jobs) - MAX_JOBS]:
-                old = _jobs.pop(old_id)
+            finished = [j for j in _jobs.values() if j.status in ("done", "error")]
+            for old in sorted(finished, key=lambda j: j.created)[: len(_jobs) - MAX_JOBS]:
+                _jobs.pop(old.id, None)
                 shutil.rmtree(old.workdir, ignore_errors=True)
 
 
@@ -245,37 +250,14 @@ def run_build(params: dict, uploads: list, workdir: str,
     os.makedirs(out_dir, exist_ok=True)
     name = slugify(_first(params, "name") or meta.title)
 
-    if "epub" in formats:
-        progress("Writing EPUB…")
-        epub_path = os.path.join(out_dir, f"{name}.epub")
-        epub_writer.write_epub(book, epub_path, theme=theme, drop_caps=drop_caps,
-                               chapter_numbers=chapter_numbers, link_notes=link_notes)
-        out.files[f"{name}.epub"] = epub_path
-
-    if "docx" in formats:
-        progress("Writing Word document…")
-        docx_path = os.path.join(out_dir, f"{name}.docx")
-        docx_writer.write_docx(book, docx_path, theme=theme, trim=trim,
-                               font_size=font_size, line_height=line_height,
-                               chapter_numbers=chapter_numbers)
-        out.files[f"{name}.docx"] = docx_path
-
-    if "icml" in formats:
-        progress("Writing InDesign story…")
-        icml_path = os.path.join(out_dir, f"{name}.icml")
-        icml_writer.write_icml(book, icml_path, theme=theme, font_size=font_size,
-                               line_height=line_height, chapter_numbers=chapter_numbers,
-                               link_notes=link_notes)
-        out.files[f"{name}.icml"] = icml_path
-
-    if "idml" in formats:
-        progress("Writing InDesign document…")
-        idml_path = os.path.join(out_dir, f"{name}.idml")
-        idml_writer.write_idml(book, idml_path, theme=theme, trim=trim,
-                               font_size=font_size, line_height=line_height,
-                               chapter_start=chapter_start, chapter_numbers=chapter_numbers,
-                               link_notes=link_notes)
-        out.files[f"{name}.idml"] = idml_path
+    write_formats(
+        book, formats, out_dir, name,
+        theme=theme, trim=trim, font_size=font_size, line_height=line_height,
+        chapter_start=chapter_start, drop_caps=drop_caps,
+        chapter_numbers=chapter_numbers, toc=toc, footnotes=footnotes,
+        link_notes=link_notes, pdf_engine=pdf_engine, progress=progress,
+        files=out.files, notes=out.warnings,
+    )
 
     if ({"icml", "idml"} & formats) and book.assets:
         for path in extract_link_assets(book, out_dir):
@@ -285,44 +267,6 @@ def run_build(params: dict, uploads: list, workdir: str,
             "images too and keep the images/ folder beside the .icml/.idml file "
             "so InDesign can relink them."
         )
-
-    if "pdf" in formats or "html" in formats:
-        progress("Typesetting pages…")
-        html_path = os.path.join(out_dir, f"{name}.html")
-        page = printbook.build_print_html(
-            book, theme=theme, trim=trim, font_size=font_size,
-            line_height=line_height, chapter_start=chapter_start,
-            toc=toc, drop_caps=drop_caps, chapter_numbers=chapter_numbers,
-            footnotes=footnotes, link_notes=link_notes,
-        )
-        with open(html_path, "w", encoding="utf-8") as fh:
-            fh.write(page)
-        if "html" in formats:
-            out.files[f"{name}.html"] = html_path
-
-        if "pdf" in formats and pdf_engine == "none":
-            out.files[f"{name}.html"] = html_path
-            out.warnings.append(
-                "PDF engine 'none': download the HTML and print it to PDF from your browser."
-            )
-        elif "pdf" in formats:
-            progress("Rendering PDF…")
-            pdf_path = os.path.join(out_dir, f"{name}.pdf")
-            try:
-                engine = printbook.write_pdf(html_path, pdf_path, engine=pdf_engine)
-                out.files[f"{name}.pdf"] = pdf_path
-                if engine == "chrome":
-                    out.warnings.append(
-                        "PDF rendered with Chrome: trim, margins, breaks and folios are "
-                        "correct, but running heads and TOC page numbers need WeasyPrint "
-                        "(pip install weasyprint)."
-                    )
-            except printbook.PdfError as exc:
-                out.files[f"{name}.html"] = html_path
-                out.warnings.append(
-                    f"Could not render a PDF ({exc}). Download the HTML and print it "
-                    "to PDF from your browser instead."
-                )
 
     return out
 
@@ -752,20 +696,11 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
       <div class="row">
         <div><label for="theme">Theme</label>
           <select id="theme" name="theme">
-            <option value="classic">Classic — serif, indents, centered heads</option>
-            <option value="modern">Modern — sans heads, spaced paragraphs</option>
-            <option value="classical">Classical — small-cap heads, top-corner folios, quiet openers</option>
-            <option value="vsi" data-trim="vsi">VSI — Oxford pocket style: gray sans openers, vertical margin running heads</option>
-            <option value="classicthesis">ClassicThesis — Palatino, spaced small caps, gray chapter numbers</option>
+__THEME_OPTIONS__
           </select></div>
         <div><label for="trim">Trim size (print)</label>
           <select id="trim" name="trim">
-            <option value="6x9">6 &times; 9 in (trade)</option>
-            <option value="5.5x8.5">5.5 &times; 8.5 in</option>
-            <option value="5.25x8">5.25 &times; 8 in</option>
-            <option value="5x8">5 &times; 8 in</option>
-            <option value="a5">A5</option>
-            <option value="vsi">4.37 &times; 6.85 in (111 &times; 174 mm pocket)</option>
+__TRIM_OPTIONS__
           </select></div>
       </div>
       <label>Formats</label>
@@ -928,6 +863,44 @@ function showError(text) {
 </body>
 </html>
 """
+
+# The theme and trim pickers are generated from the themes registry, so a
+# new theme or trim shows up here without editing this file.
+_TRIM_LABELS = {  # curated labels/order; 6x9 first = the preselected default
+    "6x9": "6 &times; 9 in (trade)",
+    "5.5x8.5": "5.5 &times; 8.5 in",
+    "5.25x8": "5.25 &times; 8 in",
+    "5x8": "5 &times; 8 in",
+    "a5": "A5",
+    "vsi": "4.37 &times; 6.85 in (111 &times; 174 mm pocket)",
+}
+
+
+def _theme_options() -> str:
+    lines = []
+    for name in themes.THEME_NAMES:
+        trim = themes.default_trim(name)
+        data = f' data-trim="{trim}"' if trim != "6x9" else ""
+        label = html.escape(themes.theme_label(name))
+        lines.append(f'            <option value="{name}"{data}>{label}</option>')
+    return "\n".join(lines)
+
+
+def _trim_options() -> str:
+    order = [t for t in _TRIM_LABELS if t in themes.TRIM_SIZES]
+    order += [t for t in themes.TRIM_SIZES if t not in _TRIM_LABELS]
+    lines = []
+    for trim in order:
+        width, height = themes.TRIM_SIZES[trim]
+        label = _TRIM_LABELS.get(trim, f"{width:g} &times; {height:g} in")
+        lines.append(f'            <option value="{trim}">{label}</option>')
+    return "\n".join(lines)
+
+
+PAGE = PAGE.replace("__THEME_OPTIONS__", _theme_options())
+PAGE = PAGE.replace("__TRIM_OPTIONS__", _trim_options())
+if "__THEME_OPTIONS__" in PAGE or "__TRIM_OPTIONS__" in PAGE:
+    raise RuntimeError("PAGE picker markers were not replaced")
 
 
 if __name__ == "__main__":

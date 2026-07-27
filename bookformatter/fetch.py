@@ -7,6 +7,7 @@ import http.client
 import ipaddress
 import re
 import socket
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -18,7 +19,17 @@ MAX_BYTES = 20 * 1024 * 1024
 # addresses so visitors can't use the server to probe its own network.
 PUBLIC_MODE = False
 
-_cache: dict = {}
+# Thread-local: the web server runs each build on its own thread, so
+# concurrent builds never share or clear each other's cache.
+_local = threading.local()
+
+
+def _cache() -> dict:
+    """This thread's URL cache."""
+    cache = getattr(_local, "cache", None)
+    if cache is None:
+        cache = _local.cache = {}
+    return cache
 
 
 class FetchError(Exception):
@@ -71,11 +82,20 @@ def _requote_url(url: str) -> str:
         (parts.scheme, parts.netloc, path, query, parts.fragment))
 
 
+def clear_cache() -> None:
+    """Forget this thread's fetched resources. Called at the start of each
+    ingest run so long-lived servers don't accumulate page/image bytes
+    across builds."""
+    _cache().clear()
+
+
 def fetch(url: str, timeout: float = 30.0):
     """Fetch a URL. Returns (bytes, content_type, final_url). Caches per run."""
     url = _requote_url(url)
-    if url in _cache:
-        return _cache[url]
+    cache = _cache()
+    hit = cache.get(url)
+    if hit is not None:
+        return hit
     if PUBLIC_MODE:
         validate_public_url(url)
     req = urllib.request.Request(
@@ -96,7 +116,7 @@ def fetch(url: str, timeout: float = 30.0):
     except (urllib.error.URLError, http.client.HTTPException,
             OSError, ValueError) as exc:
         raise FetchError(f"could not fetch {url}: {exc}") from exc
-    _cache[url] = result
+    cache[url] = result
     return result
 
 

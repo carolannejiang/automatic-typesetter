@@ -1,4 +1,3 @@
-import base64
 import io
 import os
 import tempfile
@@ -10,10 +9,7 @@ from bookformatter.cli import main as cli_main
 from bookformatter.docx import write_docx
 from bookformatter.models import Asset, Book, BookMeta, Chapter
 from bookformatter.web import run_build
-
-PNG_1PX = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
-)
+from tests.conftest import PNG_1PX, TEST_META
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 R = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
@@ -53,9 +49,7 @@ CHAPTER_TWO_HTML = (
 
 def make_book():
     return Book(
-        meta=BookMeta(title="Test & Book", author="A. Author <tester>",
-                      language="en", date="2026-07-14",
-                      description="A sub<title>", rights="CC BY 4.0"),
+        meta=BookMeta(**TEST_META),
         chapters=[
             Chapter(title="One & Only", html=CHAPTER_ONE_HTML),
             Chapter(title="Two", html=CHAPTER_TWO_HTML),

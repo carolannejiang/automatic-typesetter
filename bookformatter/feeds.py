@@ -10,6 +10,8 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from typing import Optional
 
+from .models import as_utc
+
 
 @dataclass
 class FeedItem:
@@ -56,14 +58,14 @@ def _title_text(elem) -> str:
 
 def _parse_rfc822(value: str) -> Optional[_dt.datetime]:
     try:
-        return email.utils.parsedate_to_datetime(value)
+        return as_utc(email.utils.parsedate_to_datetime(value))
     except (TypeError, ValueError):
         return None
 
 
 def _parse_iso(value: str) -> Optional[_dt.datetime]:
     try:
-        return _dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return as_utc(_dt.datetime.fromisoformat(value.replace("Z", "+00:00")))
     except (TypeError, ValueError):
         return None
 

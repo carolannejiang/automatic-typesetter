@@ -90,6 +90,17 @@ class FeedTests(unittest.TestCase):
         feed = parse_feed(rss)
         self.assertEqual(feed.items[0].title, "Where’s that comment?")
 
+    def test_zoneless_dates_become_aware_utc(self):
+        # Feeds mix zoned and zone-less date formats; zone-less ones count as
+        # UTC so ordering can sort item dates without a naive/aware TypeError.
+        rss = RSS.replace("Mon, 04 Mar 2024 10:00:00 +0000",
+                          "04 Mar 2024 09:00:00", 1)
+        atom = ATOM.replace("2023-01-10T08:00:00Z", "2023-01-10T08:00:00", 1)
+        for feed in (parse_feed(rss), parse_feed(atom)):
+            dates = [item.date for item in feed.items]
+            self.assertTrue(all(d.tzinfo is not None for d in dates))
+            self.assertEqual(len(sorted(dates)), 2)  # sortable, no TypeError
+
     def test_discover_feed_urls(self):
         page = """<html><head>
         <link rel="alternate" type="application/rss+xml" href="/feed">

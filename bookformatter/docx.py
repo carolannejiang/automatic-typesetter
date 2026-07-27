@@ -165,52 +165,45 @@ def _renumber_ordered_lists(items) -> int:
 _JC = {"LeftJustified": "both", "FullyJustified": "both",
        "CenterAlign": "center", "RightAlign": "right", "LeftAlign": "left"}
 
-# Story-item paragraph style -> Word styleId.
-_SIDS = {
-    "Body": "BodyText", "Body First": "BodyFirst",
-    "Table Row": "TableCell",
-    "Chapter Number": "ChapterNumber", "Chapter Title": "Heading1",
-    "Heading 2": "Heading2", "Heading 3": "Heading3", "Heading 4": "Heading4",
-    "Block Quote": "Quote", "Code Block": "CodeBlock",
-    "Bullet List": "ListParagraph", "Numbered List": "ListParagraph",
-    "Figure": "Figure", "Caption": "Caption", "Section Break": "SceneBreak",
-    "Book Title": "Title", "Book Subtitle": "Subtitle",
-    "Book Author": "BookAuthor", "Book Publisher": "BookPublisher",
-    "Copyright": "CopyrightPage", "Footnote Text": "FootnoteText",
-    "Folio": "Footer",
+# Story-item paragraph style -> (Word styleId, w:name, extras).
+# Lowercase w:names are how OOXML spells Word built-ins; matching them is
+# what lights up native behavior (nav pane, TOC, notes). Extras: "outline"
+# level (nav pane / TOC), "next" (the style Enter moves to), "q" (show in
+# the quick-style gallery).
+# The catalog names come from indesign.build_styles, and both they and the
+# w:names must stay recognizable to docxread._PARA_KINDS (via _norm) or the
+# docx round trip silently degrades.
+_STYLES = {
+    "Body":           ("BodyText",      "Body Text",      {"q": True}),
+    "Body First":     ("BodyFirst",     "Body First",     {"q": True, "next": "BodyText"}),
+    "Chapter Number": ("ChapterNumber", "Chapter Number", {"next": "Heading1"}),
+    "Chapter Title":  ("Heading1",      "heading 1",      {"outline": 0, "next": "BodyFirst", "q": True}),
+    "Heading 2":      ("Heading2",      "heading 2",      {"outline": 1, "next": "BodyFirst", "q": True}),
+    "Heading 3":      ("Heading3",      "heading 3",      {"outline": 2, "next": "BodyFirst", "q": True}),
+    "Heading 4":      ("Heading4",      "heading 4",      {"outline": 3, "next": "BodyFirst", "q": True}),
+    "Block Quote":    ("Quote",         "Quote",          {"q": True}),
+    "Code Block":     ("CodeBlock",     "Code Block",     {}),
+    "Figure":         ("Figure",        "Figure",         {}),
+    "Caption":        ("Caption",       "caption",        {}),
+    "Section Break":  ("SceneBreak",    "Scene Break",    {}),
+    "Book Title":     ("Title",         "Title",          {"next": "Subtitle"}),
+    "Book Subtitle":  ("Subtitle",      "Subtitle",       {}),
+    "Book Author":    ("BookAuthor",    "Book Author",    {}),
+    "Book Publisher": ("BookPublisher", "Book Publisher", {}),
+    "Copyright":      ("CopyrightPage", "Copyright Page", {}),
+    "Footnote Text":  ("FootnoteText",  "footnote text",  {}),
+    "Folio":          ("Footer",        "footer",         {}),
 }
 
-# styleId -> w:name. Lowercase names are how OOXML spells Word built-ins;
-# matching them is what lights up native behavior (nav pane, TOC, notes).
-_NAMES = {
-    "BodyText": "Body Text", "BodyFirst": "Body First",
-    "TableCell": "Table Cell",
-    "ChapterNumber": "Chapter Number", "Heading1": "heading 1",
-    "Heading2": "heading 2", "Heading3": "heading 3", "Heading4": "heading 4",
-    "Quote": "Quote", "CodeBlock": "Code Block", "Figure": "Figure",
-    "Caption": "caption", "SceneBreak": "Scene Break", "Title": "Title",
-    "Subtitle": "Subtitle", "BookAuthor": "Book Author",
-    "BookPublisher": "Book Publisher", "CopyrightPage": "Copyright Page",
-    "FootnoteText": "footnote text", "Footer": "footer",
-}
-
-# Per-style Word extras: outline level (nav pane / TOC), the style Enter
-# moves to, and whether the style shows in the quick-style gallery.
-_EXTRA = {
-    "Body": {"q": True},
-    "Body First": {"q": True, "next": "BodyText"},
-    "Chapter Number": {"next": "Heading1"},
-    "Chapter Title": {"outline": 0, "next": "BodyFirst", "q": True},
-    "Heading 2": {"outline": 1, "next": "BodyFirst", "q": True},
-    "Heading 3": {"outline": 2, "next": "BodyFirst", "q": True},
-    "Heading 4": {"outline": 3, "next": "BodyFirst", "q": True},
-    "Block Quote": {"q": True},
-    "Book Title": {"next": "Subtitle"},
-}
-
-# List and table styles are hand-written (their catalog geometry would
-# fight Word's own numbering indents), and Folio maps onto Footer.
-_HANDLED_ELSEWHERE = {"Bullet List", "Numbered List", "Table Row"}
+# List and table styles are hand-written in _styles_xml (their catalog
+# geometry would fight Word's own numbering indents), so their w:names live
+# there, not in _STYLES — reaching _style_def with one of these is a bug and
+# fails loudly. para_xml still maps their paragraphs onto the styleIds here.
+# docxread recognizes lists/tables structurally (w:numPr / w:tbl), not by
+# style name.
+_HANDLED_SIDS = {"Bullet List": "ListParagraph", "Numbered List": "ListParagraph",
+                 "Table Row": "TableCell"}
+_HANDLED_ELSEWHERE = set(_HANDLED_SIDS)
 
 
 def _style_props(attrs, size_pt, leading):
@@ -281,9 +274,8 @@ def _style_props(attrs, size_pt, leading):
 
 
 def _style_def(style, catalog) -> str:
-    sid = _SIDS[style.name]
-    extra = _EXTRA.get(style.name, {})
-    based = _SIDS[style.based] if style.based else "Normal"
+    sid, wname, extra = _STYLES[style.name]
+    based = _STYLES[style.based][0] if style.based else "Normal"
     size_pt = (float(style.attrs["PointSize"])
                if "PointSize" in style.attrs else catalog.body_pt)
     leading = style.leading if isinstance(style.leading, (int, float)) else None
@@ -294,7 +286,7 @@ def _style_def(style, catalog) -> str:
     if font:
         rpr.insert(0, '<w:rFonts w:ascii="%s" w:hAnsi="%s"/>' % (font, font))
     parts = ['<w:style w:type="paragraph" w:styleId="%s">' % sid,
-             '<w:name w:val="%s"/>' % esc(_NAMES[sid], True),
+             '<w:name w:val="%s"/>' % esc(wname, True),
              '<w:basedOn w:val="%s"/>' % based]
     if "next" in extra:
         parts.append('<w:next w:val="%s"/>' % extra["next"])
@@ -592,7 +584,8 @@ class _Parts:
         return "".join(out)
 
     def para_xml(self, para) -> str:
-        sid = _SIDS.get(para.style, "BodyText")
+        sid = (_STYLES[para.style][0] if para.style in _STYLES
+               else _HANDLED_SIDS.get(para.style, "BodyText"))
         ppr = ['<w:pStyle w:val="%s"/>' % sid]
         if para.start:
             # A plain break, not an odd-page section: the friendliest thing

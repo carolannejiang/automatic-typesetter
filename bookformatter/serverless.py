@@ -20,6 +20,7 @@ import os
 import re
 import shutil
 import tempfile
+import traceback
 import urllib.parse
 import zipfile
 
@@ -65,6 +66,16 @@ const stats = document.getElementById("stats");
 const warnings = document.getElementById("warnings");
 const downloads = document.getElementById("downloads");
 const go = document.getElementById("go");
+
+// Same theme->trim sync as the local page (web.PAGE): a theme carrying its
+// natural page (data-trim) sets the trim until the trim is chosen by hand.
+const themeSel = document.getElementById("theme");
+const trimSel = document.getElementById("trim");
+let trimTouched = false;
+trimSel.addEventListener("change", () => { trimTouched = true; });
+themeSel.addEventListener("change", () => {
+  if (!trimTouched) trimSel.value = themeSel.selectedOptions[0].dataset.trim || "6x9";
+});
 
 form.addEventListener("submit", async (ev) => {
   ev.preventDefault();
@@ -113,9 +124,13 @@ form.addEventListener("submit", async (ev) => {
 def _page() -> str:
     page = _web.PAGE
     # Lambda replacements: re.sub must not interpret backslashes in the JS.
-    page = _FORMATS_BLOCK.sub(lambda m: _SERVERLESS_FORMATS, page, count=1)
-    page = _PDF_ENGINE_BLOCK.sub("", page, count=1)
-    page = _SCRIPT_BLOCK.sub(lambda m: _SERVERLESS_SCRIPT, page, count=1)
+    # subn + count check: a silent no-match would ship the local page's
+    # markup (e.g. a PDF picker) on a host that can't honor it.
+    page, n_formats = _FORMATS_BLOCK.subn(lambda m: _SERVERLESS_FORMATS, page, count=1)
+    page, n_engine = _PDF_ENGINE_BLOCK.subn("", page, count=1)
+    page, n_script = _SCRIPT_BLOCK.subn(lambda m: _SERVERLESS_SCRIPT, page, count=1)
+    if not (n_formats and n_engine and n_script):
+        raise RuntimeError("serverless PAGE adaptations no longer match web.PAGE")
     page = page.replace(
         "Runs entirely on your machine &mdash; nothing is uploaded anywhere.",
         "Books are pressed on demand &mdash; nothing is stored on the server.",
@@ -194,6 +209,7 @@ def _build(environ, start_response):
             "X-Book-Meta": urllib.parse.quote(json.dumps(meta)),
         })
     except Exception:
+        traceback.print_exc()  # stderr reaches the platform's function logs
         return _json(start_response, 500,
                      {"error": "The press jammed unexpectedly. Try again or simplify the input."})
     finally:

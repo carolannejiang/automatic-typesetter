@@ -7,12 +7,9 @@ import datetime as _dt
 import os
 import sys
 
-from . import docx as docx_writer
-from . import epub as epub_writer
-from . import icml as icml_writer
-from . import idml as idml_writer
 from . import ingest as ingester
-from . import printbook, themes
+from . import themes
+from .build import write_formats
 from .fetch import sniff_image
 from .indesign import extract_link_assets
 from .models import Asset, Book, BookMeta, slugify
@@ -140,7 +137,6 @@ def main(argv=None) -> int:
 
     name = args.name or slugify(meta.title)
     os.makedirs(args.output_dir, exist_ok=True)
-    written = []
 
     print(
         f'Assembled "{meta.title}"'
@@ -149,43 +145,15 @@ def main(argv=None) -> int:
         file=sys.stderr,
     )
 
-    if "epub" in formats:
-        epub_path = os.path.join(args.output_dir, f"{name}.epub")
-        epub_writer.write_epub(
-            book, epub_path, theme=args.theme, drop_caps=args.drop_caps,
-            chapter_numbers=not args.no_chapter_numbers,
-            link_notes=not args.no_link_notes,
-        )
-        written.append(epub_path)
-
-    if "docx" in formats:
-        docx_path = os.path.join(args.output_dir, f"{name}.docx")
-        docx_writer.write_docx(
-            book, docx_path, theme=args.theme, trim=args.trim,
-            font_size=args.font_size, line_height=args.line_height,
-            chapter_numbers=not args.no_chapter_numbers,
-        )
-        written.append(docx_path)
-
-    if "icml" in formats:
-        icml_path = os.path.join(args.output_dir, f"{name}.icml")
-        icml_writer.write_icml(
-            book, icml_path, theme=args.theme, font_size=args.font_size,
-            line_height=args.line_height, chapter_numbers=not args.no_chapter_numbers,
-            link_notes=not args.no_link_notes,
-        )
-        written.append(icml_path)
-
-    if "idml" in formats:
-        idml_path = os.path.join(args.output_dir, f"{name}.idml")
-        idml_writer.write_idml(
-            book, idml_path, theme=args.theme, trim=args.trim,
-            font_size=args.font_size, line_height=args.line_height,
-            chapter_start=args.chapter_start,
-            chapter_numbers=not args.no_chapter_numbers,
-            link_notes=not args.no_link_notes,
-        )
-        written.append(idml_path)
+    files, notes = write_formats(
+        book, formats, args.output_dir, name,
+        theme=args.theme, trim=args.trim, font_size=args.font_size,
+        line_height=args.line_height, chapter_start=args.chapter_start,
+        drop_caps=args.drop_caps, chapter_numbers=not args.no_chapter_numbers,
+        toc=not args.no_toc, footnotes=not args.no_footnotes,
+        link_notes=not args.no_link_notes, pdf_engine=args.pdf_engine,
+        progress=lambda message: print(message, file=sys.stderr),
+    )
 
     if ({"icml", "idml"} & formats) and book.assets:
         extract_link_assets(book, args.output_dir)
@@ -195,47 +163,9 @@ def main(argv=None) -> int:
             file=sys.stderr,
         )
 
-    html_path = os.path.join(args.output_dir, f"{name}.html")
-    if "pdf" in formats or "html" in formats:
-        page = printbook.build_print_html(
-            book, theme=args.theme, trim=args.trim, font_size=args.font_size,
-            line_height=args.line_height, chapter_start=args.chapter_start,
-            toc=not args.no_toc, drop_caps=args.drop_caps,
-            chapter_numbers=not args.no_chapter_numbers,
-            footnotes=not args.no_footnotes,
-            link_notes=not args.no_link_notes,
-        )
-        with open(html_path, "w", encoding="utf-8") as fh:
-            fh.write(page)
-        if "html" in formats:
-            written.append(html_path)
-
-    if "pdf" in formats:
-        pdf_path = os.path.join(args.output_dir, f"{name}.pdf")
-        if args.pdf_engine == "none":
-            print("PDF engine 'none': skipped rendering; print the HTML from a browser.", file=sys.stderr)
-        else:
-            try:
-                engine = printbook.write_pdf(html_path, pdf_path, engine=args.pdf_engine)
-                written.append(pdf_path)
-                print(f"Rendered PDF with {engine}.", file=sys.stderr)
-                if engine == "chrome":
-                    print(
-                        "  note: Chrome gives correct trim, margins, breaks, and folios, but no\n"
-                        "  running heads or TOC page numbers; install weasyprint for full fidelity.",
-                        file=sys.stderr,
-                    )
-            except printbook.PdfError as exc:
-                if "html" not in formats:
-                    written.append(html_path)
-                print(
-                    f"warning: could not render a PDF ({exc}).\n"
-                    f"  Kept {html_path} — open it in a browser and print to PDF,\n"
-                    f"  or `pip install weasyprint` and rerun with --pdf-engine weasyprint.",
-                    file=sys.stderr,
-                )
-
-    for path in written:
+    for note in notes:
+        print(f"warning: {note}", file=sys.stderr)
+    for path in files.values():
         print(path)
     return 0
 

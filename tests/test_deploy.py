@@ -1,62 +1,9 @@
-import json
-import threading
-import time
 import unittest
-import urllib.error
-import urllib.parse
 import urllib.request
+from unittest import mock
 
 from bookformatter import fetch
-from bookformatter.web import make_server
-
-
-class ServerFixture:
-    def start(self, **kwargs):
-        self.server = make_server(port=0, **kwargs)
-        self.base = f"http://127.0.0.1:{self.server.server_address[1]}"
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-        self.thread.start()
-        return self
-
-    def stop(self):
-        self.server.shutdown()
-        self.server.server_close()
-        fetch.PUBLIC_MODE = False  # make_server(public=...) sets the module flag
-
-    def get(self, path, redirects=True):
-        opener = urllib.request.build_opener() if redirects else urllib.request.build_opener(_NoRedirect)
-        try:
-            with opener.open(self.base + path) as resp:
-                return resp.status, resp.read(), dict(resp.headers)
-        except urllib.error.HTTPError as err:
-            return err.code, err.read(), dict(err.headers)
-
-    def post(self, path, fields):
-        data = urllib.parse.urlencode(fields, doseq=True).encode()
-        req = urllib.request.Request(
-            self.base + path, data=data,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
-        try:
-            with urllib.request.urlopen(req) as resp:
-                return resp.status, json.loads(resp.read())
-        except urllib.error.HTTPError as err:
-            return err.code, json.loads(err.read())
-
-    def wait(self, path_prefix, job_id, timeout=30.0):
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            _, body, _ = self.get(f"{path_prefix}/status?id={job_id}")
-            status = json.loads(body)
-            if status["status"] in ("done", "error"):
-                return status
-            time.sleep(0.15)
-        raise AssertionError("build did not finish")
-
-
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, *args, **kwargs):
-        return None
+from tests.conftest import ServerFixture
 
 
 class BasePathTests(unittest.TestCase):
@@ -140,6 +87,17 @@ class SsrfGuardTests(unittest.TestCase):
         # point of a local tool); the guard is applied inside fetch() only
         # when PUBLIC_MODE is set, which make_server/main control.
         self.assertFalse(fetch.PUBLIC_MODE)
+
+    def test_redirect_hop_to_internal_address_rejected(self):
+        # The classic bypass: a public URL that 302s to an internal address.
+        # Every redirect hop must re-validate, not just the submitted URL.
+        req = urllib.request.Request("http://93.184.216.34/")
+        handler = fetch._GuardedRedirectHandler()
+        with mock.patch.object(fetch, "PUBLIC_MODE", True):
+            with self.assertRaises(fetch.FetchError):
+                handler.redirect_request(
+                    req, None, 302, "Found", {},
+                    "http://169.254.169.254/latest/meta-data/")
 
 
 if __name__ == "__main__":

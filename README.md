@@ -292,11 +292,7 @@ permission to reproduce.
 ## Development
 
 ```bash
-<<<<<<< HEAD
-python3 -m unittest discover -s tests -t .   # 226 tests, no dependencies
-=======
-python3 -m unittest discover -s tests -t .   # 209 tests, no dependencies
->>>>>>> carolannejiang-cmyk/hyperlink-footnote-rule
+python3 -m unittest discover -s tests -t .   # 291 tests, no dependencies
 python3 -m bookformatter examples/field-notes -t "Field Notes on Book Making" -a "You"
 ```
 

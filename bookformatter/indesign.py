@@ -21,14 +21,13 @@ footnote settings, not the L series the other outputs use.
 
 from __future__ import annotations
 
-import datetime as _dt
 import os
 import re
 import struct
 
 from . import footnotes, htmldom, themes
 from .linknotes import annotate_links
-from .models import Book
+from .models import Book, copyright_lines
 
 # Text measure assumed when no trim is known (ICML): 6x9 classic, in points.
 ICML_MEASURE_PT = 327.6
@@ -141,6 +140,9 @@ _ALIGN = {
 
 def build_styles(theme: str = "classic", font_size: str = "11pt",
                  line_height: str = "1.45") -> StyleCatalog:
+    # These style names are the vocabulary of every writer: Word export maps
+    # them through docx._STYLES, and docxread._PARA_KINDS recognizes them on
+    # re-ingest — a new style here needs entries in both to round-trip.
     params = themes.theme_params(theme, font_size, line_height)
     body_pt = _pt_size(font_size)
     try:
@@ -590,20 +592,6 @@ class _Converter:
                     self._list(sub, level + 1)
 
 
-def _copyright_lines(book: Book) -> list:
-    meta = book.meta
-    year = (meta.date or str(_dt.date.today()))[:4]
-    lines = []
-    if meta.author:
-        lines.append(f"Copyright © {year} {meta.author}. All rights reserved.")
-    if meta.rights:
-        lines.append(meta.rights)
-    if meta.source_url:
-        lines.append(f"Originally published at {meta.source_url}.")
-    lines.append("Produced with bookformatter.")
-    return lines
-
-
 def book_to_story_items(book: Book, theme: str = "classic",
                         chapter_numbers: bool = True,
                         converter_cls=None, link_notes: bool = True) -> list:
@@ -622,11 +610,13 @@ def book_to_story_items(book: Book, theme: str = "classic",
         items.append(Para("Book Author", [TextRun(meta.author)]))
     if meta.publisher:
         items.append(Para("Book Publisher", [TextRun(meta.publisher)]))
-    for i, line in enumerate(_copyright_lines(book)):
+    for i, line in enumerate(copyright_lines(book)):
         items.append(Para("Copyright", [TextRun(line)],
                           start="NextPage" if i == 0 else None))
 
     for number, chapter in enumerate(book.chapters, 1):
+        # Order matters: annotate_links skips links already inside the
+        # span.footnote elements inline_footnotes creates.
         markup = footnotes.inline_footnotes(chapter.html)
         if link_notes:
             markup, _ = annotate_links(markup, mode="native")

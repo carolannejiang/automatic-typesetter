@@ -8,10 +8,7 @@ from bookformatter import fetch
 from bookformatter.ingest import (IngestOptions, _looks_like_index_url,
                                   _match_feed_item, ingest)
 from bookformatter.feeds import FeedItem
-
-PNG_1PX = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
-)
+from tests.conftest import PNG_1PX
 
 MULTI_CHAPTER_MD = """# The Cellar Door
 
@@ -70,6 +67,27 @@ class IngestTests(unittest.TestCase):
             result = ingest([path])
         self.assertEqual(result.chapters[0].title, "My Old Journal")
         self.assertEqual(result.chapters[0].html.count("<p>"), 2)
+
+    @unittest.skipIf(os.name == "nt" or os.geteuid() == 0,
+                     "chmod cannot make a file unreadable for root/Windows")
+    def test_unreadable_file_warns_and_continues(self):
+        # One bad input must not kill the batch: warn, keep going.
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = self._write(tmp, "locked.md", "# Locked\n\nshut tight")
+            good = self._write(tmp, "open.md", SINGLE_MD)
+            os.chmod(bad, 0)
+            result = ingest([bad, good])
+        self.assertEqual([c.title for c in result.chapters], ["A Lone Essay"])
+        self.assertTrue(any("locked.md" in w for w in result.warnings))
+
+    def test_ingest_clears_fetch_cache(self):
+        # The fetch cache is per run; a long-lived web server must not
+        # accumulate fetched pages/images across builds.
+        fetch._cache()["https://stale.example/page"] = (b"x", "text/html", "u")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, "essay.md", SINGLE_MD)
+            ingest([path])
+        self.assertEqual(fetch._cache(), {})
 
     def test_directory_sorted(self):
         with tempfile.TemporaryDirectory() as tmp:

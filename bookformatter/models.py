@@ -54,6 +54,31 @@ class Book:
         return sum(ch.word_count() for ch in self.chapters)
 
 
+def as_utc(parsed: Optional[_dt.datetime]) -> Optional[_dt.datetime]:
+    """Treat a zone-less datetime as UTC. Dates reach Chapter.date from
+    mixed sources (feeds, page metadata); they must all be aware or
+    comparing them raises TypeError."""
+    if parsed is not None and parsed.tzinfo is None:
+        return parsed.replace(tzinfo=_dt.timezone.utc)
+    return parsed
+
+
+def copyright_lines(book: Book) -> list:
+    """The copyright-page lines, shared by the print, EPUB, and InDesign
+    writers so the page reads identically in every format."""
+    meta = book.meta
+    year = (meta.date or str(_dt.date.today()))[:4]
+    lines = []
+    if meta.author:
+        lines.append(f"Copyright © {year} {meta.author}. All rights reserved.")
+    if meta.rights:
+        lines.append(meta.rights)
+    if meta.source_url:
+        lines.append(f"Originally published at {meta.source_url}.")
+    lines.append("Produced with bookformatter.")
+    return lines
+
+
 def slugify(text: str, fallback: str = "book") -> str:
     text = unicodedata.normalize("NFKD", text or "")
     text = text.encode("ascii", "ignore").decode("ascii").lower()

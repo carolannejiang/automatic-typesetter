@@ -9,6 +9,16 @@ ignores them gracefully and still produces correct trim, margins, and breaks.
 
 Each theme lives in its own module beside this one (classic, modern,
 classical) and layers overrides on top of these templates.
+
+The CSS class names these selectors target are a contract with the writers:
+printbook/epub emit section.titlepage / .copyrightpage / .chapter (with
+header.chapter-head holding .chapter-number and h1.chapter-title),
+nav.print-toc, div.fm-end, and the frontmatter marker class; footnotes.py
+emits span.footnote and linknotes.py span.linknote with .linknote-call /
+.linknote-label / .linknote-url. Beyond the CSS here, the running-head
+string-set hooks below require exactly header.chapter-head +
+h1.chapter-title, and indesign.py converts span.footnote into native
+InDesign footnotes — renaming a class in one place breaks the others.
 """
 
 from __future__ import annotations
@@ -286,6 +296,28 @@ span.linknote::footnote-marker { content: none; }
 span.linknote a.linknote-url { overflow-wrap: anywhere; }
 """
 )
+
+
+def default_params(name: str, font_size: str, line_height: str) -> dict:
+    """The classic theme's full substitution set — one value for every $VAR
+    the base templates use. Themes start from this and override their design
+    choices, so a new base variable is added here once, not in every theme
+    (Template.substitute is strict: a missing key raises at render time)."""
+    return {
+        "THEME_NAME": name,
+        "BODY_FONT": SERIF_STACK,
+        "HEADING_FONT": SERIF_STACK,
+        "MONO_FONT": MONO_STACK,
+        "HEADING_WEIGHT": "normal",
+        "HEADING_ALIGN": "center",
+        "FONT_SIZE": font_size,
+        "LINE_HEIGHT": line_height,
+        "INDENT": "1.35em",
+        "PARA_EXTRA": "",
+        "TITLE_EXTRA": "font-variant: small-caps; letter-spacing: 0.04em;",
+        "CHAPTER_DROP": "2.8em",
+        "TITLE_DROP": "1.6in",
+    }
 
 
 def default_margins(width: float, height: float) -> dict:

@@ -12,10 +12,7 @@ from bookformatter.idml import write_idml
 from bookformatter.indesign import extract_link_assets
 from bookformatter.models import Asset, Book, BookMeta, Chapter
 from bookformatter.web import run_build
-
-PNG_1PX = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
-)
+from tests.conftest import PNG_1PX, TEST_META
 
 IDPKG = "{http://ns.adobe.com/AdobeInDesign/idml/1.0/packaging}"
 STYLE_TAGS = ("ParagraphStyle", "CharacterStyle", "ObjectStyle",
@@ -46,9 +43,7 @@ CHAPTER_TWO_HTML = (
 
 def make_book():
     return Book(
-        meta=BookMeta(title="Test & Book", author="A. Author <tester>",
-                      language="en", date="2026-07-14",
-                      description="A sub<title>", rights="CC BY 4.0"),
+        meta=BookMeta(**TEST_META),
         chapters=[
             Chapter(title="One & Only", html=CHAPTER_ONE_HTML),
             Chapter(title="Two", html=CHAPTER_TWO_HTML),

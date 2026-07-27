@@ -5,7 +5,9 @@ module beside it (see each module's docstring for its design). A theme
 module supplies:
 
     NAME           the theme's CLI name
-    params(...)    substitutions for the shared templates
+    LABEL          one-line picker description ("Classic — serif, ...")
+    params(...)    substitutions for the shared templates — start from
+                   base.default_params() and update only the overrides
     margins(...)   page margins for a given trim, in inches
     chapter_label  the text set in the chapter-number slot
     EXTRA          Template of CSS overrides for all output, or None
@@ -15,6 +17,19 @@ module supplies:
 
 To add a theme, write such a module and list it in `_THEME_MODULES` below.
 Unknown theme names fall back to classic.
+
+A theme that redraws the print furniture (its own running heads/folios in
+PRINT_EXTRA) must also undo the base furniture it replaces — the cascade
+adds margin boxes, it never removes them. The checklist, learned by
+classical/classicthesis/vsi:
+
+  1. blank the base boxes being replaced: `@top-center` on `:left` and
+     `:right`, and `@bottom-center` if the folio moves off the foot;
+  2. re-blank every margin box the theme adds inside `@page :blank` AND
+     `@page frontmatter` (and `clean` if used), or blanks and front-matter
+     pages grow stray folios and heads;
+  3. a theme using the `page: clean` opener trick must also revert base's
+     `page: chapter` (`section.chapter { page: auto; }`).
 """
 
 from __future__ import annotations
@@ -46,6 +61,11 @@ def chapter_label(theme: str, number: int) -> str:
 def default_trim(theme: str) -> str:
     """The trim a theme is designed around ("6x9" unless it declares one)."""
     return getattr(_theme(theme), "DEFAULT_TRIM", "6x9")
+
+
+def theme_label(name: str) -> str:
+    """One-line picker description for a theme."""
+    return _theme(name).LABEL
 
 
 def theme_params(theme: str, font_size: str, line_height: str) -> dict:

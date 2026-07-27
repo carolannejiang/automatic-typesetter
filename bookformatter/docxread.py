@@ -70,7 +70,9 @@ def _norm(name: str) -> str:
 
 
 # Paragraph-style semantics, looked up by normalized styleId and w:name.
-# Covers Word's built-ins and this tool's own exported styles.
+# Covers Word's built-ins and this tool's own exported styles: the styleIds
+# and w:names in docx._STYLES land here through _norm(), so a style added
+# there needs a row here or the round trip silently degrades to body text.
 _PARA_KINDS = {
     "title": "title", "booktitle": "title",
     "subtitle": "subtitle", "booksubtitle": "subtitle",

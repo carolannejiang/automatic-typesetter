@@ -1,3 +1,4 @@
+import contextlib
 import os
 import tempfile
 import unittest
@@ -6,6 +7,7 @@ import zipfile
 import io
 
 from bookformatter.cli import main
+from tests.conftest import PNG_1PX
 
 CHAPTERS = {
     "01-morning.md": "# Morning\n\nThe kettle ticked as it warmed, and the house stayed quiet.\n",
@@ -60,6 +62,59 @@ class CliEndToEndTests(unittest.TestCase):
             code = main([src, "-o", out, "-f", "epub"])
             self.assertEqual(code, 0)
             self.assertTrue(os.path.exists(os.path.join(out, "story.epub")))
+
+    def _write_story(self, tmp):
+        src = os.path.join(tmp, "story.txt")
+        with open(src, "w") as fh:
+            fh.write("A paragraph of story.\n\nAnother paragraph.")
+        return src
+
+    def test_unknown_format_exits_with_error(self):
+        with self.assertRaises(SystemExit):
+            main(["whatever.md", "-f", "epub,exe"])
+
+    def test_no_chapters_exits_with_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(SystemExit):
+                main([os.path.join(tmp, "missing.md"), "-o", tmp, "-f", "epub"])
+
+    def test_cover_must_be_an_image(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = self._write_story(tmp)
+            not_image = os.path.join(tmp, "cover.txt")
+            with open(not_image, "w") as fh:
+                fh.write("not pixels")
+            with self.assertRaises(SystemExit):
+                main([src, "-o", os.path.join(tmp, "out"), "-f", "epub",
+                      "--cover", not_image])
+
+    def test_cover_embedded_in_epub(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = self._write_story(tmp)
+            cover = os.path.join(tmp, "cover.png")
+            with open(cover, "wb") as fh:
+                fh.write(PNG_1PX)
+            out = os.path.join(tmp, "out")
+            code = main([src, "-o", out, "-f", "epub", "--cover", cover])
+            self.assertEqual(code, 0)
+            with zipfile.ZipFile(os.path.join(out, "story.epub")) as zf:
+                self.assertIn("OEBPS/images/cover.png", zf.namelist())
+                self.assertEqual(zf.read("OEBPS/images/cover.png"), PNG_1PX)
+
+    def test_pdf_engine_none_keeps_html(self):
+        # The default format is pdf; engine "none" must still hand the user
+        # the print HTML instead of producing nothing.
+        with tempfile.TemporaryDirectory() as tmp:
+            src = self._write_story(tmp)
+            out = os.path.join(tmp, "out")
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                code = main([src, "-o", out, "-f", "pdf",
+                             "--pdf-engine", "none"])
+            self.assertEqual(code, 0)
+            html_path = os.path.join(out, "story.html")
+            self.assertTrue(os.path.exists(html_path))
+            self.assertIn(html_path, stdout.getvalue())
 
 
 if __name__ == "__main__":

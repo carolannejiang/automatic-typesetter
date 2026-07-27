@@ -14,6 +14,7 @@ from string import Template
 from . import base
 
 NAME = "classical"
+LABEL = "Classical — small-cap heads, top-corner folios, quiet openers"
 
 # The WeasyPrint book-classical sample ships Source Serif Pro; fall back to
 # kindred transitional serifs where it isn't installed.
@@ -129,18 +130,13 @@ chapter_label = base.default_chapter_label
 
 
 def params(font_size: str, line_height: str) -> dict:
-    return {
-        "THEME_NAME": NAME,
+    values = base.default_params(NAME, font_size, line_height)
+    values.update({
         "BODY_FONT": SERIF_STACK,
         "HEADING_FONT": SERIF_STACK,
-        "MONO_FONT": base.MONO_STACK,
-        "HEADING_WEIGHT": "normal",
-        "HEADING_ALIGN": "center",
-        "FONT_SIZE": font_size,
-        "LINE_HEIGHT": line_height,
         "INDENT": "1em",
-        "PARA_EXTRA": "",
         "TITLE_EXTRA": "",
         "CHAPTER_DROP": "6em",
         "TITLE_DROP": "1.8in",
-    }
+    })
+    return values

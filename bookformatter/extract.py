@@ -16,6 +16,7 @@ from urllib.parse import urljoin
 
 from . import htmldom
 from .htmldom import Node
+from .models import as_utc
 
 _STRIP_TAGS = {
     "script", "style", "template", "iframe", "object", "embed",
@@ -216,12 +217,12 @@ def _parse_date(value: str) -> Optional[_dt.datetime]:
     # are rejected by fromisoformat before Python 3.11.
     iso = re.sub(r"([+-]\d{2})(\d{2})$", r"\1:\2", value.replace("Z", "+00:00"))
     try:
-        return _dt.datetime.fromisoformat(iso)
+        return as_utc(_dt.datetime.fromisoformat(iso))
     except ValueError:
         pass
     for fmt in ("%Y-%m-%d", "%B %d, %Y", "%b %d, %Y", "%d %B %Y", "%Y/%m/%d"):
         try:
-            return _dt.datetime.strptime(value[:24].strip(), fmt)
+            return as_utc(_dt.datetime.strptime(value[:24].strip(), fmt))
         except ValueError:
             continue
     return None
@@ -706,6 +707,14 @@ def _wrap_stray_text(container: Node) -> None:
         container.append(c)
 
 
+def _demote_headings(root: Node) -> None:
+    """Push every heading down one level (h5 first so nothing collides):
+    the chapter title the writers add will be the only h1."""
+    for level in (5, 4, 3, 2, 1):
+        for h in root.find_all(f"h{level}"):
+            h.tag = f"h{min(level + 1, 6)}"
+
+
 def extract_article(html_text: str, base_url: str = "") -> ExtractedDoc:
     root = htmldom.parse(html_text)
 
@@ -779,11 +788,8 @@ def extract_article(html_text: str, base_url: str = "") -> ExtractedDoc:
             if htmldom.normalize_ws(h.text_content()).lower() == norm_title:
                 h.detach()
 
-    # Demote headings so the chapter title is the only h1.
     if container.find_all("h1"):
-        for level in (5, 4, 3, 2, 1):
-            for h in container.find_all(f"h{level}"):
-                h.tag = f"h{min(level + 1, 6)}"
+        _demote_headings(container)
 
     return ExtractedDoc(
         title=title or "Untitled",
@@ -807,9 +813,7 @@ def clean_fragment(html_text: str, base_url: str = "") -> str:
     _clean_tree(root)
     _wrap_stray_text(root)
     if root.find_all("h1"):
-        for level in (5, 4, 3, 2, 1):
-            for h in root.find_all(f"h{level}"):
-                h.tag = f"h{min(level + 1, 6)}"
+        _demote_headings(root)
     return htmldom.inner_html(root).strip()
 
 

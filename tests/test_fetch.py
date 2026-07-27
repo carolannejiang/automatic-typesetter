@@ -1,6 +1,7 @@
 import unittest
 
 from bookformatter import fetch
+from tests.conftest import PNG_1PX
 
 
 class RequoteUrlTests(unittest.TestCase):
@@ -52,6 +53,31 @@ class DecodeBodyTests(unittest.TestCase):
         body = b"\x81abc"
         self.assertEqual(fetch.decode_body(body, "text/html; charset=ascii"),
                          "\x81abc")
+
+
+class SniffImageTests(unittest.TestCase):
+    def test_magic_bytes(self):
+        for data, media, ext in (
+            (PNG_1PX, "image/png", ".png"),
+            (b"\xff\xd8\xff\xe0" + b"\x00" * 8, "image/jpeg", ".jpg"),
+            (b"GIF89a" + b"\x00" * 8, "image/gif", ".gif"),
+            (b"RIFF\x00\x00\x00\x00WEBP", "image/webp", ".webp"),
+        ):
+            self.assertEqual(fetch.sniff_image(data), (media, ext), media)
+
+    def test_svg_and_riff_lookalikes(self):
+        self.assertEqual(
+            fetch.sniff_image(b'<svg xmlns="http://www.w3.org/2000/svg"/>'),
+            ("image/svg+xml", ".svg"))
+        # RIFF that is not WebP (e.g. WAV audio) must not pass as an image.
+        self.assertEqual(fetch.sniff_image(b"RIFF\x00\x00\x00\x00WAVE"),
+                         (None, None))
+
+    def test_content_type_fallback(self):
+        self.assertEqual(fetch.sniff_image(b"not pixels", "image/png; q=0.9"),
+                         ("image/png", ".png"))
+        self.assertEqual(fetch.sniff_image(b"not pixels", "text/html"),
+                         (None, None))
 
 
 if __name__ == "__main__":

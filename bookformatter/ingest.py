@@ -131,8 +131,12 @@ def _ingest_file(path: str, opts: IngestOptions, result: IngestResult) -> None:
             result.author_hint = doc.author
         return
 
-    with open(path, "r", encoding="utf-8", errors="replace") as fh:
-        text = fh.read()
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+    except OSError as exc:
+        result.warn(f"{path}: could not read file ({exc})")
+        return
 
     if ext in MARKDOWN_EXTS:
         _log(opts, f"markdown: {path}")
@@ -500,6 +504,7 @@ def process_images(result: IngestResult, opts: IngestOptions) -> None:
 def ingest(inputs: list, opts: Optional[IngestOptions] = None) -> IngestResult:
     opts = opts or IngestOptions()
     result = IngestResult()
+    fetch.clear_cache()
     for raw in inputs:
         if raw.startswith(("http://", "https://")):
             try:

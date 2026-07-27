@@ -22,7 +22,7 @@ import tempfile
 from . import htmldom, themes
 from .footnotes import inline_footnotes
 from .linknotes import annotate_links
-from .models import Book
+from .models import Book, copyright_lines
 
 _CHROME_CANDIDATES = [
     "chromium", "chromium-browser", "google-chrome", "google-chrome-stable",
@@ -78,15 +78,8 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = "6x9",
         parts.append(f'<div class="book-publisher">{_esc(meta.publisher)}</div>')
     parts.append("</section>")
 
-    year = (meta.date or "")[:4]
     parts.append('<section class="copyrightpage frontmatter">')
-    if meta.author:
-        parts.append(f"<p>Copyright &#169; {year or ''} {_esc(meta.author)}. All rights reserved.</p>")
-    if meta.rights:
-        parts.append(f"<p>{_esc(meta.rights)}</p>")
-    if meta.source_url:
-        parts.append(f"<p>Originally published at {_esc(meta.source_url)}.</p>")
-    parts.append("<p>Produced with bookformatter.</p>")
+    parts.extend(f"<p>{_esc(line)}</p>" for line in copyright_lines(book))
     parts.append("</section>")
 
     if toc and book.chapters:
@@ -104,6 +97,8 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = "6x9",
     for i, chapter in enumerate(book.chapters, 1):
         content = htmldom.normalize_fragment(chapter.html)
         content = _inline_assets(content, assets_by_name)
+        # Order matters: annotate_links skips links already inside the
+        # span.footnote elements inline_footnotes creates.
         if footnotes:
             content = inline_footnotes(content)
         if link_notes:
@@ -181,7 +176,12 @@ def _pdf_chrome(html_path: str, pdf_path: str) -> None:
         base + [url],  # headless_shell needs no --headless flag
     ]
     last_err = ""
-    with tempfile.TemporaryDirectory(prefix="bookformatter-chrome-") as profile:
+    try:
+        profile = tempfile.mkdtemp(prefix="bookformatter-chrome-")
+    except OSError as exc:
+        # stay inside the engine ladder so auto/fallback semantics hold
+        raise PdfError(f"could not create a Chrome profile dir: {exc}") from exc
+    try:
         for cmd in attempts:
             try:
                 proc = subprocess.run(
@@ -194,6 +194,10 @@ def _pdf_chrome(html_path: str, pdf_path: str) -> None:
             if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0:
                 return
             last_err = (proc.stderr or proc.stdout or "").strip()[-500:]
+    finally:
+        # Chrome may still be flushing profile files as it exits; a strict
+        # cleanup races that and can crash a successful render.
+        shutil.rmtree(profile, ignore_errors=True)
     raise PdfError(f"Chrome PDF rendering failed: {last_err}")
 
 
@@ -209,8 +213,13 @@ def write_pdf(html_path: str, pdf_path: str, engine: str = "auto") -> str:
         try:
             _pdf_weasyprint(html_path, pdf_path)
             return "weasyprint"
-        except PdfError:
-            pass
-        _pdf_chrome(html_path, pdf_path)
-        return "chrome"
+        except PdfError as weasy_exc:
+            try:
+                _pdf_chrome(html_path, pdf_path)
+                return "chrome"
+            except PdfError as chrome_exc:
+                # surface both reasons: the weasyprint one (e.g. macOS arch
+                # mismatch) is usually the diagnosis the user needs
+                raise PdfError(f"{chrome_exc}; weasyprint also failed: "
+                               f"{weasy_exc}") from chrome_exc
     raise PdfError(f"unknown pdf engine: {engine}")

@@ -96,6 +96,7 @@ from string import Template
 from . import base
 
 NAME = "vsi"
+LABEL = "VSI — Oxford pocket style: gray sans openers, vertical margin running heads"
 
 # The page this design was measured on (base.TRIM_SIZES["vsi"], 111 x 174 mm);
 # the CLI and web form fall back to it when the theme is chosen without a trim.
@@ -363,21 +364,18 @@ chapter_label = base.default_chapter_label
 
 
 def params(font_size: str, line_height: str) -> dict:
-    values = {
-        "THEME_NAME": NAME,
+    values = base.default_params(NAME, font_size, line_height)
+    values.update({
         "BODY_FONT": SERIF_STACK,
         "HEADING_FONT": SANS_STACK,
-        "MONO_FONT": base.MONO_STACK,
         "HEADING_WEIGHT": "400",
         "HEADING_ALIGN": "left",
-        "FONT_SIZE": font_size,
-        "LINE_HEIGHT": line_height,
         "INDENT": "0",
         # Block paragraphs: exactly one text line between, no indent.
         "PARA_EXTRA": f"p + p {{ margin-top: {line_height}em; }}",
         "TITLE_EXTRA": "",
         "CHAPTER_DROP": "0",     # the head sits at the top of the text block
         "TITLE_DROP": "0",       # the title page manages its own drops
-    }
+    })
     values.update(_TOKENS)
     return values

@@ -1,18 +1,16 @@
-import base64
 import io
 import json
-import threading
-import time
+import os
+import shutil
+import tempfile
 import unittest
 import urllib.parse
 import urllib.request
 import zipfile
+from unittest import mock
 
-from bookformatter.web import make_server
-
-PNG_1PX = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
-)
+from bookformatter import web
+from tests.conftest import PNG_1PX, ServerFixture
 
 PASTED = """# First Light
 
@@ -27,26 +25,22 @@ By the second evening we no longer noticed the hum at all.
 class WebTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.server = make_server(port=0)
-        cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
-        cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
-        cls.thread.start()
+        cls.fx = ServerFixture().start()
+        cls.base = cls.fx.base
 
     @classmethod
     def tearDownClass(cls):
-        cls.server.shutdown()
-        cls.server.server_close()
+        cls.fx.stop()
 
     # -- helpers -----------------------------------------------------------
 
     def _get(self, path):
-        try:
-            with urllib.request.urlopen(self.base + path) as resp:
-                return resp.status, resp.read()
-        except urllib.error.HTTPError as err:
-            return err.code, err.read()
+        code, body, _ = self.fx.get(path)
+        return code, body
 
     def _post(self, path, data, content_type):
+        # Raw-body post (the fixture's post is urlencoded-fields only; the
+        # upload tests need multipart bodies and raw responses).
         req = urllib.request.Request(
             self.base + path, data=data, headers={"Content-Type": content_type}
         )
@@ -57,14 +51,7 @@ class WebTests(unittest.TestCase):
             return err.code, err.read()
 
     def _wait_for_job(self, job_id, timeout=30.0):
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            _, body = self._get(f"/status?id={job_id}")
-            status = json.loads(body)
-            if status["status"] in ("done", "error"):
-                return status
-            time.sleep(0.15)
-        self.fail("build did not finish in time")
+        return self.fx.wait("", job_id, timeout)
 
     # -- tests ---------------------------------------------------------------
 
@@ -199,6 +186,69 @@ class WebTests(unittest.TestCase):
     def test_unknown_route_404(self):
         code, _ = self._get("/status?id=missing")
         self.assertEqual(code, 404)
+
+    def test_oversize_body_rejected(self):
+        with mock.patch.object(web, "MAX_BODY", 512):
+            code, _ = self._post("/build", b"x" * 1024,
+                                 "application/x-www-form-urlencoded")
+        self.assertEqual(code, 413)
+
+
+class InputGuardTests(unittest.TestCase):
+    """Request-shaping guards, unit-level (no server needed)."""
+
+    def test_hostile_size_values_fall_back_to_default(self):
+        # These land inside a <style> block; anything but a plain size must
+        # be replaced by the default, not interpolated.
+        for hostile in ("12pt}body{display:none", "expression(alert(1))",
+                        "11pt;position:fixed", "url(x)"):
+            self.assertEqual(
+                web._clean_size(hostile, "11pt", web._FONT_SIZE_RE), "11pt")
+        self.assertEqual(
+            web._clean_size("2.footnote", "1.45", web._LINE_HEIGHT_RE), "1.45")
+
+    def test_page_pickers_track_theme_registry(self):
+        # The theme/trim selects are generated from the themes registry; a
+        # new theme or trim must appear in the form without editing web.py.
+        from bookformatter import themes
+        for name in themes.THEME_NAMES:
+            self.assertIn(f'<option value="{name}"', web.PAGE)
+        for trim in themes.TRIM_SIZES:
+            self.assertIn(f'<option value="{trim}"', web.PAGE)
+
+    def test_too_many_inputs_rejected(self):
+        urls = "\n".join(
+            f"https://example.com/{i}" for i in range(web.MAX_INPUTS + 1))
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError) as ctx:
+                web.run_build({"urls": [urls]}, [], tmp)
+        self.assertIn("Too many inputs", str(ctx.exception))
+
+    def _job(self, status):
+        job = web.Job()
+        job.status = status
+        self.addCleanup(shutil.rmtree, job.workdir, ignore_errors=True)
+        return job
+
+    def test_eviction_keeps_unfinished_jobs(self):
+        # The cap must never delete a queued/running build's workdir.
+        with mock.patch.object(web, "MAX_JOBS", 2), \
+             mock.patch.dict(web._jobs, clear=True):
+            running = self._job("running")   # oldest
+            done = self._job("done")
+            web._jobs.update({running.id: running, done.id: done})
+            newest = self._job("queued")
+            web._register_job(newest)
+            self.assertIn(running.id, web._jobs)
+            self.assertNotIn(done.id, web._jobs)
+            self.assertTrue(os.path.isdir(running.workdir))
+            self.assertFalse(os.path.isdir(done.workdir))
+
+    def test_status_tolerates_deleted_files(self):
+        # Eviction can remove a file between the listing and the stat.
+        job = self._job("done")
+        job.files["gone.epub"] = os.path.join(job.workdir, "gone.epub")
+        self.assertEqual(job.to_json()["files"], [])
 
 
 if __name__ == "__main__":
