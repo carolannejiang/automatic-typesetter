@@ -741,6 +741,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
             <option value="classic">Classic — serif, indents, centered heads</option>
             <option value="modern">Modern — sans heads, spaced paragraphs</option>
             <option value="classical">Classical — small-cap heads, top-corner folios, quiet openers</option>
+            <option value="vsi">VSI — Oxford pocket style: gray sans openers, vertical margin running heads</option>
           </select></div>
         <div><label for="trim">Trim size (print)</label>
           <select id="trim" name="trim">
@@ -749,6 +750,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
             <option value="5.25x8">5.25 &times; 8 in</option>
             <option value="5x8">5 &times; 8 in</option>
             <option value="a5">A5</option>
+            <option value="vsi">4.37 &times; 6.85 in (111 &times; 174 mm pocket)</option>
           </select></div>
       </div>
       <label>Formats</label>

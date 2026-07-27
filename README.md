@@ -34,6 +34,13 @@ python3 -m bookformatter chapters/ -t "Essays" -f epub,pdf,html \
 # top outer corners, chapter openers stripped of all page furniture
 python3 -m bookformatter chapters/ -t "Essays" --theme classical
 
+# Oxford Very Short Introduction pocket design (see themes/vsi.py for the
+# measured spec): gray sans openers over a deep sink, block paragraphs,
+# rotated running heads riding the outer margins; these settings match
+# the series' 111 x 174 mm page and 8.5/12 Miller text exactly
+python3 -m bookformatter chapters/ -t "Essays" --theme vsi --trim vsi \
+    --font-size 8.5pt --line-height 1.41 --chapter-start any
+
 # Hand off to a designer: an InCopy story to Place, plus a full
 # InDesign document
 python3 -m bookformatter manuscript.md -t "My Book" -f icml,idml

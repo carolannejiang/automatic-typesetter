@@ -59,7 +59,8 @@ def build_parser() -> argparse.ArgumentParser:
     design.add_argument("--theme", default="classic",
                         choices=themes.THEME_NAMES,
                         help="typography theme; classical sets the page after "
-                             "WeasyPrint's book-classical sample (default: classic)")
+                             "WeasyPrint's book-classical sample, vsi after Oxford's "
+                             "Very Short Introduction series (default: classic)")
     design.add_argument("--trim", default="6x9", choices=sorted(themes.TRIM_SIZES),
                         help="print trim size in inches (default: 6x9)")
     design.add_argument("--font-size", default="11pt", help="print body size (default: 11pt)")

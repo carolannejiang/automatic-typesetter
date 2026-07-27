@@ -70,6 +70,39 @@ class ClassicalCssTests(unittest.TestCase):
         self.assertNotIn("page: clean", css)
 
 
+class VsiCssTests(unittest.TestCase):
+    def test_chapter_label_spells_out_chapter(self):
+        self.assertEqual(themes.chapter_label("vsi", 3), "Chapter 3")
+
+    def test_print_css_moves_running_heads_to_the_margin_rails(self):
+        css = themes.print_css(theme="vsi", book_title="Field Notes")
+        # The series signature: rotated strings riding the side margins,
+        # book title up the verso, chapter title down the recto...
+        self.assertIn("@left-middle", css)
+        self.assertIn("@right-middle", css)
+        self.assertIn("transform: rotate(-90deg)", css)
+        self.assertIn("transform: rotate(90deg)", css)
+        # ...replacing the shared top-center heads they come after.
+        furniture = css.index("vsi print furniture")
+        self.assertGreater(furniture, css.index("string(book-title, first-except)"))
+        self.assertGreater(furniture, css.index("content: counter(page)"))
+
+    def test_print_geometry_matches_the_measured_pocket_page(self):
+        css = themes.print_css(theme="vsi", trim="vsi")
+        self.assertIn("size: 4.37in 6.85in;", css)
+        self.assertIn("margin: 0.375in 0.455in 0.68in 0.5in;", css)
+
+    def test_block_paragraphs_open_a_full_line(self):
+        css = themes.epub_css(theme="vsi", line_height="1.41")
+        self.assertIn("p + p { margin-top: 1.41em; }", css)
+        self.assertIn("text-indent: 0", css)
+
+    def test_epub_css_restyles_without_paged_furniture(self):
+        css = themes.epub_css(theme="vsi")
+        self.assertIn("vsi overrides", css)
+        self.assertNotIn("@left-middle", css)
+
+
 class ThemeBuildTests(unittest.TestCase):
     def test_print_html_classic_is_unchanged(self):
         page = printbook.build_print_html(_book(), theme="classic")
