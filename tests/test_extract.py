@@ -241,6 +241,41 @@ class ExtractTests(unittest.TestCase):
         out = clean_fragment('<p><a href="/rel">link</a></p>', base_url="https://b.example/post/1")
         self.assertIn('href="https://b.example/rel"', out)
 
+    def test_social_icon_links_dropped_from_feed_fragment(self):
+        # The feed path (clean_fragment) never runs class-name noise removal,
+        # so social icons must be stripped by href regardless of container.
+        frag = (
+            '<p>Real body text about the topic at hand.</p>'
+            '<p class="post-footer">'
+            '<a href="https://twitter.com/intent/tweet?url=x"><img src="/tw.png" alt="Tweet"></a>'
+            '<a href="https://www.facebook.com/sharer/sharer.php?u=x">Share on Facebook</a>'
+            '<a href="https://www.linkedin.com/in/someauthor">LinkedIn</a>'
+            '<a href="mailto:?subject=Read+this">Email this</a>'
+            '</p>'
+        )
+        out = clean_fragment(frag, base_url="https://b.example/post/1")
+        self.assertIn("Real body text", out)
+        for gone in ("twitter.com", "facebook.com", "linkedin.com",
+                     "mailto:?", "/tw.png", "Share on Facebook"):
+            self.assertNotIn(gone, out)
+
+    def test_social_prose_link_keeps_its_text(self):
+        # A social URL used as an in-sentence citation loses only the link,
+        # never the words around it.
+        frag = ('<p>As shown in '
+                '<a href="https://twitter.com/user/status/123">this detailed thread</a>'
+                ', the numbers add up.</p>')
+        out = clean_fragment(frag)
+        self.assertIn("this detailed thread", out)
+        self.assertIn("the numbers add up", out)
+        self.assertNotIn("twitter.com", out)
+
+    def test_non_social_icon_link_survives(self):
+        # An icon-only anchor to a non-social target (image lightbox) is kept.
+        frag = '<p><a href="/full.jpg"><img src="/thumb.jpg" alt="figure"></a></p>'
+        out = clean_fragment(frag, base_url="https://b.example/")
+        self.assertIn("thumb.jpg", out)
+
     def test_footnote_anchors_preserved_and_dangling_links_unwrapped(self):
         filler = "A reasonably long paragraph, with commas, to win the scoring pass. " * 3
         page = f"""<html><body><article>
