@@ -70,6 +70,42 @@ class ClassicalCssTests(unittest.TestCase):
         self.assertNotIn("page: clean", css)
 
 
+class ClassicthesisCssTests(unittest.TestCase):
+    def test_chapter_label_is_the_bare_number(self):
+        self.assertEqual(themes.chapter_label("classicthesis", 3), "3")
+
+    def test_print_css_joins_folio_and_headmark_in_the_outer_corner(self):
+        css = themes.print_css(theme="classicthesis", book_title="Field Notes")
+        # Folio and running head share one outer corner box per side...
+        self.assertIn('content: counter(page) "\\2003" string(chapter-title, first-except)', css)
+        self.assertIn('content: string(chapter-title, first-except) "\\2003" counter(page)', css)
+        # ...the theme block comes after the shared furniture it replaces...
+        furniture = css.index("classicthesis print furniture")
+        self.assertGreater(furniture, css.index("string(book-title, first-except)"))
+        self.assertGreater(furniture, css.index('leader(". ")'))
+        # ...and the TOC drops its dot leaders for a fixed space.
+        self.assertNotIn("leader(", css[furniture:])
+        self.assertIn('content: "\\2003\\2002" target-counter(attr(href url), page)', css[furniture:])
+        self.assertIn("Palatino", css)
+
+    def test_print_css_gives_openers_a_plain_style_folio(self):
+        css = themes.print_css(theme="classicthesis")
+        self.assertIn("header.chapter-head { page: clean; }", css)
+        self.assertIn("section.chapter { page: auto; }", css)
+        clean = css.index("@page clean")
+        self.assertIn("@bottom-center { content: counter(page)", css[clean:])
+
+    def test_print_geometry_widens_the_outer_margin(self):
+        css = themes.print_css(theme="classicthesis", trim="6x9")
+        self.assertIn("margin: 0.78in 1.05in 0.95in 0.72in;", css)
+
+    def test_epub_css_restyles_without_paged_furniture(self):
+        css = themes.epub_css(theme="classicthesis")
+        self.assertIn("classicthesis overrides", css)
+        self.assertNotIn("@top-left", css)
+        self.assertNotIn("page: clean", css)
+
+
 class ThemeBuildTests(unittest.TestCase):
     def test_print_html_classic_is_unchanged(self):
         page = printbook.build_print_html(_book(), theme="classic")

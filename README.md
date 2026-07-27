@@ -34,6 +34,12 @@ python3 -m bookformatter chapters/ -t "Essays" -f epub,pdf,html \
 # top outer corners, chapter openers stripped of all page furniture
 python3 -m bookformatter chapters/ -t "Essays" --theme classical
 
+# Or after André Miede's ClassicThesis LaTeX style (an homage to
+# Bringhurst): Palatino, letterspaced small-cap heads, outsize gray
+# chapter numbers over a title rule, folio and running head sharing
+# the top outer corner, dot-leaderless contents
+python3 -m bookformatter chapters/ -t "Essays" --theme classicthesis
+
 # Hand off to a designer: an InCopy story to Place, plus a full
 # InDesign document
 python3 -m bookformatter manuscript.md -t "My Book" -f icml,idml

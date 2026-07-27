@@ -741,6 +741,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
             <option value="classic">Classic — serif, indents, centered heads</option>
             <option value="modern">Modern — sans heads, spaced paragraphs</option>
             <option value="classical">Classical — small-cap heads, top-corner folios, quiet openers</option>
+            <option value="classicthesis">ClassicThesis — Palatino, spaced small caps, gray chapter numbers</option>
           </select></div>
         <div><label for="trim">Trim size (print)</label>
           <select id="trim" name="trim">
