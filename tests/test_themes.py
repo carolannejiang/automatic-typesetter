@@ -149,6 +149,29 @@ class VsiCssTests(unittest.TestCase):
         self.assertNotIn("@left-middle", css)
 
 
+class ShortIntroCssTests(unittest.TestCase):
+    def test_declares_the_pocket_page(self):
+        self.assertEqual(themes.default_trim("short intro"), "vsi")
+
+    def test_print_geometry_sets_the_specified_measure_and_grid(self):
+        css = themes.print_css(theme="short intro", trim="vsi")
+        self.assertIn("size: 4.37in 6.85in;", css)
+        # 0.477 in sides leave a 20.5-pica measure; 0.375/0.475 head and
+        # foot leave a 6 in column — 36 lines of the 12 pt grid.
+        self.assertIn("margin: 0.375in 0.477in 0.475in 0.477in;", css)
+
+    def test_body_sets_ragged_right(self):
+        css = themes.epub_css(theme="short intro")
+        # The override comes after the shared justification it replaces.
+        self.assertGreater(css.index("section.chapter { text-align: left; }"),
+                           css.index("text-align: justify"))
+
+    def test_block_paragraphs_open_a_blank_line(self):
+        css = themes.epub_css(theme="short intro", line_height="1.41")
+        self.assertIn("p + p { margin-top: 1.41em; }", css)
+        self.assertIn("text-indent: 0", css)
+
+
 class ThemeBuildTests(unittest.TestCase):
     def test_print_html_classic_is_unchanged(self):
         page = printbook.build_print_html(_book(), theme="classic")
