@@ -27,6 +27,19 @@ class RequoteUrlTests(unittest.TestCase):
         self.assertEqual(fetch._requote_url(url), url)
 
 
+class MalformedUrlTests(unittest.TestCase):
+    """fetch() must raise FetchError, never a bare ValueError, on URLs that
+    fail before any I/O — feeds and pages supply arbitrary link strings."""
+
+    def test_unbalanced_ipv6_brackets(self):
+        with self.assertRaises(fetch.FetchError):
+            fetch.fetch("http://[2001:db8::1/post")
+
+    def test_relative_url(self):
+        with self.assertRaises(fetch.FetchError):
+            fetch.fetch("posts/first.html")
+
+
 class DecodeBodyTests(unittest.TestCase):
     def test_declared_latin1_reads_cp1252_punctuation(self):
         # Pages labeled iso-8859-1 routinely contain windows-1252 smart

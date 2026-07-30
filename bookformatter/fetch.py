@@ -73,19 +73,25 @@ def _requote_url(url: str) -> str:
 
 def fetch(url: str, timeout: float = 30.0):
     """Fetch a URL. Returns (bytes, content_type, final_url). Caches per run."""
-    url = _requote_url(url)
+    try:
+        # Malformed URLs (unbalanced IPv6 brackets, relative links from a
+        # feed) raise plain ValueError before any I/O; keep the contract
+        # that this module only ever raises FetchError.
+        url = _requote_url(url)
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": USER_AGENT,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/*;q=0.8,*/*;q=0.7",
+                "Accept-Encoding": "identity",
+            },
+        )
+    except ValueError as exc:
+        raise FetchError(f"could not fetch {url}: {exc}") from exc
     if url in _cache:
         return _cache[url]
     if PUBLIC_MODE:
         validate_public_url(url)
-    req = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": USER_AGENT,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/*;q=0.8,*/*;q=0.7",
-            "Accept-Encoding": "identity",
-        },
-    )
     try:
         with _opener.open(req, timeout=timeout) as resp:
             data = resp.read(MAX_BYTES + 1)

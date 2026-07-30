@@ -11,8 +11,9 @@ import hashlib
 import os
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Callable, Optional
 from urllib.parse import urljoin, urlparse, unquote
 
 from . import docxread, extract, feeds, fetch, htmldom, mini_markdown
@@ -31,8 +32,9 @@ class IngestOptions:
     images: str = "download"     # download | link | strip
     order: str = "auto"          # auto | keep | asc | desc
     max_items: int = 0           # 0 = no limit (feeds)
-    fetch_full: bool = False     # feeds: fetch each item's page for full text
+    fetch_full: bool = False     # feeds: fetch every item's page, even full-looking ones
     verbose: bool = False
+    progress: Optional[Callable] = None  # called with status messages (web UI)
 
 
 @dataclass
@@ -187,7 +189,95 @@ def _ingest_page(url: str, doc, opts: IngestOptions, result: IngestResult) -> No
         result.source_url = url
 
 
-def _ingest_feed(url: str, feed: feeds.Feed, opts: IngestOptions, result: IngestResult) -> None:
+# Many feeds carry only a teaser per item — a one-line description or a
+# WordPress-style excerpt — rather than the post. Items with less visible
+# text than this are treated as truncated and their page is fetched for the
+# full text (fetch_full forces the fetch for every item). Only links back to
+# the feed's own site qualify: on a link blog the item's link is someone
+# else's article and the item's own text *is* the post.
+SUMMARY_LEN = 500
+
+# The least visible text an extraction can have and still count as a real
+# article: _ingest_url treats pages below it as scrape failures worth
+# retrying via the feed, and a fetched post page must clear it to replace a
+# feed item's own content — below that the "article" is a subscribe pitch,
+# paywall stub, or JS shell rather than the post. The bar drops when the
+# feed side is empty anyway (title-only feeds) or the fetch was forced.
+FULL_PAGE_MIN = 300
+
+# Below this many visible characters, content is an empty stub — a paid-post
+# placeholder, a link-only reblog — unless an image is the actual post.
+NEAR_EMPTY_LEN = 40
+
+
+def _host(url: str) -> str:
+    try:
+        host = (urlparse(url).hostname or "").lower()
+    except ValueError:  # e.g. unbalanced IPv6 brackets in a feed's link
+        return ""
+    if host.startswith("www."):
+        host = host[4:]
+    try:
+        # IDN feeds mix Unicode and punycode spellings of the same host.
+        host = host.encode("idna").decode("ascii")
+    except UnicodeError:
+        pass
+    return host
+
+
+def _same_site(item_link: str, site_host: str) -> bool:
+    """True when an item's link stays on the feed's site. Subdomain moves
+    (example.com channel link, posts on blog.example.com) count as the
+    same site; a link blog pointing at someone else's domain does not."""
+    host = _host(item_link)
+    if not host or not site_host:
+        return False
+    return (host == site_host or host.endswith("." + site_host)
+            or site_host.endswith("." + host))
+
+
+def _has_img(html_text: str) -> bool:
+    """Any real image? 1×1 tracking pixels (FeedBurner, WordPress.com stats)
+    don't count — same rule extract.py applies to <noscript> images."""
+    return any(
+        img.get("width") != "1" and img.get("height") != "1"
+        for img in htmldom.parse(html_text).find_all("img"))
+
+
+def _fetch_parallel(urls: list, fetch_one, label: str, opts: IngestOptions) -> dict:
+    """Run fetch_one over URLs concurrently: {url: result or FetchError}."""
+    results: dict = {}
+    if not urls:
+        return results
+    with ThreadPoolExecutor(max_workers=min(8, len(urls))) as pool:
+        futures = {pool.submit(fetch_one, u): u for u in urls}
+        for done, future in enumerate(as_completed(futures), 1):
+            try:
+                results[futures[future]] = future.result()
+            except fetch.FetchError as exc:
+                results[futures[future]] = exc
+            if opts.progress:
+                opts.progress(f"{label} {done}/{len(urls)}")
+    return results
+
+
+def _page_wins(doc_html: str, doc_len: int, item_html: str, item_len: int,
+               forced: bool) -> bool:
+    """Should a fetched page's extraction replace the feed item's own
+    content? Only when it really is the full post: more text than the feed
+    gave, article-length (unless the feed side is an empty stub anyway, or
+    the fetch was forced by fetch_full), and never an image-only item — a
+    comic, a photo post — traded for a text-only extraction."""
+    if doc_len <= item_len:
+        return False
+    if (doc_len < FULL_PAGE_MIN and not forced and item_len >= NEAR_EMPTY_LEN):
+        return False
+    return not (item_len < NEAR_EMPTY_LEN and _has_img(item_html)
+                and not _has_img(doc_html))
+
+
+def _ingest_feed(url: str, feed: feeds.Feed, opts: IngestOptions,
+                 result: IngestResult, auto_full: bool = True) -> None:
     items = list(feed.items)
     _log(opts, f"feed: {url} ({len(items)} items)")
     if not items:
@@ -209,21 +299,59 @@ def _ingest_feed(url: str, feed: feeds.Feed, opts: IngestOptions, result: Ingest
         selected = set(id(it) for it in dated)
         items = [it for it in feed.items if id(it) in selected]
 
+    # Clean every item up front so all length decisions measure what would
+    # actually land in the book, not raw feed markup (share-link blocks and
+    # tracking pixels inflate the raw text; clean_fragment strips them).
+    site_host = _host(feed.link) or _host(url)
+    cleaned_items, item_lens, page_links = [], [], []
     for item in items:
-        html_text = item.html or ""
-        base = item.link or url
-        if opts.fetch_full and item.link:
-            try:
-                page_text, _, final_url = fetch.fetch_text(item.link)
+        cleaned = extract.clean_fragment(item.html or "", base_url=item.link or url)
+        item_len = _visible_len(cleaned)
+        cleaned_items.append(cleaned)
+        item_lens.append(item_len)
+        # A link back to the feed itself or to a listing page can't be the
+        # post's page; "fetching the full text" from it yields junk.
+        link_ok = (item.link and item.link.rstrip("/") != url.rstrip("/")
+                   and not _looks_like_index_url(item.link))
+        wants_page = link_ok and (opts.fetch_full or (
+            auto_full and item_len < SUMMARY_LEN
+            and _same_site(item.link, site_host)))
+        page_links.append(item.link if wants_page else "")
+    to_fetch = list(dict.fromkeys(link for link in page_links if link))
+    if to_fetch:
+        _log(opts, f"fetching {len(to_fetch)} post page(s) for full text")
+    pages = _fetch_parallel(to_fetch, fetch.fetch_text, "Fetching full posts…", opts)
+
+    truncated = 0  # items that looked like teasers and had a fetchable page
+    stubs = []     # ...whose page failed or held nothing; first-error detail
+    for item, link, html_text, item_len in zip(items, page_links,
+                                               cleaned_items, item_lens):
+        final_len = item_len
+        looks_truncated = bool(link) and item_len < SUMMARY_LEN
+        truncated += looks_truncated
+        if link:
+            page = pages[link]
+            if isinstance(page, fetch.FetchError):
+                if looks_truncated:
+                    _log(opts, str(page))
+                    stubs.append(str(page))
+                else:
+                    result.warn(str(page))
+            else:
+                page_text, _, final_url = page
+                _log(opts, f"full text: {link}")
                 doc = extract.extract_article(page_text, base_url=final_url)
-                if len(doc.html) > len(html_text):
-                    html_text = doc.html
-                    base = ""  # already absolutized + cleaned
-            except fetch.FetchError as exc:
-                result.warn(str(exc))
-        if base:
-            html_text = extract.clean_fragment(html_text, base_url=base)
-        if _visible_len(html_text) < 40 and "<img" not in html_text:
+                doc_len = _visible_len(doc.html)
+                if _page_wins(doc.html, doc_len, html_text, item_len,
+                              opts.fetch_full):
+                    html_text = doc.html  # already absolutized + cleaned
+                    final_len = doc_len
+                elif looks_truncated and doc_len < NEAR_EMPTY_LEN:
+                    # The page exists but reads as empty — a JS-rendered
+                    # theme, most likely. The teaser is all we have.
+                    _log(opts, f"{link}: no readable article text")
+                    stubs.append(f"{link}: no readable article text")
+        if final_len < NEAR_EMPTY_LEN and not _has_img(html_text):
             # Paid-subscriber Substack posts, link-only Tumblr reblogs, and
             # the like put a stub (or nothing) in the feed.
             result.warn(f"skipping near-empty feed item: {item.title}")
@@ -232,6 +360,11 @@ def _ingest_feed(url: str, feed: feeds.Feed, opts: IngestOptions, result: Ingest
             Chapter(title=item.title, html=html_text, source=item.link or url,
                     author=item.author, date=item.date)
         )
+    if stubs:
+        result.warn(
+            f"{len(stubs)} of {truncated} short feed item(s) kept their feed "
+            f"text — the full pages couldn't be fetched or held no readable "
+            f"article (first: {stubs[0]})")
 
     if feed.title and not result.title_hint:
         result.title_hint = feed.title
@@ -253,20 +386,29 @@ _INDEX_PATHS = {
 
 
 def _looks_like_index_url(url: str) -> bool:
-    parts = urlparse(url)
+    try:
+        parts = urlparse(url)
+    except ValueError:  # feed items can carry unparseable links
+        return False
     if parts.query:  # e.g. WordPress "?p=123" permalinks name a single post
         return False
     return unquote(parts.path).strip("/").lower() in _INDEX_PATHS
 
 
 def _visible_len(html_text: str) -> int:
-    return len(htmldom.normalize_ws(htmldom.parse(html_text).text_content()))
+    root = htmldom.parse(html_text)
+    for tag in ("script", "style"):  # their text is code, not content
+        for node in root.find_all(tag):
+            node.detach()
+    return len(htmldom.normalize_ws(root.text_content()))
 
 
 def _fetch_feed(feed_url: str):
-    """Fetch and parse a candidate feed URL; None if it isn't a live feed."""
+    """Fetch and parse a candidate feed URL; None if it isn't a live feed.
+    Returns (feed, final_url) — a redirect can land on another host, and
+    the landing host is the one item links must match."""
     try:
-        text, content_type, _ = fetch.fetch_text(feed_url, timeout=15)
+        text, content_type, final_url = fetch.fetch_text(feed_url, timeout=15)
     except fetch.FetchError:
         return None
     if not feeds.looks_like_feed(text, content_type):
@@ -275,7 +417,7 @@ def _fetch_feed(feed_url: str):
         parsed = feeds.parse_feed(text)
     except ValueError:
         return None
-    return parsed if parsed.items else None
+    return (parsed, final_url) if parsed.items else None
 
 
 def _match_feed_item(items: list, page_url: str):
@@ -350,7 +492,8 @@ def _medium_ingest_from_feed(url: str, opts: IngestOptions,
             result.title_hint = wanted[0].title or None
     result.warn(f"{url}: Medium refuses non-browser readers; "
                 f"imported from its public feed {feed_url} instead")
-    _ingest_feed(feed_url, parsed, opts, result)
+    # auto_full=False: story pages 403 for us, so page fetches can't help.
+    _ingest_feed(feed_url, parsed, opts, result, auto_full=False)
     return True
 
 
@@ -369,14 +512,14 @@ def _ingest_url(url: str, opts: IngestOptions, result: IngestResult) -> None:
             doc = extract.extract_article(text, base_url=final_url)
             _ingest_page(url, doc, opts, result)
             return
-        _ingest_feed(url, parsed, opts, result)
+        _ingest_feed(final_url, parsed, opts, result)
         return
 
     doc = extract.extract_article(text, base_url=final_url)
     content_len = _visible_len(doc.html)
 
     # A Medium page that came back as a near-empty JS shell: use its feed.
-    if content_len < 300:
+    if content_len < FULL_PAGE_MIN:
         if _medium_ingest_from_feed(url, opts, result):
             return
         if final_url != url and _medium_ingest_from_feed(final_url, opts, result):
@@ -387,18 +530,19 @@ def _ingest_url(url: str, opts: IngestOptions, result: IngestResult) -> None:
     # nothing from switches to its feed too, but only to the matching item —
     # never a surprise import of the whole blog.
     indexy = _looks_like_index_url(final_url)
-    if content_len < 300 or indexy:
+    if content_len < FULL_PAGE_MIN or indexy:
         candidates = feeds.discover_feed_urls(text, final_url)[:3]
         if not candidates and indexy:
             base = final_url if final_url.endswith("/") else final_url + "/"
             candidates = [urljoin(base, p) for p in feeds.COMMON_FEED_PATHS]
         for feed_url in candidates:
-            parsed = _fetch_feed(feed_url)
-            if parsed is None:
+            got = _fetch_feed(feed_url)
+            if got is None:
                 continue
+            parsed, feed_final = got
             if indexy:
                 _log(opts, f"{url}: using its feed {feed_url}")
-                _ingest_feed(feed_url, parsed, opts, result)
+                _ingest_feed(feed_final, parsed, opts, result)
                 return
             item = (_match_feed_item(parsed.items, final_url)
                     or _match_feed_item(parsed.items, url))
@@ -408,7 +552,9 @@ def _ingest_url(url: str, opts: IngestOptions, result: IngestResult) -> None:
                     result.title_hint = item.title or None
                 result.warn(f"{url}: the page yielded almost no content; "
                             f"imported this post from the site's feed {feed_url}")
-                _ingest_feed(feed_url, parsed, opts, result)
+                # auto_full=False: the page was already fetched and judged
+                # nearly empty — re-fetching it can't add anything.
+                _ingest_feed(feed_final, parsed, opts, result, auto_full=False)
                 return
             break  # a live feed without this post: keep the page result
 
@@ -456,10 +602,25 @@ def _load_image(src: str) -> tuple:
     return None, None
 
 
+def _prefetch_images(result: IngestResult, opts: IngestOptions) -> dict:
+    """Warm the fetch cache for all remote images concurrently. Returns
+    {src: FetchError} for the ones that failed, so the sequential pass
+    below doesn't re-attempt them."""
+    remote: list = []
+    for chapter in result.chapters:
+        for img in htmldom.parse(chapter.html).find_all("img"):
+            src = img.get("src") or ""
+            if src.startswith(("http://", "https://")) and src not in remote:
+                remote.append(src)
+    fetched = _fetch_parallel(remote, fetch.fetch, "Downloading images…", opts)
+    return {u: v for u, v in fetched.items() if isinstance(v, fetch.FetchError)}
+
+
 def process_images(result: IngestResult, opts: IngestOptions) -> None:
     """Apply the image policy across all chapters, filling result.assets."""
     if opts.images == "link":
         return
+    failed = _prefetch_images(result, opts) if opts.images == "download" else {}
     seen: dict = {}
     for chapter in result.chapters:
         root = htmldom.parse(chapter.html)
@@ -475,6 +636,8 @@ def process_images(result: IngestResult, opts: IngestOptions) -> None:
                 continue
             data, media = (None, None)
             try:
+                if src in failed:
+                    raise failed[src]
                 data, media = _load_image(src)
             except fetch.FetchError as exc:
                 result.warn(str(exc))

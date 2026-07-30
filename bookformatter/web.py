@@ -189,6 +189,7 @@ def run_build(params: dict, uploads: list, workdir: str,
         order=_first(params, "order", "auto"),
         max_items=int(_first(params, "max_items", "0") or 0),
         fetch_full=_first(params, "fetch_full") == "on",
+        progress=progress,
     )
     result = ingester.ingest(inputs, opts)
     out.warnings.extend(w for w in result.warnings if w not in out.warnings)
@@ -686,6 +687,17 @@ button.build:disabled { opacity: 0.55; cursor: wait; }
 #status .msg { color: var(--muted); }
 #status .spin::after { content: "…"; animation: dots 1.2s steps(4) infinite; }
 @keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+#status .spinner {
+  display: none; width: 0.85em; height: 0.85em; vertical-align: -0.1em;
+  border: 2px solid var(--line); border-top-color: var(--accent);
+  border-radius: 50%; margin-right: 0.5rem;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#bar { display: none; height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; margin-top: 0.6rem; }
+#bar .fill { height: 100%; width: 0; background: var(--accent); border-radius: 2px; transition: width .3s; }
+#bar.indeterminate .fill { width: 30%; animation: slide 1.2s ease-in-out infinite; }
+@keyframes slide { 0% { margin-left: -30%; } 100% { margin-left: 100%; } }
 .stats { color: var(--muted); font-size: 0.9rem; }
 ul.warnings { color: var(--warn); font-size: 0.85rem; padding-left: 1.2rem; }
 .error { color: var(--err); }
@@ -823,7 +835,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
           <div><label for="max_items">Max posts (0 = all)</label>
             <input type="text" id="max_items" name="max_items" value="0"></div>
           <div><label style="margin-top:1.9rem"><input type="checkbox" name="fetch_full"> Fetch full post pages
-            (for truncated feeds)</label></div>
+            (automatic for truncated feeds)</label></div>
         </div>
         <div class="checks" style="margin-top:0.9rem">
           <label><input type="checkbox" name="include_pictures" checked> Include pictures</label>
@@ -841,7 +853,8 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
 
   <div class="card" id="status">
     <h2>IV &middot; The press</h2>
-    <p><span class="msg" id="msg"></span></p>
+    <p><span class="spinner" id="spinner"></span><span class="msg" id="msg"></span></p>
+    <div id="bar"><div class="fill" id="fill"></div></div>
     <p class="stats" id="stats"></p>
     <ul class="warnings" id="warnings"></ul>
     <div class="downloads" id="downloads"></div>
@@ -858,7 +871,25 @@ const stats = document.getElementById("stats");
 const warnings = document.getElementById("warnings");
 const downloads = document.getElementById("downloads");
 const go = document.getElementById("go");
+const spinner = document.getElementById("spinner");
+const bar = document.getElementById("bar");
+const fill = document.getElementById("fill");
 let timer = null;
+
+function showBusy(running, message) {
+  spinner.style.display = running ? "inline-block" : "none";
+  bar.style.display = running ? "block" : "none";
+  go.textContent = running ? "The press is running…" : "Make the book";
+  // Progress messages carry "n/N"; anything else gets the sliding bar.
+  const m = running && /(\d+)\/(\d+)/.exec(message || "");
+  if (m && +m[2] > 0) {
+    bar.classList.remove("indeterminate");
+    fill.style.width = Math.round(100 * m[1] / m[2]) + "%";
+  } else {
+    bar.classList.add("indeterminate");
+    fill.style.width = "";
+  }
+}
 
 // A theme can carry its natural page (data-trim on its option): picking the
 // theme sets the trim to match, until the trim is chosen by hand.
@@ -877,6 +908,8 @@ form.addEventListener("submit", async (ev) => {
   statusCard.style.display = "block";
   msg.className = "msg spin"; msg.textContent = "Starting";
   stats.textContent = ""; warnings.innerHTML = ""; downloads.innerHTML = "";
+  showBusy(true, "");
+  statusCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
   try {
     // Relative URLs so the app works at any mount point (e.g. /book/).
     const resp = await fetch("build", { method: "POST", body: new FormData(form) });
@@ -897,7 +930,9 @@ async function poll(id) {
   msg.textContent = data.status === "done"
     ? ("“" + (data.book_title || "Untitled") + "” is ready.")
     : data.message;
-  msg.className = data.status === "running" || data.status === "queued" ? "msg spin" : "msg";
+  const running = data.status === "running" || data.status === "queued";
+  msg.className = running ? "msg spin" : "msg";
+  showBusy(running, data.message);
   stats.textContent = data.stats || "";
   warnings.innerHTML = "";
   for (const w of data.warnings || []) {
@@ -922,6 +957,7 @@ async function poll(id) {
 
 function showError(text) {
   go.disabled = false;
+  showBusy(false, "");
   msg.className = "msg error";
   msg.textContent = text;
 }

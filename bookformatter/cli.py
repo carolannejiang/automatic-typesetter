@@ -91,7 +91,8 @@ def build_parser() -> argparse.ArgumentParser:
                          help="feed chapter order (default: oldest first)")
     content.add_argument("--max-items", type=int, default=0, help="feeds: use only the N most recent posts")
     content.add_argument("--fetch-full", action="store_true",
-                         help="feeds: fetch each post's page for full text (for truncated feeds)")
+                         help="feeds: fetch every post's page for full text "
+                              "(items that look truncated are fetched automatically)")
 
     parser.add_argument("-v", "--verbose", action="store_true", help="log ingestion details")
     return parser
