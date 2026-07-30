@@ -701,8 +701,8 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
 <body>
 <div class="wrap">
   <header class="masthead">
-    <h1>bookformatter</h1>
-    <p>Turn websites, blogs, and manuscripts into traditional books.</p>
+    <h1>Typesetting tool</h1>
+    <p>Turn blogs / rss feeds / manuscripts into printable book format.</p>
   </header>
 
   <form id="form">
