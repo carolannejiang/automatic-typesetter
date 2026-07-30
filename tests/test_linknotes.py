@@ -71,12 +71,53 @@ class AnnotateLinksInlineTests(unittest.TestCase):
         self.assertEqual(out, html)
         self.assertEqual(nxt, 1)
 
-    def test_links_inside_footnotes_left_alone(self):
+    def test_links_inside_footnotes_unfold_in_parentheses(self):
         html = ('<p>Claim.<span class="footnote">Per '
                 '<a href="https://x.example">the source</a>.</span></p>')
         out, nxt = annotate_links(html)
-        self.assertEqual(out, html)
         self.assertEqual(nxt, 1)
+        self.assertNotIn("linknote-call", out)
+        self.assertIn('Per the source (<a class="linknote-url" '
+                      'href="https://x.example">https://x.example</a>).', out)
+
+    def test_bare_url_inside_footnote_skips_parentheses(self):
+        html = ('<p>C.<span class="footnote">See '
+                '<a href="https://x.example/p">https://x.example/p</a>.</span></p>')
+        out, nxt = annotate_links(html)
+        self.assertEqual(nxt, 1)
+        self.assertIn('See <a class="linknote-url" href="https://x.example/p">'
+                      'https://x.example/p</a>.', out)
+        self.assertEqual(out.count("https://x.example/p"), 2)  # href + text only
+
+    def test_endnote_list_link_unfolds_without_consuming_a_number(self):
+        html = ('<p><a href="https://a.example">body</a> cite'
+                '<sup id="fnref-1"><a href="#fn-1">1</a></sup>.</p>'
+                '<div class="footnotes"><ol><li id="fn-1"><p>See '
+                '<a href="https://note.example/p">the paper</a>. '
+                '<a href="#fnref-1">↩</a></p></li></ol></div>')
+        for mode in ("inline", "aside", "native"):
+            out, nxt = annotate_links(html, mode=mode)
+            self.assertEqual(nxt, 2)  # only the body link takes L1
+            self.assertIn('the paper (<a class="linknote-url" '
+                          'href="https://note.example/p">', out)
+
+    def test_note_detection_survives_attribute_stripping(self):
+        # extract.py keeps only referenced ids: the endnote list arrives as
+        # a bare <ol> whose items carry fn-ish ids.
+        html = ('<ol><li id="footnote-1">Note '
+                '<a href="https://n.example">here</a>.</li></ol>')
+        out, nxt = annotate_links(html)
+        self.assertEqual(nxt, 1)
+        self.assertIn('here (<a class="linknote-url" href="https://n.example">',
+                      out)
+
+    def test_unfold_is_idempotent(self):
+        html = ('<p>C.<span class="footnote">Per '
+                '<a href="https://x.example">the source</a>.</span></p>')
+        once, nxt = annotate_links(html)
+        twice, nxt2 = annotate_links(once, start=nxt)
+        self.assertEqual(once, twice)
+        self.assertEqual(nxt, nxt2)
 
     def test_idempotent(self):
         html = '<p>See <a href="https://example.com">x</a>.</p>'
@@ -117,6 +158,13 @@ class AnnotateLinksModesTests(unittest.TestCase):
         self.assertNotIn("L1", out)
 
 
+FOOTNOTED = ('<p>Body <a href="https://a.example">link</a> cite'
+             '<sup id="fnref-1"><a href="#fn-1">1</a></sup>.</p>'
+             '<div class="footnotes"><ol><li id="fn-1"><p>See '
+             '<a href="https://note.example/p">the paper</a>. '
+             '<a href="#fnref-1">↩</a></p></li></ol></div>')
+
+
 class PrintIntegrationTests(unittest.TestCase):
     def test_print_html_carries_link_notes_across_chapters(self):
         book = make_book([
@@ -127,6 +175,14 @@ class PrintIntegrationTests(unittest.TestCase):
         self.assertIn('class="linknote-call">L1</sub>', page)
         self.assertIn('class="linknote-call">L2</sub>', page)
         self.assertIn('href="https://b.example"', page)
+
+    def test_footnote_link_unfolds_inside_the_page_note(self):
+        book = make_book([Chapter(title="One", html=FOOTNOTED)])
+        page = build_print_html(book)
+        self.assertIn('class="linknote-call">L1</sub>', page)
+        self.assertNotIn(">L2</sub>", page)
+        self.assertIn('the paper (<a class="linknote-url" '
+                      'href="https://note.example/p">', page)
 
     def test_print_html_opt_out(self):
         book = make_book([
@@ -162,6 +218,20 @@ class EpubIntegrationTests(unittest.TestCase):
             self.assertIn('<a href="https://a.example">a</a>', doc)
             self.assertNotIn("linknote", doc)
 
+    def test_footnote_link_unfolds_and_numbering_matches_print(self):
+        book = make_book([Chapter(title="One", html=FOOTNOTED)])
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = os.path.join(tmp.name, "t.epub")
+        write_epub(book, path)
+        with zipfile.ZipFile(path) as zf:
+            doc = zf.read("OEBPS/text/chapter-001.xhtml").decode("utf-8")
+        # Only the body link becomes L1 — same series as the print edition.
+        self.assertEqual(doc.count('epub:type="noteref"'), 1)
+        self.assertIn('the paper (<a class="linknote-url" '
+                      'href="https://note.example/p">', doc)
+        ET.parse(io.BytesIO(doc.encode("utf-8")))  # stays well-formed XHTML
+
 
 class InDesignIntegrationTests(unittest.TestCase):
     def _icml(self, **kwargs):
@@ -185,6 +255,17 @@ class InDesignIntegrationTests(unittest.TestCase):
         self.assertNotIn("<Footnote>", icml)
         self.assertNotIn("https://a.example/p", icml)
 
+    def test_footnote_link_unfolds_inside_native_footnote(self):
+        book = make_book([Chapter(title="One", html=FOOTNOTED)])
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = os.path.join(tmp.name, "t.icml")
+        write_icml(book, path)
+        with open(path, encoding="utf-8") as fh:
+            icml = fh.read()
+        self.assertIn("<Footnote>", icml)
+        self.assertIn("https://note.example/p", icml)
+
 
 class WiringTests(unittest.TestCase):
     def test_cli_flag_exists(self):
@@ -198,10 +279,12 @@ class WiringTests(unittest.TestCase):
             css = themes.print_css(theme=theme)
             self.assertIn("span.linknote {", css)
             self.assertIn("span.linknote::footnote-call { content: none; }", css)
+            self.assertIn("a.linknote-url { overflow-wrap: anywhere; }", css)
 
     def test_epub_css_has_linknote_rules(self):
         css = themes.epub_css()
         self.assertIn("aside.linknote", css)
+        self.assertIn("a.linknote-url { overflow-wrap: anywhere;", css)
 
 
 if __name__ == "__main__":

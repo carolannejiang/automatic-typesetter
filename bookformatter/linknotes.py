@@ -28,7 +28,12 @@ The rule renders three ways, one per output medium:
 
 Only external web links (http/https) are converted. Fragment references,
 ``mailto:`` and friends are left alone, as are links inside headings (their
-text feeds the running heads) and links inside an existing note.
+text feeds the running heads). A link that already sits inside a note — a
+content footnote (``span.footnote``) or an endnote list (any ancestor whose
+class or id reads note-ish, the same notion footnotes.py matches) — must
+not spawn a note on a note; instead, in every mode, its destination unfolds
+in place: the linked text stays, followed by the URL in parentheses, so the
+address still reaches the page inside the note itself.
 """
 
 from __future__ import annotations
@@ -36,6 +41,9 @@ from __future__ import annotations
 import re
 
 from . import htmldom
+# The same id/class heuristic footnotes.py uses to recognize notes, so the
+# two passes agree on what "inside a footnote" means.
+from .footnotes import _NOTE_HINT
 from .htmldom import Node
 
 PREFIX = "L"
@@ -43,25 +51,36 @@ PREFIX = "L"
 _WEB_SCHEME = re.compile(r"^https?://", re.I)
 
 # Ancestors whose links are never converted: heading text is copied into
-# running heads via string-set, and a note must not spawn a nested note.
+# running heads via string-set, and this module's own notes (class
+# ``linknote``) must not be reprocessed on a later pass.
 _HEADING_TAGS = {"h1", "h2", "h3", "h4", "h5", "h6"}
-_NOTE_CLASS = re.compile(r"(?:^|\s)(?:foot|link)note(?:$|\s)")
+_LINKNOTE_CLASS = re.compile(r"(?:^|\s)linknote(?:$|\s)")
+_URL_CLASS = re.compile(r"(?:^|\s)linknote-url(?:$|\s)")
 
 
 def annotate_links(fragment: str, start: int = 1, mode: str = "inline"):
     """Rewrite external links in a body fragment into link notes.
 
     Returns ``(html, next_number)`` so callers can thread one continuous
-    L series across chapters. The fragment comes back unchanged when it
-    holds no convertible links.
+    L series across chapters. A link already inside a note unfolds its URL
+    in parentheses in place, consuming no L number. The fragment comes back
+    unchanged when it holds no convertible links.
     """
     root = htmldom.parse(fragment)
-    anchors = [a for a in root.find_all("a") if _convertible(a)]
-    if not anchors:
+    calls, in_note = [], []
+    for a in root.find_all("a"):
+        kind = _classify(a)
+        if kind == "call":
+            calls.append(a)
+        elif kind == "note":
+            in_note.append(a)
+    if not calls and not in_note:
         return fragment, start
+    for a in in_note:
+        _unfold_in_note(a)
     number = start
     asides = []
-    for a in anchors:
+    for a in calls:
         label = f"{PREFIX}{number}"
         href = (a.get("href") or "").strip()
         nodes, trailing = _unwrapped_content(a)
@@ -96,19 +115,44 @@ def annotate_links(fragment: str, start: int = 1, mode: str = "inline"):
     return htmldom.inner_html(root), number
 
 
-def _convertible(a: Node) -> bool:
+def _classify(a: Node):
+    """``"call"`` for a link to convert into an L note, ``"note"`` for one
+    that must instead unfold inside the note it already sits in, ``None``
+    to leave alone."""
     if not _WEB_SCHEME.match((a.get("href") or "").strip()):
-        return False
+        return None
+    if _URL_CLASS.search(a.get("class") or ""):
+        return None  # a URL anchor this module placed on an earlier pass
+    in_note = False
     node = a.parent
     while node is not None:
         if not node.is_text:
             if node.tag in _HEADING_TAGS:
-                return False
-            if node.tag in ("span", "aside") \
-                    and _NOTE_CLASS.search(node.get("class") or ""):
-                return False
+                return None
+            if _LINKNOTE_CLASS.search(node.get("class") or ""):
+                return None
+            if _NOTE_HINT.search(node.get("class") or "") \
+                    or _NOTE_HINT.search(node.get("id") or ""):
+                in_note = True
         node = node.parent
-    return True
+    return "note" if in_note else "call"
+
+
+def _unfold_in_note(a: Node) -> None:
+    """A note must not spawn a nested note, but the page still needs the
+    address: the linked text stays, with the destination unfolded after it
+    in parentheses — itself the live link. A link whose text already is the
+    bare URL just becomes the live anchor, sparing redundant parentheses."""
+    href = (a.get("href") or "").strip()
+    bare = a.text_content().strip() == href
+    nodes, trailing = _unwrapped_content(a)
+    if bare:
+        nodes = [_url_anchor(href)]
+    else:
+        nodes.extend([Node(text=" ("), _url_anchor(href), Node(text=")")])
+    if trailing:
+        nodes.append(Node(text=trailing))
+    _replace_with(a, nodes)
 
 
 def _unwrapped_content(a: Node):

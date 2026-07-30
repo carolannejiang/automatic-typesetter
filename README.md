@@ -180,7 +180,9 @@ Paged Media:
   link keeps its text and gains a small `L1`, `L2`, … call, with the
   destination URL set as a matching note at the foot of the page (a live
   link in the PDF). The L series is separate from content footnotes, which
-  keep their own 1, 2, 3; `--no-link-notes` turns the rule off
+  keep their own 1, 2, 3. A link quoted *inside* a footnote spawns no
+  note-on-a-note: its URL unfolds in parentheses right there in the note,
+  in every output format. `--no-link-notes` turns the rule off
 - `* * *` scene-break ornaments for `---`/`<hr>`, styled blockquotes,
   tables, figures with captions, code blocks
 
