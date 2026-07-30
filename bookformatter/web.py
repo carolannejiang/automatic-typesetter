@@ -698,6 +698,19 @@ ul.warnings { color: var(--warn); font-size: 0.85rem; padding-left: 1.2rem; }
 }
 .downloads a strong { color: var(--accent); }
 footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 2.5rem; }
+/* Drop a bare checkbox down to line up with the labelled inputs beside it. */
+.fetch-full { margin-top: 1.9rem; }
+/* Phones: reclaim horizontal room, stack paired fields, fatten tap targets. */
+@media (max-width: 560px) {
+  .wrap { padding: 1.25rem 0.9rem 3rem; }
+  header.masthead { margin-bottom: 1.25rem; }
+  header.masthead h1 { font-size: 1.4rem; }
+  .card { padding: 1.15rem 1.05rem; border-radius: 10px; }
+  .row > div { flex-basis: 100%; }
+  .checks { flex-direction: column; gap: 0.7rem; }
+  .fetch-full { margin-top: 0.3rem; }
+  .downloads a { flex: 1 1 100%; text-align: center; }
+}
 </style>
 </head>
 <body>
@@ -824,7 +837,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
             </select></div>
           <div><label for="max_items">Max posts (0 = all)</label>
             <input type="text" id="max_items" name="max_items" value="0"></div>
-          <div><label style="margin-top:1.9rem"><input type="checkbox" name="fetch_full"> Fetch full post pages
+          <div><label class="fetch-full"><input type="checkbox" name="fetch_full"> Fetch full post pages
             (for truncated feeds)</label></div>
         </div>
         <div class="checks" style="margin-top:0.9rem">
