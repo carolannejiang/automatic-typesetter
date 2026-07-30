@@ -5,13 +5,21 @@ import xml.etree.ElementTree as ET
 import zipfile
 import io
 
-from bookformatter.cli import main
+from bookformatter.cli import build_parser, main
 
 CHAPTERS = {
     "01-morning.md": "# Morning\n\nThe kettle ticked as it warmed, and the house stayed quiet.\n",
     "02-noon.md": "# Noon\n\nBy noon the light had flattened everything into fact.\n",
     "03-night.md": "# Night\n\n> Night is a room.\n\nAnd we live in it, mostly asleep.\n",
 }
+
+
+class FetchFullFlagTests(unittest.TestCase):
+    def test_tristate(self):
+        parser = build_parser()
+        self.assertIsNone(parser.parse_args(["in.md"]).fetch_full)
+        self.assertIs(parser.parse_args(["in.md", "--fetch-full"]).fetch_full, True)
+        self.assertIs(parser.parse_args(["in.md", "--no-fetch-full"]).fetch_full, False)
 
 
 class CliEndToEndTests(unittest.TestCase):
