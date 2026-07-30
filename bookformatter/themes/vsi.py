@@ -97,14 +97,19 @@ from . import base
 
 NAME = "vsi"
 
-# Longest title (chars) the title page holds at full size on its
-# tightest supported trim; longer titles are scaled down to fit
-# (see themes.print_css).
+# Longest title (chars) the title page holds at full size, measured on
+# the calibration page (TITLE_FIT_TRIM / TITLE_FIT_SIZE, default 5x8 at
+# 11pt); longer titles are scaled down to fit (see themes.print_css).
 TITLE_FIT_CHARS = 23
+TITLE_FIT_TRIM = "vsi"
+TITLE_FIT_SIZE = "8.5pt"
 
-# The page this design was measured on (base.TRIM_SIZES["vsi"], 111 x 174 mm);
-# the CLI and web form fall back to it when the theme is chosen without a trim.
+# The page and text setting this design was measured on (base.TRIM_SIZES
+# ["vsi"], 111 x 174 mm; 8.5/12 pt body); the CLI and web form fall back to
+# them when the theme is chosen without a trim or size.
 DEFAULT_TRIM = "vsi"
+DEFAULT_FONT_SIZE = "8.5pt"
+DEFAULT_LINE_HEIGHT = "1.41"
 
 # ---------------------------------------------------------------- fonts ----
 # Miller Text is commercial; Georgia is the closest widely installed Scotch

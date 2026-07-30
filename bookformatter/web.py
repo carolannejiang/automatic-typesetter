@@ -226,8 +226,10 @@ def run_build(params: dict, uploads: list, workdir: str,
     toc = _first(params, "no_toc") != "on"
     footnotes = _first(params, "no_footnotes") != "on"
     link_notes = _first(params, "no_link_notes") != "on"
-    font_size = _clean_size(_first(params, "font_size"), "11pt", _FONT_SIZE_RE)
-    line_height = _clean_size(_first(params, "line_height"), "1.45", _LINE_HEIGHT_RE)
+    font_size = _clean_size(_first(params, "font_size"),
+                            themes.default_font_size(theme), _FONT_SIZE_RE)
+    line_height = _clean_size(_first(params, "line_height"),
+                              themes.default_line_height(theme), _LINE_HEIGHT_RE)
     pdf_engine = _first(params, "pdf_engine", "auto")
     if pdf_engine not in ("auto", "weasyprint", "chrome", "none"):
         pdf_engine = "auto"
@@ -782,9 +784,9 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
         <summary>Fine print — typography, chapters, images, feeds, engine</summary>
         <div class="row">
           <div><label for="font_size">Body size (print)</label>
-            <input type="text" id="font_size" name="font_size" placeholder="11pt"></div>
+            <input type="text" id="font_size" name="font_size" placeholder="theme default"></div>
           <div><label for="line_height">Leading (line height)</label>
-            <input type="text" id="line_height" name="line_height" placeholder="1.45"></div>
+            <input type="text" id="line_height" name="line_height" placeholder="theme default"></div>
           <div><label for="pdf_engine">PDF engine</label>
             <select id="pdf_engine" name="pdf_engine">
               <option value="auto">Auto (WeasyPrint, else Chrome)</option>

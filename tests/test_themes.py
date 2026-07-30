@@ -1,4 +1,5 @@
 import os
+import re
 import tempfile
 import unittest
 import zipfile
@@ -186,6 +187,73 @@ class ThemeBuildTests(unittest.TestCase):
                 chapter = zf.read("OEBPS/text/chapter-001.xhtml").decode()
         self.assertIn("classical overrides", css)
         self.assertIn('<span class="chapter-number">Chapter 1</span>', chapter)
+
+
+class TitleFitTests(unittest.TestCase):
+    """The title page holds exactly one leaf: long titles scale to fit."""
+
+    LONG = ("An Exceedingly Long and Ponderous Chronicle of the Rise and "
+            "Fall of Nearly Everything That Ever Mattered " * 6).strip()
+
+    @staticmethod
+    def _scale(css):
+        m = re.search(r"section\.titlepage \{ font-size: ([0-9.]+)em; \}", css)
+        return float(m.group(1)) if m else None
+
+    def test_one_leaf_clamp_is_universal(self):
+        for theme in themes.THEME_NAMES:
+            css = themes.print_css(theme=theme, book_title="Field Notes")
+            self.assertIn("continue: discard;", css)
+            self.assertRegex(css, r"section\.titlepage \{\n  height: [0-9.]+in;")
+
+    def test_short_title_keeps_full_size(self):
+        css = themes.print_css(theme="classic", book_title="Field Notes")
+        self.assertIsNone(self._scale(css))
+
+    def test_long_title_scales_down_in_every_theme(self):
+        for theme in themes.THEME_NAMES:
+            css = themes.print_css(theme=theme, trim=themes.default_trim(theme),
+                                   book_title=self.LONG)
+            scale = self._scale(css)
+            self.assertIsNotNone(scale, theme)
+            self.assertLess(scale, 1.0, theme)
+            self.assertGreater(scale, 0.0, theme)
+
+    def test_longer_titles_scale_smaller(self):
+        shorter = self._scale(themes.print_css(theme="classic", book_title=self.LONG))
+        longer = self._scale(themes.print_css(theme="classic", book_title=self.LONG * 3))
+        self.assertLess(longer, shorter)
+
+    def test_roomier_trim_scales_less(self):
+        tight = self._scale(themes.print_css(theme="classic", trim="5x8",
+                                             book_title=self.LONG))
+        roomy = self._scale(themes.print_css(theme="classic", trim="6x9",
+                                             book_title=self.LONG))
+        self.assertGreater(roomy, tight)
+
+    def test_smaller_body_type_scales_less(self):
+        big = self._scale(themes.print_css(theme="classic", font_size="11pt",
+                                           book_title=self.LONG))
+        small = self._scale(themes.print_css(theme="classic", font_size="9pt",
+                                             book_title=self.LONG))
+        self.assertGreater(small, big)
+
+    def test_long_subtitle_counts_toward_the_fit(self):
+        css = themes.print_css(theme="classic", book_title="Field Notes",
+                               book_subtitle=self.LONG * 3)
+        self.assertIsNotNone(self._scale(css))
+
+
+class DefaultTypeTests(unittest.TestCase):
+    def test_pocket_themes_declare_their_design_setting(self):
+        for theme in ("vsi", "short intro"):
+            self.assertEqual(themes.default_font_size(theme), "8.5pt")
+            self.assertEqual(themes.default_line_height(theme), "1.41")
+
+    def test_other_themes_default_to_house_setting(self):
+        for theme in ("classic", "nonsense"):
+            self.assertEqual(themes.default_font_size(theme), "11pt")
+            self.assertEqual(themes.default_line_height(theme), "1.45")
 
 
 if __name__ == "__main__":
