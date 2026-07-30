@@ -173,7 +173,9 @@ section.titlepage .book-title { margin-top: 15%; }
    of its L call; others render them as a note list at the chapter's end. */
 aside.linknote { font-size: 0.85em; margin: 0.4em 0; }
 aside.linknote p { text-indent: 0; margin: 0; }
-aside.linknote a.linknote-url { overflow-wrap: anywhere; word-break: break-all; }
+/* Bare selector: the URL anchor also appears parenthesized inside content
+   footnotes, where links unfold in place rather than gaining an L note. */
+a.linknote-url { overflow-wrap: anywhere; word-break: break-all; }
 """
 )
 
@@ -292,7 +294,20 @@ span.linknote {
 }
 span.linknote::footnote-call { content: none; }
 span.linknote::footnote-marker { content: none; }
-span.linknote a.linknote-url { overflow-wrap: anywhere; }
+/* Bare selector: a link already inside a content footnote unfolds its URL
+   in parentheses within that note (span.footnote), not as an L note. */
+a.linknote-url { overflow-wrap: anywhere; }
+
+/* On screen the paged machinery is inert (float:footnote, @page), so the
+   same file doubles as a proof when opened in a browser before printing:
+   notes read as bracketed inline asides instead of raw runs of small
+   text. Print engines use the print medium and never see this block. */
+@media screen {
+  span.footnote, span.linknote { font-size: 0.82em; color: #444; }
+  span.footnote::before, span.linknote::before { content: " [ "; color: #999; }
+  span.footnote::after, span.linknote::after { content: " ]"; color: #999; }
+  span.linknote .linknote-label { font-weight: 600; }
+}
 """
 )
 

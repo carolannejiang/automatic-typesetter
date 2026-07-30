@@ -73,6 +73,21 @@ move or send it. If InDesign reports missing links, open the Links panel,
 **Relink** the first one to the `images/` folder with **"Search for
 Missing Links in This Folder"** checked — one operation fixes all of them.
 
+## Footnotes and link notes
+
+Content footnotes arrive as **real InDesign footnotes**, numbered by your
+document's footnote settings (**Type → Document Footnote Options** owns
+numbering style and restarts). Because print can't be clicked, every
+external hyperlink also arrives as a footnote: the linked text stays in
+the body and the destination URL sits in a footnote right after it. These
+URL notes join the same numbering as the content footnotes here — InDesign
+numbers all footnotes itself, so the `L1`, `L2`, … series the other output
+formats use doesn't apply. A link quoted *inside* a content footnote shows
+its URL in parentheses within that note instead, and email links unfold
+their address in parentheses right in the text. Exporting with
+`--no-link-notes` (or the web UI checkbox) drops the URL notes and keeps
+plain linked text.
+
 ## Table of contents and running heads
 
 There is deliberately no baked-in TOC — page numbers only exist after

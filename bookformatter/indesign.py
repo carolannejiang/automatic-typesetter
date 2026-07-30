@@ -296,10 +296,11 @@ class ImageRun:
 
 
 class FootnoteRun:
-    __slots__ = ("paras",)
+    __slots__ = ("paras", "label")
 
-    def __init__(self, paras):
+    def __init__(self, paras, label=None):
         self.paras = paras
+        self.label = label  # custom mark (link notes in docx); None = auto
 
 
 class Para:
@@ -481,7 +482,9 @@ class _Converter:
             runs = [r for r in self._inline(group) if isinstance(r, TextRun)]
             if _has_substance(runs):
                 paras.append(Para("Footnote Text", runs))
-        return FootnoteRun(paras) if paras else None
+        if not paras:
+            return None
+        return FootnoteRun(paras, label=span.get("data-label"))
 
     # -- block content -------------------------------------------------------
 
@@ -606,12 +609,15 @@ def _copyright_lines(book: Book) -> list:
 
 def book_to_story_items(book: Book, theme: str = "classic",
                         chapter_numbers: bool = True,
-                        converter_cls=None, link_notes: bool = True) -> list:
+                        converter_cls=None, link_notes: bool = True,
+                        link_note_mode: str = "native") -> list:
     """The whole book as a flat list of Para items: front matter, then the
     chapters. Chapter openers carry start="NextOddPage" (write_idml maps that
     to "NextPage" when chapter_start is not "right"). converter_cls swaps in
     a _Converter subclass (the docx writer keeps links, lists, and tables
-    that InDesign interchange flattens)."""
+    that InDesign interchange flattens); link_note_mode picks the
+    annotate_links flavor ("native" for InDesign, "word" for docx, whose
+    L labels thread one series across chapters)."""
     meta = book.meta
     assets = {a.filename: a for a in book.assets}
 
@@ -626,10 +632,12 @@ def book_to_story_items(book: Book, theme: str = "classic",
         items.append(Para("Copyright", [TextRun(line)],
                           start="NextPage" if i == 0 else None))
 
+    next_link_note = 1
     for number, chapter in enumerate(book.chapters, 1):
         markup = footnotes.inline_footnotes(chapter.html)
         if link_notes:
-            markup, _ = annotate_links(markup, mode="native")
+            markup, next_link_note = annotate_links(
+                markup, start=next_link_note, mode=link_note_mode)
         root = htmldom.parse(markup)
         opener: list = []
         title_attrs = None

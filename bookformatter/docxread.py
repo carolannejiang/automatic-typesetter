@@ -101,6 +101,9 @@ _SCENE_TEXT = re.compile(r"^[\s*•◦⁂#~–—-]{3,}$")
 
 _MONO_FONT = re.compile(r"consolas|courier|menlo|monaco|mono", re.I)
 
+# The custom mark docx.py gives a link-note footnote (linknotes.py L series).
+_LINKNOTE_MARK = re.compile(r"^L\d+$")
+
 _TAG_STRIP = re.compile(r"<[^>]+>")
 
 _OFF_VALUES = {"0", "false", "none", "off"}
@@ -278,6 +281,14 @@ class _Reader:
         return tags
 
     def _run_html(self, run, rels, part: str) -> str:
+        ref = run.find(f"{_W}footnoteReference")
+        if ref is not None and ref.get(f"{_W}customMarkFollows") in ("1", "true"):
+            mark = "".join(t.text or "" for t in run.findall(f"{_W}t"))
+            if _LINKNOTE_MARK.match(mark):
+                # A link note this tool wrote (docx.py): the hyperlink before
+                # it already carries the URL, so drop the call, its mark, and
+                # (by never pulling it) the note itself.
+                return ""
         parts = []
         for el in run:
             tag = el.tag

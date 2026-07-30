@@ -192,15 +192,31 @@ class DocxTests(unittest.TestCase):
     # -- footnotes ----------------------------------------------------------
 
     def test_footnote_moves_to_real_note(self):
-        refs = [el.get(f"{W}id")
-                for el in self.doc.iter(f"{W}footnoteReference")]
-        self.assertEqual(len(refs), 1)
+        # Two references: the link note for "living link" (custom L mark)
+        # and the content footnote (auto-numbered).
+        refs = list(self.doc.iter(f"{W}footnoteReference"))
+        auto = [r for r in refs if r.get(f"{W}customMarkFollows") is None]
+        self.assertEqual(len(auto), 1)
         notes = {n.get(f"{W}id"): n for n in self.footnotes.iter(f"{W}footnote")}
-        self.assertIn(refs[0], notes)
-        self.assertIn("The buried footnote text", _texts(notes[refs[0]]))
+        self.assertIn(auto[0].get(f"{W}id"), notes)
+        self.assertIn("The buried footnote text",
+                      _texts(notes[auto[0].get(f"{W}id")]))
         kinds = {n.get(f"{W}type") for n in notes.values()}
         self.assertIn("separator", kinds)
         self.assertIn("continuationSeparator", kinds)
+
+    def test_link_note_is_custom_marked_subscript_footnote(self):
+        refs = [r for r in self.doc.iter(f"{W}footnoteReference")
+                if r.get(f"{W}customMarkFollows") is not None]
+        self.assertEqual(len(refs), 1)
+        run = next(r for r in self.doc.iter(f"{W}r")
+                   if r.find(f"{W}footnoteReference") is refs[0])
+        self.assertEqual(_texts(run), "L1")  # the visible call
+        vert = run.find(f"{W}rPr/{W}vertAlign")
+        self.assertEqual(vert.get(f"{W}val"), "subscript")
+        notes = {n.get(f"{W}id"): n for n in self.footnotes.iter(f"{W}footnote")}
+        note_text = _texts(notes[refs[0].get(f"{W}id")])
+        self.assertEqual(note_text, "L1 https://example.com/ref")
 
     # -- images -------------------------------------------------------------
 
@@ -228,18 +244,27 @@ class DocxTests(unittest.TestCase):
         self.assertEqual(rstyle.get(f"{W}val"), "Hyperlink")
 
     def test_hyperlink_inside_footnote_resolves_in_note_part(self):
-        links = list(self.footnotes.iter(f"{W}hyperlink"))
-        self.assertEqual(len(links), 1)
-        self.assertEqual(_texts(links[0]), "the source")
+        # The content footnote's link unfolds in parentheses (its URL is the
+        # live anchor); the L note holds the body link's URL. Both resolve
+        # against the footnotes part's own relationship file.
         note_rels = {
             rel.get("Id"): rel
             for rel in ET.fromstring(
                 self.parts["word/_rels/footnotes.xml.rels"]
             ).iter(f"{REL}Relationship")
         }
-        rel = note_rels[links[0].get(f"{R}id")]
-        self.assertEqual(rel.get("Target"), "https://example.com/note")
-        self.assertEqual(rel.get("TargetMode"), "External")
+        targets = {}
+        for link in self.footnotes.iter(f"{W}hyperlink"):
+            rel = note_rels[link.get(f"{R}id")]
+            self.assertEqual(rel.get("TargetMode"), "External")
+            targets[rel.get("Target")] = _texts(link)
+        self.assertEqual(targets, {
+            "https://example.com/note": "https://example.com/note",
+            "https://example.com/ref": "https://example.com/ref",
+        })
+        note_texts = " ".join(_texts(n)
+                              for n in self.footnotes.iter(f"{W}footnote"))
+        self.assertIn("the source (https://example.com/note)", note_texts)
 
     # -- lists --------------------------------------------------------------
 

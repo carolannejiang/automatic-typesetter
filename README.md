@@ -152,7 +152,12 @@ chapters; References → Table of Contents just works), body/quote/
 code/caption formatting rides on named styles derived from the chosen
 theme (restyle the book by editing a style), footnotes are real Word
 footnotes that renumber as you edit, lists and tables are native,
-hyperlinks stay live, images are embedded. Page size and mirrored
+images are embedded. Hyperlinks stay live *and* each external link
+carries its `L1`, `L2`, … URL note as a real footnote with a custom
+mark — Word keeps custom-marked notes out of the automatic numbering,
+so content footnotes stay an unbroken 1, 2, 3 (`--no-link-notes` keeps
+plain hyperlinks only; feeding the file back in folds the L notes back
+out). Page size and mirrored
 margins follow the chosen trim, so the page count roughly tracks the
 print edition. Edit it, then either export from Word directly (KDP
 accepts .docx) — or simply feed the edited file back in:
@@ -180,7 +185,14 @@ Paged Media:
   link keeps its text and gains a small `L1`, `L2`, … call, with the
   destination URL set as a matching note at the foot of the page (a live
   link in the PDF). The L series is separate from content footnotes, which
-  keep their own 1, 2, 3; `--no-link-notes` turns the rule off
+  keep their own 1, 2, 3. A link quoted *inside* a footnote spawns no
+  note-on-a-note: its URL unfolds in parentheses right there in the note,
+  in every output format — and a `mailto:` link unfolds the same way in
+  the text (`write to Jane (jane@x.com)`), an address being short enough
+  to read in line. `--no-link-notes` turns the rule off
+- opened in a browser on screen (before printing), footnotes and link
+  notes render as bracketed inline asides, so the same file doubles as a
+  proof
 - `* * *` scene-break ornaments for `---`/`<hr>`, styled blockquotes,
   tables, figures with captions, code blocks
 
