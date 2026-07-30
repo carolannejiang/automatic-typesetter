@@ -1,12 +1,16 @@
 import base64
 import os
 import tempfile
+import threading
+import time
 import unittest
 from unittest import mock
 
 from bookformatter import fetch
-from bookformatter.ingest import (IngestOptions, _host, _looks_like_index_url,
-                                  _match_feed_item, ingest)
+from bookformatter.ingest import (IngestOptions, PER_HOST_FETCHES,
+                                  _fetch_parallel, _host,
+                                  _looks_like_index_url, _match_feed_item,
+                                  ingest)
 from bookformatter.feeds import FeedItem
 
 PNG_1PX = base64.b64decode(
@@ -570,6 +574,59 @@ class UrlIngestTests(unittest.TestCase):
         result = self._ingest(fake, "https://blog.example/feed")
         self.assertEqual(len(result.chapters), 1)
         self.assertIn("reasonably long paragraph", result.chapters[0].html)
+
+    def test_no_fetch_full_keeps_feed_text(self):
+        page = f"""<html><head><title>First Post</title></head>
+        <body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>"""
+        fake = _FakeWeb({
+            "https://blog.example/feed": (self._summary_feed(), "application/rss+xml"),
+            "https://blog.example/posts/first": (page, "text/html"),
+        })
+        result = self._ingest(fake, "https://blog.example/feed", fetch_full=False)
+        self.assertEqual(len(result.chapters), 1)
+        self.assertIn("never gets to the argument", result.chapters[0].html)
+        self.assertEqual(fake.requested, ["https://blog.example/feed"])
+
+    def test_off_domain_feed_uses_items_common_host(self):
+        # FeedPress-style: the feed and its channel link live on the feed
+        # service's domain, but every item links to the blog itself.
+        feed_xml = """<?xml version="1.0" encoding="UTF-8"?>
+        <rss version="2.0"><channel><title>Example Blog</title>
+        <link>https://feedpress.example/exampleblog</link>
+        <item><title>One</title><link>https://blog.example/posts/one</link>
+          <description>%s</description></item>
+        <item><title>Two</title><link>https://blog.example/posts/two</link>
+          <description>%s</description></item>
+        </channel></rss>""" % (self.TEASER, self.TEASER)
+        page = f"""<html><head><title>Post</title></head>
+        <body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>"""
+        fake = _FakeWeb({
+            "https://feedpress.example/exampleblog": (feed_xml, "application/rss+xml"),
+            "https://blog.example/posts/one": (page, "text/html"),
+            "https://blog.example/posts/two": (page, "text/html"),
+        })
+        result = self._ingest(fake, "https://feedpress.example/exampleblog")
+        self.assertEqual(len(result.chapters), 2)
+        for chapter in result.chapters:
+            self.assertIn("reasonably long paragraph", chapter.html)
+
+    def test_fetch_parallel_caps_concurrency_per_host(self):
+        lock = threading.Lock()
+        active = {"now": 0, "peak": 0}
+
+        def slow_fetch(u):
+            with lock:
+                active["now"] += 1
+                active["peak"] = max(active["peak"], active["now"])
+            time.sleep(0.02)
+            with lock:
+                active["now"] -= 1
+            return u
+
+        urls = [f"https://one.example/p{i}" for i in range(12)]
+        results = _fetch_parallel(urls, slow_fetch, "x", IngestOptions())
+        self.assertEqual(len(results), 12)
+        self.assertLessEqual(active["peak"], PER_HOST_FETCHES)
 
     def test_host_normalization(self):
         self.assertEqual(_host("https://www.Example.com/feed"), "example.com")

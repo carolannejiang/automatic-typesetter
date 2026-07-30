@@ -31,7 +31,7 @@ That's it: `https://book.carolanne.link` is live.
 Hosted limits to know about: each build must finish inside the function's
 window (60 s as configured in `vercel.json`; on plans with Fluid compute
 you can raise `maxDuration` to 300) — post pages are fetched eight at a
-time, but a huge blog with "fetch full posts" (automatic for summary-only
+time (at most four per site), but a huge blog with "fetch full posts" (automatic for summary-only
 feeds) may still need a smaller "max posts" or the CLI instead. Request bodies
 (uploads) cap at ~4.5 MB on Vercel. Nothing is stored server-side; the
 book streams straight back. The SSRF guard is always on, and Vercel's

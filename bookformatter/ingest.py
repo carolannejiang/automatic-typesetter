@@ -11,6 +11,7 @@ import hashlib
 import os
 import re
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Callable, Optional
@@ -32,7 +33,8 @@ class IngestOptions:
     images: str = "download"     # download | link | strip
     order: str = "auto"          # auto | keep | asc | desc
     max_items: int = 0           # 0 = no limit (feeds)
-    fetch_full: bool = False     # feeds: fetch every item's page, even full-looking ones
+    fetch_full: Optional[bool] = None  # None: fetch truncated items' pages;
+                                       # True: every item; False: never
     verbose: bool = False
     progress: Optional[Callable] = None  # called with status messages (web UI)
 
@@ -244,13 +246,27 @@ def _has_img(html_text: str) -> bool:
         for img in htmldom.parse(html_text).find_all("img"))
 
 
+# Concurrent connections per host — most of a build hits one blog, and
+# eight parallel requests to a small site is impolite.
+PER_HOST_FETCHES = 4
+
+
 def _fetch_parallel(urls: list, fetch_one, label: str, opts: IngestOptions) -> dict:
-    """Run fetch_one over URLs concurrently: {url: result or FetchError}."""
+    """Run fetch_one over URLs concurrently: {url: result or FetchError}.
+    At most PER_HOST_FETCHES requests run against any one host at a time."""
     results: dict = {}
     if not urls:
         return results
+    gates: dict = {}
+    for u in urls:
+        gates.setdefault(_host(u), threading.Semaphore(PER_HOST_FETCHES))
+
+    def polite(u):
+        with gates[_host(u)]:
+            return fetch_one(u)
+
     with ThreadPoolExecutor(max_workers=min(8, len(urls))) as pool:
-        futures = {pool.submit(fetch_one, u): u for u in urls}
+        futures = {pool.submit(polite, u): u for u in urls}
         for done, future in enumerate(as_completed(futures), 1):
             try:
                 results[futures[future]] = future.result()
@@ -303,6 +319,14 @@ def _ingest_feed(url: str, feed: feeds.Feed, opts: IngestOptions,
     # actually land in the book, not raw feed markup (share-link blocks and
     # tracking pixels inflate the raw text; clean_fragment strips them).
     site_host = _host(feed.link) or _host(url)
+    # FeedPress-style feeds live off-domain: the channel link names the
+    # feed host, not the blog. When every item links to one other host,
+    # that host is the blog. (A link blog's items scatter across hosts.)
+    item_hosts = {h for h in (_host(it.link) for it in feed.items) if h}
+    linked = [it.link for it in feed.items if it.link]
+    if (len(item_hosts) == 1 and len(linked) >= 2
+            and not _same_site(linked[0], site_host)):
+        site_host = item_hosts.pop()
     cleaned_items, item_lens, page_links = [], [], []
     for item in items:
         cleaned = extract.clean_fragment(item.html or "", base_url=item.link or url)
@@ -313,8 +337,8 @@ def _ingest_feed(url: str, feed: feeds.Feed, opts: IngestOptions,
         # post's page; "fetching the full text" from it yields junk.
         link_ok = (item.link and item.link.rstrip("/") != url.rstrip("/")
                    and not _looks_like_index_url(item.link))
-        wants_page = link_ok and (opts.fetch_full or (
-            auto_full and item_len < SUMMARY_LEN
+        wants_page = link_ok and (opts.fetch_full is True or (
+            auto_full and opts.fetch_full is None and item_len < SUMMARY_LEN
             and _same_site(item.link, site_host)))
         page_links.append(item.link if wants_page else "")
     to_fetch = list(dict.fromkeys(link for link in page_links if link))
@@ -343,7 +367,7 @@ def _ingest_feed(url: str, feed: feeds.Feed, opts: IngestOptions,
                 doc = extract.extract_article(page_text, base_url=final_url)
                 doc_len = _visible_len(doc.html)
                 if _page_wins(doc.html, doc_len, html_text, item_len,
-                              opts.fetch_full):
+                              opts.fetch_full is True):
                     html_text = doc.html  # already absolutized + cleaned
                     final_len = doc_len
                 elif looks_truncated and doc_len < NEAR_EMPTY_LEN:

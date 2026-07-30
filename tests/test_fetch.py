@@ -1,4 +1,7 @@
+import http.server
+import threading
 import unittest
+from unittest import mock
 
 from bookformatter import fetch
 
@@ -38,6 +41,100 @@ class MalformedUrlTests(unittest.TestCase):
     def test_relative_url(self):
         with self.assertRaises(fetch.FetchError):
             fetch.fetch("posts/first.html")
+
+
+class RetryTests(unittest.TestCase):
+    def test_transient_503_retried(self):
+        calls = []
+
+        def raw(url, timeout):
+            calls.append(url)
+            if len(calls) == 1:
+                return 503, "Service Unavailable", {"Retry-After": "2"}, b""
+            return 200, "OK", {"Content-Type": "text/plain"}, b"recovered"
+
+        with mock.patch.object(fetch, "_raw_get", raw), \
+                mock.patch.object(fetch.time, "sleep") as slept:
+            data, ctype, final = fetch.fetch("http://blog.example/rate-limited")
+        self.assertEqual(data, b"recovered")
+        self.assertEqual(len(calls), 2)
+        slept.assert_called_once_with(2)  # server's Retry-After honored
+
+    def test_transient_failure_gives_up_after_retries(self):
+        calls = []
+
+        def raw(url, timeout):
+            calls.append(url)
+            return 429, "Too Many Requests", {}, b""
+
+        with mock.patch.object(fetch, "_raw_get", raw), \
+                mock.patch.object(fetch.time, "sleep"):
+            with self.assertRaises(fetch.FetchError) as ctx:
+                fetch.fetch("http://blog.example/always-limited")
+        self.assertIn("HTTP Error 429", str(ctx.exception))
+        self.assertEqual(len(calls), 1 + len(fetch.RETRY_DELAYS))
+
+    def test_404_not_retried(self):
+        calls = []
+
+        def raw(url, timeout):
+            calls.append(url)
+            return 404, "Not Found", {}, b""
+
+        with mock.patch.object(fetch, "_raw_get", raw):
+            with self.assertRaises(fetch.FetchError) as ctx:
+                fetch.fetch("http://blog.example/missing")
+        self.assertIn("HTTP Error 404", str(ctx.exception))
+        self.assertEqual(len(calls), 1)
+
+
+class _CountingHandler(http.server.BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"  # keep-alive
+    connections: list = []
+
+    def setup(self):
+        type(self).connections.append(self.client_address)
+        super().setup()
+
+    def do_GET(self):
+        if self.path == "/redirect":
+            self.send_response(302)
+            self.send_header("Location", "/landing")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        body = b"<p>hello from " + self.path.encode() + b"</p>"
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, fmt, *args):
+        pass
+
+
+class KeepAliveTests(unittest.TestCase):
+    def setUp(self):
+        _CountingHandler.connections = []
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _CountingHandler)
+        self.port = self.server.server_address[1]
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+    def test_sequential_fetches_reuse_one_connection(self):
+        for i in range(3):
+            data, _, _ = fetch.fetch(f"http://127.0.0.1:{self.port}/page-{i}")
+            self.assertIn(b"hello from /page-", data)
+        self.assertEqual(len(_CountingHandler.connections), 1)
+
+    def test_redirects_followed(self):
+        data, _, final = fetch.fetch(f"http://127.0.0.1:{self.port}/redirect")
+        self.assertIn(b"hello from /landing", data)
+        self.assertTrue(final.endswith("/landing"))
 
 
 class DecodeBodyTests(unittest.TestCase):

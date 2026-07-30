@@ -1,4 +1,11 @@
-"""HTTP fetching via urllib (honors HTTP(S)_PROXY from the environment)."""
+"""HTTP fetching over per-thread keep-alive connections.
+
+Connections persist per (scheme, host) per thread, so crawling one blog
+reuses a handful of sockets instead of opening one per request. When
+HTTP(S)_PROXY is set the module falls back to urllib, which honors proxy
+environment variables. Rate-limit and gateway blips (429/502/503/504) are
+retried once or twice with a short backoff.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +14,8 @@ import http.client
 import ipaddress
 import re
 import socket
+import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -18,11 +27,27 @@ MAX_BYTES = 20 * 1024 * 1024
 # addresses so visitors can't use the server to probe its own network.
 PUBLIC_MODE = False
 
+# Statuses worth another try after a pause: rate limits and gateway blips.
+TRANSIENT_HTTP = {429, 502, 503, 504}
+RETRY_DELAYS = (1.0, 2.0)
+
+REDIRECT_HTTP = {301, 302, 303, 307, 308}
+MAX_REDIRECTS = 10
+
+_HEADERS = {
+    "User-Agent": USER_AGENT,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/*;q=0.8,*/*;q=0.7",
+    "Accept-Encoding": "identity",
+}
+
 _cache: dict = {}
 
 
 class FetchError(Exception):
-    pass
+    def __init__(self, message: str, transient: bool = False, retry_after=None):
+        super().__init__(message)
+        self.transient = transient        # a retry might succeed
+        self.retry_after = retry_after    # server-suggested wait, seconds
 
 
 def validate_public_url(url: str) -> None:
@@ -48,7 +73,7 @@ def validate_public_url(url: str) -> None:
 
 
 class _GuardedRedirectHandler(urllib.request.HTTPRedirectHandler):
-    """Re-validate every redirect hop in public mode."""
+    """Re-validate every redirect hop in public mode (proxy path only)."""
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         if PUBLIC_MODE:
@@ -71,37 +96,144 @@ def _requote_url(url: str) -> str:
         (parts.scheme, parts.netloc, path, query, parts.fragment))
 
 
+def _parse_retry_after(value) -> "int | None":
+    if value and value.strip().isdigit():
+        return int(value.strip())
+    return None
+
+
+_pool = threading.local()
+
+
+def _connection(scheme: str, netloc: str, timeout: float):
+    """The thread's kept-alive connection to scheme://netloc."""
+    conns = getattr(_pool, "conns", None)
+    if conns is None:
+        conns = _pool.conns = {}
+    conn = conns.get((scheme, netloc))
+    if conn is not None and conn.timeout != timeout:
+        conn.close()
+        conn = None
+    if conn is None:
+        make = (http.client.HTTPSConnection if scheme == "https"
+                else http.client.HTTPConnection)
+        conn = conns[(scheme, netloc)] = make(netloc, timeout=timeout)
+    return conn
+
+
+def _drop_connection(scheme: str, netloc: str) -> None:
+    conn = getattr(_pool, "conns", {}).pop((scheme, netloc), None)
+    if conn is not None:
+        conn.close()
+
+
+def _raw_get(url: str, timeout: float):
+    """One GET on the thread's connection: (status, reason, headers, body).
+    A request that dies on a previously used connection is retried once on
+    a fresh one — servers drop idle keep-alive sockets without warning."""
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme not in ("http", "https"):
+        raise FetchError(f"could not fetch {url}: only http(s) URLs are supported")
+    target = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
+    while True:
+        conn = _connection(parts.scheme, parts.netloc, timeout)
+        fresh = not getattr(conn, "_used", False)
+        try:
+            conn.request("GET", target, headers=_HEADERS)
+            resp = conn.getresponse()
+            body = resp.read(MAX_BYTES + 1)
+            conn._used = True
+        except (http.client.HTTPException, OSError, ValueError) as exc:
+            _drop_connection(parts.scheme, parts.netloc)
+            if fresh:
+                raise FetchError(f"could not fetch {url}: {exc}") from exc
+            continue  # stale keep-alive socket: once more on a fresh one
+        if len(body) > MAX_BYTES:
+            # A truncated read leaves the connection unusable.
+            _drop_connection(parts.scheme, parts.netloc)
+            raise FetchError(f"{url}: response larger than {MAX_BYTES} bytes")
+        if resp.will_close:  # HTTP/1.0 server or Connection: close
+            _drop_connection(parts.scheme, parts.netloc)
+        return resp.status, resp.reason, resp.headers, body
+
+
+def _direct_fetch(url: str, timeout: float):
+    """GET with redirects over keep-alive connections. Non-2xx raises a
+    FetchError shaped like urllib's ("HTTP Error 404: Not Found")."""
+    for _ in range(MAX_REDIRECTS):
+        if PUBLIC_MODE:
+            validate_public_url(url)
+        status, reason, headers, body = _raw_get(url, timeout)
+        if status in REDIRECT_HTTP:
+            location = headers.get("Location")
+            if not location:
+                raise FetchError(
+                    f"could not fetch {url}: HTTP Error {status}: {reason}")
+            try:
+                url = _requote_url(urllib.parse.urljoin(url, location))
+            except ValueError as exc:
+                raise FetchError(f"could not fetch {url}: {exc}") from exc
+            continue
+        if not 200 <= status < 300:
+            raise FetchError(
+                f"could not fetch {url}: HTTP Error {status}: {reason}",
+                transient=status in TRANSIENT_HTTP,
+                retry_after=_parse_retry_after(headers.get("Retry-After")))
+        return body, headers.get("Content-Type", ""), url
+    raise FetchError(f"could not fetch {url}: too many redirects")
+
+
+def _proxy_fetch(url: str, timeout: float):
+    """urllib fallback when a proxy is configured in the environment."""
+    try:
+        req = urllib.request.Request(url, headers=dict(_HEADERS))
+    except ValueError as exc:
+        raise FetchError(f"could not fetch {url}: {exc}") from exc
+    try:
+        with _opener.open(req, timeout=timeout) as resp:
+            data = resp.read(MAX_BYTES + 1)
+            if len(data) > MAX_BYTES:
+                raise FetchError(f"{url}: response larger than {MAX_BYTES} bytes")
+            return data, resp.headers.get("Content-Type", ""), resp.geturl()
+    except urllib.error.HTTPError as exc:
+        headers = exc.headers or {}
+        raise FetchError(f"could not fetch {url}: {exc}",
+                         transient=exc.code in TRANSIENT_HTTP,
+                         retry_after=_parse_retry_after(headers.get("Retry-After"))
+                         ) from exc
+    except (urllib.error.URLError, http.client.HTTPException,
+            OSError, ValueError) as exc:
+        raise FetchError(f"could not fetch {url}: {exc}") from exc
+
+
 def fetch(url: str, timeout: float = 30.0):
-    """Fetch a URL. Returns (bytes, content_type, final_url). Caches per run."""
+    """Fetch a URL. Returns (bytes, content_type, final_url). Caches per
+    run; 429/502/503/504 are retried after a short backoff."""
     try:
         # Malformed URLs (unbalanced IPv6 brackets, relative links from a
         # feed) raise plain ValueError before any I/O; keep the contract
         # that this module only ever raises FetchError.
         url = _requote_url(url)
-        req = urllib.request.Request(
-            url,
-            headers={
-                "User-Agent": USER_AGENT,
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/*;q=0.8,*/*;q=0.7",
-                "Accept-Encoding": "identity",
-            },
-        )
     except ValueError as exc:
         raise FetchError(f"could not fetch {url}: {exc}") from exc
     if url in _cache:
         return _cache[url]
     if PUBLIC_MODE:
         validate_public_url(url)
-    try:
-        with _opener.open(req, timeout=timeout) as resp:
-            data = resp.read(MAX_BYTES + 1)
-            if len(data) > MAX_BYTES:
-                raise FetchError(f"{url}: response larger than {MAX_BYTES} bytes")
-            content_type = resp.headers.get("Content-Type", "")
-            result = (data, content_type, resp.geturl())
-    except (urllib.error.URLError, http.client.HTTPException,
-            OSError, ValueError) as exc:
-        raise FetchError(f"could not fetch {url}: {exc}") from exc
+    get = _proxy_fetch if urllib.request.getproxies() else _direct_fetch
+    attempt = 0
+    while True:
+        try:
+            result = get(url, timeout)
+            break
+        except FetchError as exc:
+            if not exc.transient or attempt >= len(RETRY_DELAYS):
+                raise
+            delay = RETRY_DELAYS[attempt]
+            if exc.retry_after is not None:
+                delay = min(max(exc.retry_after, delay), 15)
+            time.sleep(delay)
+            attempt += 1
     _cache[url] = result
     return result
 

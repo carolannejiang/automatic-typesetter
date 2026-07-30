@@ -188,7 +188,7 @@ def run_build(params: dict, uploads: list, workdir: str,
         images=_first(params, "images", "download") if include_pictures else "strip",
         order=_first(params, "order", "auto"),
         max_items=int(_first(params, "max_items", "0") or 0),
-        fetch_full=_first(params, "fetch_full") == "on",
+        fetch_full=True if _first(params, "fetch_full") == "on" else None,
         progress=progress,
     )
     result = ingester.ingest(inputs, opts)

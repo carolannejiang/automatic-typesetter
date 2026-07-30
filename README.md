@@ -107,7 +107,7 @@ See **[docs/DEPLOY.md](docs/DEPLOY.md)** for both recipes.
 | `.docx` files | Word manuscripts — including books this tool made that you then edited in Word. Heading 1s split into chapters, footnotes/endnotes, lists, tables, images, and links all come back in; tracked changes import as accepted; a bookformatter title page becomes metadata again |
 | Directories | All of the above, sorted by filename — one file per chapter |
 | Page URLs | Fetched and extracted: boilerplate (nav, sidebars, share buttons, comments) is scored away, the article kept |
-| Feed URLs (RSS 2.0 / Atom / RDF) | Each post becomes a chapter, ordered oldest-first by default (`--order`); items that look truncated (summary-only feeds) are fetched from their pages automatically, and `--fetch-full` forces that for every item; `--max-items N` keeps the N most recent |
+| Feed URLs (RSS 2.0 / Atom / RDF) | Each post becomes a chapter, ordered oldest-first by default (`--order`); items that look truncated (summary-only feeds) are fetched from their pages automatically, `--fetch-full` forces that for every item, and `--no-fetch-full` turns it off; `--max-items N` keeps the N most recent |
 | Blog homepage URLs | The blog's feed is discovered automatically (advertised `<link>` tags, then common feed paths) and ingested as above — pasting `https://someones.blog/` just works |
 
 Images are downloaded and embedded into the book by default
