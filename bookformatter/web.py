@@ -696,6 +696,7 @@ ul.warnings { color: var(--warn); font-size: 0.85rem; padding-left: 1.2rem; }
 }
 .downloads a strong { color: var(--accent); }
 footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 2.5rem; }
+footer a { color: var(--link); }
 </style>
 </head>
 <body>
@@ -847,10 +848,33 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
     <div class="downloads" id="downloads"></div>
   </div>
 
-  <footer>Runs entirely on your machine &mdash; nothing is uploaded anywhere.</footer>
+  <div class="card" id="feedback" style="display:none">
+    <h2>Feedback / report bug</h2>
+    <label for="fb-text">What went wrong, or what would make this better?</label>
+    <textarea id="fb-text" rows="4" placeholder="The PDF came out with&hellip;"></textarea>
+    <button class="build" type="button" id="fb-send">Send by email</button>
+  </div>
+
+  <footer>Runs entirely on your machine &mdash; nothing is uploaded anywhere.
+    &middot; <a href="#" id="fb-toggle">Feedback / report bug</a></footer>
 </div>
 
 <script>
+// Feedback goes out as plain email — no server involved, in keeping with
+// "nothing is uploaded anywhere".
+const fbCard = document.getElementById("feedback");
+document.getElementById("fb-toggle").addEventListener("click", (ev) => {
+  ev.preventDefault();
+  const open = fbCard.style.display !== "block";
+  fbCard.style.display = open ? "block" : "none";
+  if (open) document.getElementById("fb-text").focus();
+});
+document.getElementById("fb-send").addEventListener("click", () => {
+  location.href = "mailto:carolannejiang@gmail.com" +
+    "?subject=" + encodeURIComponent("bookformatter feedback") +
+    "&body=" + encodeURIComponent(document.getElementById("fb-text").value);
+});
+
 const form = document.getElementById("form");
 const statusCard = document.getElementById("status");
 const msg = document.getElementById("msg");
