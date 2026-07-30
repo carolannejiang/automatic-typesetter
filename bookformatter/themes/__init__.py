@@ -12,6 +12,9 @@ module supplies:
     PRINT_EXTRA    Template of print-only furniture overrides, or None
     DEFAULT_TRIM   optional: the trim the design is drawn for; pickers
                    default to it when no trim is chosen (else 6x9)
+    TITLE_FIT_CHARS  optional: longest title (chars) the title page holds
+                   at full size; longer titles are scaled down to fit
+                   their single page (else 200)
 
 To add a theme, write such a module and list it in `_THEME_MODULES` below.
 Unknown theme names fall back to classic.
@@ -36,6 +39,9 @@ def _geometry(trim: str, theme: str = "classic") -> dict:
     width, height = TRIM_SIZES[trim]
     geometry = {"TRIM_W": f"{width:g}", "TRIM_H": f"{height:g}"}
     geometry.update(_theme(theme).margins(width, height))
+    geometry["CONTENT_H"] = (
+        f"{height - float(geometry['M_TOP']) - float(geometry['M_BOTTOM']):g}"
+    )
     return geometry
 
 
@@ -86,4 +92,22 @@ def print_css(theme: str = "classic", trim: str = "6x9", font_size: str = "11pt"
         css += mod.PRINT_EXTRA.substitute(params)
     if drop_caps:
         css += base.DROP_CAP
+    css += _title_fit_css(mod, book_title)
     return css
+
+
+def _title_fit_css(mod, book_title: str) -> str:
+    """Shrink the title-page type so a long title still fits its one leaf.
+
+    Title height grows roughly with chars x scale^2 (a smaller face packs
+    more per line AND needs less per line), so sqrt(capacity / length)
+    holds the title block near the height a capacity-length title has at
+    full size. TITLE_FIT_CHARS is each theme's measured full-size capacity;
+    the em rule scales the whole page's type ramp proportionally.
+    """
+    n = len(book_title)
+    cap = getattr(mod, "TITLE_FIT_CHARS", 200)
+    if n <= cap:
+        return ""
+    scale = (cap / n) ** 0.5
+    return f"\nsection.titlepage {{ font-size: {scale:.3f}em; }}\n"
