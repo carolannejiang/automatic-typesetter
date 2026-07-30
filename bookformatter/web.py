@@ -257,7 +257,8 @@ def run_build(params: dict, uploads: list, workdir: str,
         docx_path = os.path.join(out_dir, f"{name}.docx")
         docx_writer.write_docx(book, docx_path, theme=theme, trim=trim,
                                font_size=font_size, line_height=line_height,
-                               chapter_numbers=chapter_numbers)
+                               chapter_numbers=chapter_numbers,
+                               link_notes=link_notes)
         out.files[f"{name}.docx"] = docx_path
 
     if "icml" in formats:

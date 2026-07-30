@@ -56,6 +56,13 @@ class RoundTripTests(unittest.TestCase):
         self.assertIn("“Curly — quotes” and a naïve café.", first)
         self.assertIn("<strong>stark</strong>", first)
 
+    def test_link_notes_fold_back_out(self):
+        # The L1 call and its URL footnote written by docx.py vanish on
+        # ingest — the live hyperlink alone carries the destination.
+        first = self.result.chapters[0].html
+        self.assertNotIn("L1", first)
+        self.assertEqual(first.count("<li id="), 1)  # only the content note
+
     def test_image_bytes_restored_as_asset(self):
         self.assertEqual(len(self.result.assets), 1)
         asset = self.result.assets[0]

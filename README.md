@@ -152,7 +152,12 @@ chapters; References → Table of Contents just works), body/quote/
 code/caption formatting rides on named styles derived from the chosen
 theme (restyle the book by editing a style), footnotes are real Word
 footnotes that renumber as you edit, lists and tables are native,
-hyperlinks stay live, images are embedded. Page size and mirrored
+images are embedded. Hyperlinks stay live *and* each external link
+carries its `L1`, `L2`, … URL note as a real footnote with a custom
+mark — Word keeps custom-marked notes out of the automatic numbering,
+so content footnotes stay an unbroken 1, 2, 3 (`--no-link-notes` keeps
+plain hyperlinks only; feeding the file back in folds the L notes back
+out). Page size and mirrored
 margins follow the chosen trim, so the page count roughly tracks the
 print edition. Edit it, then either export from Word directly (KDP
 accepts .docx) — or simply feed the edited file back in:

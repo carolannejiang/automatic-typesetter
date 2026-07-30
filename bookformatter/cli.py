@@ -164,6 +164,7 @@ def main(argv=None) -> int:
             book, docx_path, theme=args.theme, trim=args.trim,
             font_size=args.font_size, line_height=args.line_height,
             chapter_numbers=not args.no_chapter_numbers,
+            link_notes=not args.no_link_notes,
         )
         written.append(docx_path)
 

@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 
 from bookformatter import themes
 from bookformatter.cli import build_parser
+from bookformatter.docx import write_docx
 from bookformatter.icml import write_icml
 from bookformatter.linknotes import annotate_links
 from bookformatter.models import Book, BookMeta, Chapter
@@ -157,6 +158,24 @@ class AnnotateLinksModesTests(unittest.TestCase):
                       'https://example.com/a</a></span>', out)
         self.assertNotIn("L1", out)
 
+    def test_word_mode_keeps_hyperlink_and_adds_labeled_note(self):
+        html = '<p>See <a href="https://example.com/a">the spec</a> now.</p>'
+        out, nxt = annotate_links(html, mode="word")
+        self.assertEqual(nxt, 2)
+        self.assertIn('<a href="https://example.com/a">the spec</a>'
+                      '<span class="footnote" data-label="L1">'
+                      '<a class="linknote-url" href="https://example.com/a">'
+                      'https://example.com/a</a></span> now.', out)
+
+    def test_word_mode_call_hugs_text_and_reruns_cleanly(self):
+        html = '<p><a href="https://x.example">text </a>rest</p>'
+        once, nxt = annotate_links(html, mode="word")
+        self.assertIn('>text</a><span class="footnote" data-label="L1">', once)
+        self.assertIn("</span> rest", once)
+        twice, nxt2 = annotate_links(once, start=nxt, mode="word")
+        self.assertEqual(once, twice)
+        self.assertEqual(nxt, nxt2)
+
 
 FOOTNOTED = ('<p>Body <a href="https://a.example">link</a> cite'
              '<sup id="fnref-1"><a href="#fn-1">1</a></sup>.</p>'
@@ -265,6 +284,34 @@ class InDesignIntegrationTests(unittest.TestCase):
             icml = fh.read()
         self.assertIn("<Footnote>", icml)
         self.assertIn("https://note.example/p", icml)
+
+
+class WordIntegrationTests(unittest.TestCase):
+    def _docx(self, **kwargs):
+        book = make_book([
+            Chapter(title="One", html='<p>See <a href="https://a.example/p">a</a>.</p>'),
+        ])
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = os.path.join(tmp.name, "t.docx")
+        write_docx(book, path, **kwargs)
+        with zipfile.ZipFile(path) as zf:
+            return (zf.read("word/document.xml").decode("utf-8"),
+                    zf.read("word/footnotes.xml").decode("utf-8"))
+
+    def test_link_note_rides_as_custom_marked_footnote(self):
+        doc, notes = self._docx()
+        self.assertIn("<w:hyperlink", doc)  # the text link stays live
+        self.assertIn('w:customMarkFollows="1"', doc)
+        self.assertIn(">L1</w:t>", doc)
+        self.assertIn("https://a.example/p", notes)
+
+    def test_opt_out_keeps_hyperlinks_only(self):
+        doc, notes = self._docx(link_notes=False)
+        self.assertIn("<w:hyperlink", doc)
+        self.assertNotIn("customMarkFollows", doc)
+        self.assertNotIn("L1", doc)
+        self.assertNotIn("https://a.example/p", notes)
 
 
 class WiringTests(unittest.TestCase):

@@ -25,6 +25,11 @@ The rule renders three ways, one per output medium:
   foot of the page. InDesign insists on numbering its own footnotes, so
   there the calls follow the document's footnote settings instead of the
   L series.
+* ``word`` (Word manuscript) — the linked text keeps its live hyperlink,
+  followed by ``<span class="footnote" data-label="L1">`` holding the URL.
+  The docx writer sets that span as a real Word footnote whose custom
+  ``L1`` mark stays outside Word's automatic numbering, so the L series
+  survives into the manuscript while content footnotes keep their 1, 2, 3.
 
 Only external web links (http/https) are converted. Fragment references,
 ``mailto:`` and friends are left alone, as are links inside headings (their
@@ -81,8 +86,22 @@ def annotate_links(fragment: str, start: int = 1, mode: str = "inline"):
     number = start
     asides = []
     for a in calls:
+        if mode == "word" and _already_noted(a):
+            continue
         label = f"{PREFIX}{number}"
         href = (a.get("href") or "").strip()
+        if mode == "word":
+            # The manuscript keeps the hyperlink live; the labeled note
+            # follows it, hugging the linked text.
+            note = Node("span", {"class": "footnote", "data-label": label})
+            note.append(_url_anchor(href))
+            items = [note]
+            trailing = _split_trailing(a)
+            if trailing:
+                items.append(Node(text=trailing))
+            _insert_after(a, items)
+            number += 1
+            continue
         nodes, trailing = _unwrapped_content(a)
         if mode == "native":
             note = Node("span", {"class": "footnote"})
@@ -153,6 +172,41 @@ def _unfold_in_note(a: Node) -> None:
     if trailing:
         nodes.append(Node(text=trailing))
     _replace_with(a, nodes)
+
+
+def _already_noted(a: Node) -> bool:
+    """Whether a labeled note already follows the anchor (an earlier word-
+    mode pass), so a rerun neither duplicates notes nor shifts the series."""
+    siblings = a.parent.children
+    idx = siblings.index(a)
+    nxt = siblings[idx + 1] if idx + 1 < len(siblings) else None
+    return (nxt is not None and not nxt.is_text and nxt.tag == "span"
+            and bool(nxt.get("data-label")))
+
+
+def _split_trailing(a: Node) -> str:
+    """Detach trailing whitespace inside the anchor so the note call can
+    hug the linked text."""
+    last = a.children[-1] if a.children else None
+    if last is None or not last.is_text:
+        return ""
+    text = last.text or ""
+    stripped = text.rstrip()
+    if stripped == text:
+        return ""
+    if stripped:
+        last.text = stripped
+    else:
+        last.detach()
+    return text[len(stripped):]
+
+
+def _insert_after(node: Node, items: list) -> None:
+    parent = node.parent
+    idx = parent.children.index(node)
+    for i, item in enumerate(items, 1):
+        item.parent = parent
+        parent.children.insert(idx + i, item)
 
 
 def _unwrapped_content(a: Node):
