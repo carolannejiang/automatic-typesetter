@@ -62,7 +62,11 @@ def validate_public_url(url: str) -> None:
         raise FetchError(f"{url}: only http(s) URLs are allowed")
     host = parts.hostname or ""
     try:
-        infos = socket.getaddrinfo(host, parts.port or 443, proto=socket.IPPROTO_TCP)
+        port = parts.port or 443  # ValueError on a non-numeric port
+    except ValueError as exc:
+        raise FetchError(f"{url}: {exc}") from exc
+    try:
+        infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
     except OSError as exc:
         raise FetchError(f"could not resolve {host}: {exc}") from exc
     for info in infos:
@@ -84,14 +88,19 @@ class _GuardedRedirectHandler(urllib.request.HTTPRedirectHandler):
 _opener = urllib.request.build_opener(_GuardedRedirectHandler)
 
 
-def _requote_url(url: str) -> str:
+def _requote_url(url: str, encoding: str = "utf-8") -> str:
     """Percent-encode characters browsers tolerate raw in href/src but
     http.client rejects — old hand-authored pages link uploads like
     "nme goth.jpg" with a literal space. Existing %-escapes are preserved.
+    Redirect Locations arrive latin-1-decoded from http.client; re-quoting
+    them with encoding="iso-8859-1" recovers the server's original bytes
+    (urllib's redirect handler does the same).
     """
     parts = urllib.parse.urlsplit(url)
-    path = urllib.parse.quote(parts.path, safe="/%:@!$&'()*+,;=~._-")
-    query = urllib.parse.quote(parts.query, safe="=&%:@!$'()*+,;/?~._-")
+    path = urllib.parse.quote(parts.path, safe="/%:@!$&'()*+,;=~._-",
+                              encoding=encoding)
+    query = urllib.parse.quote(parts.query, safe="=&%:@!$'()*+,;/?~._-",
+                               encoding=encoding)
     return urllib.parse.urlunsplit(
         (parts.scheme, parts.netloc, path, query, parts.fragment))
 
@@ -136,7 +145,11 @@ def _raw_get(url: str, timeout: float):
         raise FetchError(f"could not fetch {url}: only http(s) URLs are supported")
     target = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
     while True:
-        conn = _connection(parts.scheme, parts.netloc, timeout)
+        try:
+            # http.client rejects bad ports and userinfo at construction.
+            conn = _connection(parts.scheme, parts.netloc, timeout)
+        except (http.client.HTTPException, ValueError) as exc:
+            raise FetchError(f"could not fetch {url}: {exc}") from exc
         fresh = not getattr(conn, "_used", False)
         try:
             conn.request("GET", target, headers=_HEADERS)
@@ -145,14 +158,20 @@ def _raw_get(url: str, timeout: float):
             conn._used = True
         except (http.client.HTTPException, OSError, ValueError) as exc:
             _drop_connection(parts.scheme, parts.netloc)
-            if fresh:
+            # A timeout is not a stale socket — replaying the request just
+            # doubles the wait and hits a struggling server twice.
+            if fresh or isinstance(exc, socket.timeout):
                 raise FetchError(f"could not fetch {url}: {exc}") from exc
             continue  # stale keep-alive socket: once more on a fresh one
         if len(body) > MAX_BYTES:
             # A truncated read leaves the connection unusable.
             _drop_connection(parts.scheme, parts.netloc)
             raise FetchError(f"{url}: response larger than {MAX_BYTES} bytes")
-        if resp.will_close:  # HTTP/1.0 server or Connection: close
+        if resp.status < 200 or resp.will_close:
+            # An interim 1xx (103 Early Hints) leaves the real response
+            # unread in the buffer — http.client cannot resync, and reusing
+            # the socket would serve the previous URL's bytes to the next
+            # request. HTTP/1.0 and Connection: close also end the socket.
             _drop_connection(parts.scheme, parts.netloc)
         return resp.status, resp.reason, resp.headers, body
 
@@ -170,7 +189,9 @@ def _direct_fetch(url: str, timeout: float):
                 raise FetchError(
                     f"could not fetch {url}: HTTP Error {status}: {reason}")
             try:
-                url = _requote_url(urllib.parse.urljoin(url, location))
+                # latin-1 round-trips the raw Location bytes (see _requote_url).
+                url = _requote_url(urllib.parse.urljoin(url, location),
+                                   encoding="iso-8859-1")
             except ValueError as exc:
                 raise FetchError(f"could not fetch {url}: {exc}") from exc
             continue

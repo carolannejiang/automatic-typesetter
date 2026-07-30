@@ -589,15 +589,14 @@ class UrlIngestTests(unittest.TestCase):
 
     def test_off_domain_feed_uses_items_common_host(self):
         # FeedPress-style: the feed and its channel link live on the feed
-        # service's domain, but every item links to the blog itself.
+        # service's domain, every item links to the blog itself, and the
+        # items carry no text of their own.
         feed_xml = """<?xml version="1.0" encoding="UTF-8"?>
         <rss version="2.0"><channel><title>Example Blog</title>
         <link>https://feedpress.example/exampleblog</link>
-        <item><title>One</title><link>https://blog.example/posts/one</link>
-          <description>%s</description></item>
-        <item><title>Two</title><link>https://blog.example/posts/two</link>
-          <description>%s</description></item>
-        </channel></rss>""" % (self.TEASER, self.TEASER)
+        <item><title>One</title><link>https://blog.example/posts/one</link></item>
+        <item><title>Two</title><link>https://blog.example/posts/two</link></item>
+        </channel></rss>"""
         page = f"""<html><head><title>Post</title></head>
         <body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>"""
         fake = _FakeWeb({
@@ -609,6 +608,30 @@ class UrlIngestTests(unittest.TestCase):
         self.assertEqual(len(result.chapters), 2)
         for chapter in result.chapters:
             self.assertIn("reasonably long paragraph", chapter.html)
+
+    def test_single_source_commentary_blog_keeps_its_own_words(self):
+        # A commentary blog whose every item links one external site has
+        # the same shape as an off-domain feed — but its item text is the
+        # post, and must never be swapped for the linked site's articles.
+        feed_xml = """<?xml version="1.0" encoding="UTF-8"?>
+        <rss version="2.0"><channel><title>Reading the Times</title>
+        <link>https://blog.example/</link>
+        <item><title>One</title><link>https://elsewhere.example/a1</link>
+          <description>%s</description></item>
+        <item><title>Two</title><link>https://elsewhere.example/a2</link>
+          <description>%s</description></item>
+        </channel></rss>""" % (self.TEASER, self.TEASER)
+        page = f"""<html><body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>"""
+        fake = _FakeWeb({
+            "https://blog.example/feed": (feed_xml, "application/rss+xml"),
+            "https://elsewhere.example/a1": (page, "text/html"),
+            "https://elsewhere.example/a2": (page, "text/html"),
+        })
+        result = self._ingest(fake, "https://blog.example/feed")
+        self.assertEqual(len(result.chapters), 2)
+        for chapter in result.chapters:
+            self.assertIn("never gets to the argument", chapter.html)
+        self.assertEqual(fake.requested, ["https://blog.example/feed"])
 
     def test_fetch_parallel_caps_concurrency_per_host(self):
         lock = threading.Lock()

@@ -321,12 +321,16 @@ def _ingest_feed(url: str, feed: feeds.Feed, opts: IngestOptions,
     site_host = _host(feed.link) or _host(url)
     # FeedPress-style feeds live off-domain: the channel link names the
     # feed host, not the blog. When every item links to one other host,
-    # that host is the blog. (A link blog's items scatter across hosts.)
+    # that host may be the blog — but a commentary blog devoted to a
+    # single external site has the same shape, and its items' own text is
+    # the post. So the foreign host is trusted only for items that carry
+    # no text of their own (checked per item below).
     item_hosts = {h for h in (_host(it.link) for it in feed.items) if h}
     linked = [it.link for it in feed.items if it.link]
+    majority_host = ""
     if (len(item_hosts) == 1 and len(linked) >= 2
             and not _same_site(linked[0], site_host)):
-        site_host = item_hosts.pop()
+        majority_host = next(iter(item_hosts))
     cleaned_items, item_lens, page_links = [], [], []
     for item in items:
         cleaned = extract.clean_fragment(item.html or "", base_url=item.link or url)
@@ -337,9 +341,11 @@ def _ingest_feed(url: str, feed: feeds.Feed, opts: IngestOptions,
         # post's page; "fetching the full text" from it yields junk.
         link_ok = (item.link and item.link.rstrip("/") != url.rstrip("/")
                    and not _looks_like_index_url(item.link))
+        foreign_ok = (majority_host and item_len < NEAR_EMPTY_LEN
+                      and _host(item.link) == majority_host)
         wants_page = link_ok and (opts.fetch_full is True or (
             auto_full and opts.fetch_full is None and item_len < SUMMARY_LEN
-            and _same_site(item.link, site_host)))
+            and (_same_site(item.link, site_host) or foreign_ok)))
         page_links.append(item.link if wants_page else "")
     to_fetch = list(dict.fromkeys(link for link in page_links if link))
     if to_fetch:
