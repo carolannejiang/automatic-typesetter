@@ -11,6 +11,11 @@ from . import base
 
 NAME = "modern"
 
+# Longest title (chars) the title page holds at full size on its
+# tightest supported trim; longer titles are scaled down to fit
+# (see themes.print_css).
+TITLE_FIT_CHARS = 195
+
 EXTRA = None
 PRINT_EXTRA = None
 

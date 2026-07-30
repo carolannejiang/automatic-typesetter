@@ -19,6 +19,11 @@ from . import base
 
 NAME = "classicthesis"
 
+# Longest title (chars) the title page holds at full size on its
+# tightest supported trim; longer titles are scaled down to fit
+# (see themes.print_css).
+TITLE_FIT_CHARS = 105
+
 # classicthesis loads mathpazo (Palatino) with old-style figures and real
 # small caps; put Palatino faces first and fall back to kindred serifs.
 SERIF_STACK = ('Palatino, "Palatino Linotype", "Book Antiqua", '

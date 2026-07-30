@@ -219,6 +219,15 @@ PRINT_EXTRA = Template(
 
 .frontmatter { page: frontmatter; }
 section.titlepage, section.copyrightpage, nav.print-toc { break-before: page; page-break-before: always; }
+/* The title page is always exactly one leaf: fix it to the page's content
+   height so an overlong title can't spill onto a second page. WeasyPrint
+   honors `continue: discard` (CSS Overflow 3) and drops the lines that
+   don't fit; Chrome ignores it but clips via overflow: hidden. */
+section.titlepage {
+  height: ${CONTENT_H}in;
+  overflow: hidden;
+  continue: discard;
+}
 /* The invisible page that closes the front matter: forcing a left page here
    means any blank inserted before chapter 1 still belongs to the
    frontmatter page group, keeping the body's first folio at 1 on a recto. */

@@ -31,6 +31,11 @@ from .vsi import SERIF_STACK
 
 NAME = "short intro"
 
+# Longest title (chars) the title page holds at full size on its
+# tightest supported trim; longer titles are scaled down to fit
+# (see themes.print_css).
+TITLE_FIT_CHARS = 150
+
 # The ~112 mm pocket page the spec's margins are quoted against.
 DEFAULT_TRIM = "vsi"
 
