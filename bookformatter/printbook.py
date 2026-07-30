@@ -63,7 +63,8 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = "6x9",
     meta = book.meta
     css = themes.print_css(
         theme=theme, trim=trim, font_size=font_size, line_height=line_height,
-        book_title=meta.title, chapter_start=chapter_start, drop_caps=drop_caps,
+        book_title=meta.title, book_subtitle=meta.description or "",
+        chapter_start=chapter_start, drop_caps=drop_caps,
     )
     assets_by_name = {a.filename: a for a in book.assets}
     parts: list = []

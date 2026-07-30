@@ -67,8 +67,12 @@ def build_parser() -> argparse.ArgumentParser:
     design.add_argument("--trim", default=None, choices=sorted(themes.TRIM_SIZES),
                         help="print trim size in inches (default: the theme's own "
                              "page — 4.37x6.85 for vsi, 6x9 otherwise)")
-    design.add_argument("--font-size", default="11pt", help="print body size (default: 11pt)")
-    design.add_argument("--line-height", default="1.45", help="body leading (default: 1.45)")
+    design.add_argument("--font-size", default=None,
+                        help="print body size (default: the theme's design size — "
+                             "8.5pt for vsi and short intro, 11pt otherwise)")
+    design.add_argument("--line-height", default=None,
+                        help="body leading (default: the theme's design leading — "
+                             "1.41 for vsi and short intro, 1.45 otherwise)")
     design.add_argument("--chapter-start", default="right", choices=["right", "any"],
                         help="print: chapters open on a recto page or any page (default: right)")
     design.add_argument("--drop-caps", action="store_true", help="drop cap on each chapter's first paragraph")
@@ -110,6 +114,10 @@ def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     if args.trim is None:
         args.trim = themes.default_trim(args.theme)
+    if args.font_size is None:
+        args.font_size = themes.default_font_size(args.theme)
+    if args.line_height is None:
+        args.line_height = themes.default_line_height(args.theme)
     formats = {f.strip().lower() for f in args.formats.split(",") if f.strip()}
     unknown = formats - {"epub", "pdf", "html", "docx", "icml", "idml"}
     if unknown:
