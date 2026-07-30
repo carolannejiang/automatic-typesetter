@@ -8,7 +8,7 @@ the bottom of the page, itself a live link in outputs that support them
 (PDF, EPUB). The ``L`` series is separate from content footnotes, so a
 reader can tell "this note is a web address" at a glance.
 
-The rule renders three ways, one per output medium:
+The rule renders four ways, one per output medium:
 
 * ``inline`` (print/PDF) — the note travels inline as
   ``<span class="linknote">``, which the print stylesheet floats into the
@@ -86,13 +86,13 @@ def annotate_links(fragment: str, start: int = 1, mode: str = "inline"):
     number = start
     asides = []
     for a in calls:
-        if mode == "word" and _already_noted(a):
-            continue
         label = f"{PREFIX}{number}"
         href = (a.get("href") or "").strip()
         if mode == "word":
             # The manuscript keeps the hyperlink live; the labeled note
             # follows it, hugging the linked text.
+            if _already_noted(a):
+                continue
             note = Node("span", {"class": "footnote", "data-label": label})
             note.append(_url_anchor(href))
             items = [note]
@@ -212,18 +212,8 @@ def _insert_after(node: Node, items: list) -> None:
 def _unwrapped_content(a: Node):
     """The anchor's children, with any trailing whitespace split off so the
     call can sit tight against the linked text."""
-    nodes = list(a.children)
-    trailing = ""
-    if nodes and nodes[-1].is_text:
-        text = nodes[-1].text or ""
-        stripped = text.rstrip()
-        if stripped != text:
-            trailing = text[len(stripped):]
-            if stripped:
-                nodes[-1].text = stripped
-            else:
-                nodes.pop()
-    return nodes, trailing
+    trailing = _split_trailing(a)
+    return list(a.children), trailing
 
 
 def _url_anchor(href: str) -> Node:
