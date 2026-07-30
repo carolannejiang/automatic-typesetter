@@ -288,6 +288,17 @@ span.linknote::footnote-marker { content: none; }
 /* Bare selector: a link already inside a content footnote unfolds its URL
    in parentheses within that note (span.footnote), not as an L note. */
 a.linknote-url { overflow-wrap: anywhere; }
+
+/* On screen the paged machinery is inert (float:footnote, @page), so the
+   same file doubles as a proof when opened in a browser before printing:
+   notes read as bracketed inline asides instead of raw runs of small
+   text. Print engines use the print medium and never see this block. */
+@media screen {
+  span.footnote, span.linknote { font-size: 0.82em; color: #444; }
+  span.footnote::before, span.linknote::before { content: " [ "; color: #999; }
+  span.footnote::after, span.linknote::after { content: " ]"; color: #999; }
+  span.linknote .linknote-label { font-weight: 600; }
+}
 """
 )
 

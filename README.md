@@ -187,7 +187,12 @@ Paged Media:
   link in the PDF). The L series is separate from content footnotes, which
   keep their own 1, 2, 3. A link quoted *inside* a footnote spawns no
   note-on-a-note: its URL unfolds in parentheses right there in the note,
-  in every output format. `--no-link-notes` turns the rule off
+  in every output format — and a `mailto:` link unfolds the same way in
+  the text (`write to Jane (jane@x.com)`), an address being short enough
+  to read in line. `--no-link-notes` turns the rule off
+- opened in a browser on screen (before printing), footnotes and link
+  notes render as bracketed inline asides, so the same file doubles as a
+  proof
 - `* * *` scene-break ornaments for `---`/`<hr>`, styled blockquotes,
   tables, figures with captions, code blocks
 

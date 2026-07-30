@@ -60,11 +60,31 @@ class AnnotateLinksInlineTests(unittest.TestCase):
         self.assertIn("</span> rest", out)
 
     def test_non_web_links_left_alone(self):
-        html = ('<p><a href="#fn1">1</a> <a href="mailto:a@b.c">mail</a> '
-                '<a href="/relative">rel</a></p>')
+        html = ('<p><a href="#fn1">1</a> <a href="/relative">rel</a> '
+                '<a href="tel:+15551234">call us</a></p>')
         out, nxt = annotate_links(html)
         self.assertEqual(out, html)
         self.assertEqual(nxt, 1)
+
+    def test_mailto_unfolds_in_place_in_every_mode(self):
+        html = '<p><a href="mailto:jane@x.com">write to Jane</a> soon.</p>'
+        for mode in ("inline", "aside", "native", "word"):
+            out, nxt = annotate_links(html, mode=mode)
+            self.assertEqual(nxt, 1)  # no L number consumed
+            self.assertNotIn("linknote-call", out)
+            self.assertIn('write to Jane (<a class="linknote-url" '
+                          'href="mailto:jane@x.com">jane@x.com</a>) soon.', out)
+
+    def test_mailto_bare_address_and_query_stay_tidy(self):
+        html = ('<p><a href="mailto:j@x.com">j@x.com</a> or '
+                '<a href="mailto:j@x.com?subject=Hi">say hi</a>.</p>')
+        out, _ = annotate_links(html)
+        self.assertIn('<a class="linknote-url" href="mailto:j@x.com">'
+                      'j@x.com</a> or', out)
+        self.assertIn('say hi (<a class="linknote-url" '
+                      'href="mailto:j@x.com?subject=Hi">j@x.com</a>).', out)
+        twice, _ = annotate_links(out)
+        self.assertEqual(out, twice)
 
     def test_heading_links_left_alone(self):
         html = '<h2>See <a href="https://x.example">this</a></h2>'
@@ -327,6 +347,7 @@ class WiringTests(unittest.TestCase):
             self.assertIn("span.linknote {", css)
             self.assertIn("span.linknote::footnote-call { content: none; }", css)
             self.assertIn("a.linknote-url { overflow-wrap: anywhere; }", css)
+            self.assertIn("@media screen {", css)  # browser-proofing styles
 
     def test_epub_css_has_linknote_rules(self):
         css = themes.epub_css()

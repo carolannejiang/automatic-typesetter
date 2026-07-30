@@ -83,7 +83,8 @@ the body and the destination URL sits in a footnote right after it. These
 URL notes join the same numbering as the content footnotes here — InDesign
 numbers all footnotes itself, so the `L1`, `L2`, … series the other output
 formats use doesn't apply. A link quoted *inside* a content footnote shows
-its URL in parentheses within that note instead. Exporting with
+its URL in parentheses within that note instead, and email links unfold
+their address in parentheses right in the text. Exporting with
 `--no-link-notes` (or the web UI checkbox) drops the URL notes and keeps
 plain linked text.
 
