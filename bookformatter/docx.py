@@ -181,7 +181,7 @@ _SIDS = {
     "Book Title": "Title", "Book Subtitle": "Subtitle",
     "Book Author": "BookAuthor", "Book Publisher": "BookPublisher",
     "Copyright": "CopyrightPage", "Footnote Text": "FootnoteText",
-    "Folio": "Footer",
+    "Reference Entry": "ReferenceEntry", "Folio": "Footer",
 }
 
 # styleId -> w:name. Lowercase names are how OOXML spells Word built-ins;
@@ -195,7 +195,8 @@ _NAMES = {
     "Caption": "caption", "SceneBreak": "Scene Break", "Title": "Title",
     "Subtitle": "Subtitle", "BookAuthor": "Book Author",
     "BookPublisher": "Book Publisher", "CopyrightPage": "Copyright Page",
-    "FootnoteText": "footnote text", "Footer": "footer",
+    "FootnoteText": "footnote text", "ReferenceEntry": "Reference Entry",
+    "Footer": "footer",
 }
 
 # Per-style Word extras: outline level (nav pane / TOC), the style Enter
@@ -786,12 +787,14 @@ def _document_rels_xml(parts: _Parts) -> str:
 def write_docx(book: Book, path: str, theme: str = "classic",
                trim: str = "6x9", font_size: str = "11pt",
                line_height: str = "1.45", chapter_numbers: bool = True,
-               link_notes: bool = True, link_citations: dict = None) -> None:
+               link_notes: bool = True, link_citations: dict = None,
+               references: bool = False) -> None:
     catalog = build_styles(theme, font_size, line_height)
     items = book_to_story_items(book, theme, chapter_numbers,
                                 converter_cls=_WordConverter,
                                 link_notes=link_notes, link_note_mode="word",
-                                link_citations=link_citations)
+                                link_citations=link_citations,
+                                references=references)
     ordered_lists = _renumber_ordered_lists(items)
 
     width_in, height_in = themes.TRIM_SIZES.get(trim, themes.TRIM_SIZES["6x9"])

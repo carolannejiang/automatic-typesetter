@@ -189,6 +189,35 @@ class CollectTests(unittest.TestCase):
         self.assertEqual(apacite.collect([]), {})
 
 
+class ReferenceListTests(unittest.TestCase):
+    def test_entries_are_alphabetized(self):
+        cites = {
+            "https://z.example/": Citation(url="https://z.example/",
+                                           title="Zebras", author="Ann Zoe"),
+            "https://a.example/": Citation(url="https://a.example/",
+                                           title="Aardvarks", author="Bo Ash"),
+        }
+        entries = apacite.reference_entries(cites)
+        self.assertEqual(len(entries), 2)
+        self.assertIn("Ash, B.", entries[0])   # sorted by byline, not dict order
+        self.assertIn("Zoe, A.", entries[1])
+        self.assertTrue(entries[0].startswith('<p class="ref-entry">'))
+
+    def test_chapter_sources(self):
+        from bookformatter.models import Chapter
+        chapters = [
+            Chapter(title="From the Web", html="<p>x</p>",
+                    source="https://www.blog.example/post", author="Jane Doe",
+                    date=dt.datetime(2024, 6, 3)),
+            Chapter(title="Local", html="<p>y</p>", source="notes.md"),
+        ]
+        entries = apacite.chapter_source_entries(chapters)
+        self.assertEqual(len(entries), 1)  # only the web-sourced chapter
+        self.assertIn("Doe, J. (2024, June 3). <i>From the Web</i>. "
+                      "blog.example.", entries[0])
+        self.assertIn('href="https://www.blog.example/post"', entries[0])
+
+
 class CacheTests(unittest.TestCase):
     def _cite(self, url, timeout=None):
         self.calls.append(url)

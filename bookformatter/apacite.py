@@ -326,3 +326,44 @@ def citation_nodes(cite: Citation, url_node: Node) -> list:
     nodes.append(Node(text=after + " "))
     nodes.append(url_node)
     return nodes
+
+
+# -- reference lists --------------------------------------------------------
+
+def reference_entries(citations) -> list:
+    """The collected citations as an alphabetized APA reference list, each
+    entry a serialized ``<p class="ref-entry">`` fragment (the stylesheets
+    give the class a hanging indent)."""
+    entries = [_entry_html(c) for c in (citations or {}).values()]
+    return sorted(entries, key=_entry_sort_key)
+
+
+def chapter_source_entries(chapters) -> list:
+    """Provenance entries for chapters ingested from the web, in book
+    order: each chapter's own author, date, and title cited at its source
+    URL — no fetching, the metadata came with ingestion."""
+    out = []
+    for chapter in chapters:
+        src = (chapter.source or "").strip()
+        if not re.match(r"^https?://", src):
+            continue
+        host = _host(src)
+        if host.startswith("www."):
+            host = host[4:]
+        out.append(_entry_html(Citation(
+            url=src, title=chapter.title or src, author=chapter.author,
+            date=chapter.date, site_name=host or None)))
+    return out
+
+
+def _entry_html(cite: Citation) -> str:
+    p = Node("p", {"class": "ref-entry"})
+    anchor = Node("a", {"class": "linknote-url", "href": cite.url})
+    anchor.append(Node(text=cite.url))
+    for node in citation_nodes(cite, anchor):
+        p.append(node)
+    return htmldom.serialize(p)
+
+
+def _entry_sort_key(entry: str) -> str:
+    return htmldom.normalize_ws(htmldom.parse(entry).text_content()).casefold()

@@ -176,6 +176,12 @@ aside.linknote p { text-indent: 0; margin: 0; }
 /* Bare selector: the URL anchor also appears parenthesized inside content
    footnotes, where links unfold in place rather than gaining an L note. */
 a.linknote-url { overflow-wrap: anywhere; word-break: break-all; }
+
+/* References page: APA hanging indents. */
+section.references p.ref-entry {
+  text-indent: -1.4em; padding-left: 1.4em;
+  margin: 0 0 0.4em; text-align: left;
+}
 """
 )
 
@@ -297,6 +303,12 @@ span.linknote::footnote-marker { content: none; }
 /* Bare selector: a link already inside a content footnote unfolds its URL
    in parentheses within that note (span.footnote), not as an L note. */
 a.linknote-url { overflow-wrap: anywhere; }
+
+/* References page: APA hanging indents. */
+section.references p.ref-entry {
+  text-indent: -1.4em; padding-left: 1.4em;
+  margin: 0 0 0.4em; text-align: left;
+}
 
 /* On screen the paged machinery is inert (float:footnote, @page), so the
    same file doubles as a proof when opened in a browser before printing:

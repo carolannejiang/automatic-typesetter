@@ -89,6 +89,10 @@ def build_parser() -> argparse.ArgumentParser:
     design.add_argument("--no-link-citations", action="store_true",
                         help="set link notes as bare URLs instead of fetching each "
                              "linked page to expand its note into an APA-style citation")
+    design.add_argument("--references", action="store_true",
+                        help="append a References page: every cited link as an "
+                             "alphabetized APA reference list, followed by the "
+                             "chapters' own web sources when known")
 
     content = parser.add_argument_group("content handling")
     content.add_argument("--split", default="auto", choices=["auto", "h1", "h2", "none"],
@@ -192,6 +196,7 @@ def main(argv=None) -> int:
             book, epub_path, theme=args.theme, drop_caps=args.drop_caps,
             chapter_numbers=not args.no_chapter_numbers,
             link_notes=not args.no_link_notes, link_citations=citations,
+            references=args.references,
         )
         written.append(epub_path)
 
@@ -202,6 +207,7 @@ def main(argv=None) -> int:
             font_size=args.font_size, line_height=args.line_height,
             chapter_numbers=not args.no_chapter_numbers,
             link_notes=not args.no_link_notes, link_citations=citations,
+            references=args.references,
         )
         written.append(docx_path)
 
@@ -211,6 +217,7 @@ def main(argv=None) -> int:
             book, icml_path, theme=args.theme, font_size=args.font_size,
             line_height=args.line_height, chapter_numbers=not args.no_chapter_numbers,
             link_notes=not args.no_link_notes, link_citations=citations,
+            references=args.references,
         )
         written.append(icml_path)
 
@@ -222,6 +229,7 @@ def main(argv=None) -> int:
             chapter_start=args.chapter_start,
             chapter_numbers=not args.no_chapter_numbers,
             link_notes=not args.no_link_notes, link_citations=citations,
+            references=args.references,
         )
         written.append(idml_path)
 
@@ -242,6 +250,7 @@ def main(argv=None) -> int:
             chapter_numbers=not args.no_chapter_numbers,
             footnotes=not args.no_footnotes,
             link_notes=not args.no_link_notes, link_citations=citations,
+            references=args.references,
         )
         with open(html_path, "w", encoding="utf-8") as fh:
             fh.write(page)

@@ -15,7 +15,7 @@ import os
 import uuid
 import zipfile
 
-from . import htmldom, themes
+from . import apacite, htmldom, themes
 from .linknotes import annotate_links
 from .models import Book
 
@@ -106,7 +106,8 @@ def _copyright_body(book: Book) -> str:
 
 def write_epub(book: Book, path: str, theme: str = "classic",
                drop_caps: bool = False, chapter_numbers: bool = True,
-               link_notes: bool = True, link_citations: dict = None) -> None:
+               link_notes: bool = True, link_citations: dict = None,
+               references: bool = False) -> None:
     meta = book.meta
     lang = meta.language or "en"
     book_id = "urn:uuid:" + str(
@@ -163,6 +164,24 @@ def write_epub(book: Book, path: str, theme: str = "classic",
         manifest.append((f"ch{i:03d}", href, "application/xhtml+xml", None))
         spine.append(f"ch{i:03d}")
         chapter_hrefs.append((href, chapter.title))
+
+    if references:
+        ref_entries = apacite.reference_entries(link_citations)
+        ref_sources = apacite.chapter_source_entries(book.chapters)
+        if ref_entries or ref_sources:
+            body = ('<section class="chapter references">'
+                    '<header class="chapter-head">'
+                    '<h1 class="chapter-title">References</h1></header>'
+                    + "".join(ref_entries))
+            if ref_sources:
+                body += "<h2>Chapter sources</h2>" + "".join(ref_sources)
+            body += "</section>"
+            files.append(("OEBPS/text/references.xhtml",
+                          _xhtml("References", body, lang)))
+            manifest.append(("references", "text/references.xhtml",
+                             "application/xhtml+xml", None))
+            spine.append("references")
+            chapter_hrefs.append(("text/references.xhtml", "References"))
 
     for asset in book.assets:
         files.append((f"OEBPS/{asset.filename}", asset.data))

@@ -19,7 +19,7 @@ import shutil
 import subprocess
 import tempfile
 
-from . import htmldom, themes
+from . import apacite, htmldom, themes
 from .footnotes import inline_footnotes
 from .linknotes import annotate_links
 from .models import Book
@@ -60,7 +60,8 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = "6x9",
                      chapter_start: str = "right", toc: bool = True,
                      drop_caps: bool = False, chapter_numbers: bool = True,
                      footnotes: bool = True, link_notes: bool = True,
-                     link_citations: dict = None) -> str:
+                     link_citations: dict = None,
+                     references: bool = False) -> str:
     meta = book.meta
     css = themes.print_css(
         theme=theme, trim=trim, font_size=font_size, line_height=line_height,
@@ -68,6 +69,11 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = "6x9",
         chapter_start=chapter_start, drop_caps=drop_caps,
     )
     assets_by_name = {a.filename: a for a in book.assets}
+    ref_entries: list = []
+    ref_sources: list = []
+    if references:
+        ref_entries = apacite.reference_entries(link_citations)
+        ref_sources = apacite.chapter_source_entries(book.chapters)
     parts: list = []
 
     parts.append('<section class="titlepage frontmatter">')
@@ -97,6 +103,8 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = "6x9",
         parts.append("<ol>")
         for i, chapter in enumerate(book.chapters, 1):
             parts.append(f'<li><a href="#chapter-{i}">{_esc(chapter.title)}</a></li>')
+        if ref_entries or ref_sources:
+            parts.append('<li><a href="#references">References</a></li>')
         parts.append("</ol>")
         parts.append("</nav>")
 
@@ -118,6 +126,17 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = "6x9",
         parts.append(f'<h1 class="chapter-title">{_esc(chapter.title)}</h1>')
         parts.append("</header>")
         parts.append(content)
+        parts.append("</section>")
+
+    if ref_entries or ref_sources:
+        parts.append('<section class="chapter references" id="references">')
+        parts.append('<header class="chapter-head">')
+        parts.append('<h1 class="chapter-title">References</h1>')
+        parts.append("</header>")
+        parts.extend(ref_entries)
+        if ref_sources:
+            parts.append("<h2>Chapter sources</h2>")
+            parts.extend(ref_sources)
         parts.append("</section>")
 
     body = "\n".join(parts)

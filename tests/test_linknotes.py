@@ -404,6 +404,84 @@ class CitationTests(unittest.TestCase):
         self.assertIn("<w:i/>", notes)
 
 
+class ReferencesPageTests(unittest.TestCase):
+    CITES = {
+        "https://cats.example/naps": Citation(
+            url="https://cats.example/naps", title="How cats sleep",
+            author="Jane Doe", date=datetime.datetime(2024, 6, 3),
+            site_name="Cat Journal"),
+    }
+
+    def make(self):
+        return make_book([Chapter(
+            title="One",
+            html='<p>See <a href="https://cats.example/naps">a study</a>.</p>',
+            source="https://blog.example/one", author="Ed Author",
+            date=datetime.datetime(2023, 1, 2))])
+
+    def test_print_references_section(self):
+        page = build_print_html(self.make(), link_citations=self.CITES,
+                                references=True)
+        self.assertIn('<section class="chapter references" id="references">', page)
+        self.assertIn('<a href="#references">References</a>', page)  # in the TOC
+        self.assertIn('<p class="ref-entry">Doe, J. (2024, June 3). '
+                      '<i>How cats sleep</i>. Cat Journal. ', page)
+        self.assertIn("<h2>Chapter sources</h2>", page)
+        self.assertIn("Author, E. (2023, January 2). <i>One</i>. blog.example.",
+                      page)
+
+    def test_print_references_off_by_default(self):
+        page = build_print_html(self.make(), link_citations=self.CITES)
+        self.assertNotIn('id="references"', page)
+        self.assertNotIn("ref-entry\">", page)
+
+    def test_epub_references_file(self):
+        book = self.make()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "b.epub")
+            write_epub(book, path, link_citations=self.CITES, references=True)
+            with zipfile.ZipFile(path) as zf:
+                refs = zf.read("OEBPS/text/references.xhtml").decode("utf-8")
+                nav = zf.read("OEBPS/nav.xhtml").decode("utf-8")
+                opf = zf.read("OEBPS/package.opf").decode("utf-8")
+        ET.fromstring(refs)  # well-formed XHTML
+        self.assertIn("Doe, J. (2024, June 3).", refs)
+        self.assertIn('<a href="text/references.xhtml">References</a>', nav)
+        self.assertIn("references", opf)
+
+    def test_docx_references_section(self):
+        book = self.make()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "b.docx")
+            write_docx(book, path, link_citations=self.CITES, references=True)
+            with zipfile.ZipFile(path) as zf:
+                doc = zf.read("word/document.xml").decode("utf-8")
+                styles = zf.read("word/styles.xml").decode("utf-8")
+        self.assertIn(">References<", doc)
+        self.assertIn('w:val="ReferenceEntry"', doc)
+        self.assertIn("How cats sleep", doc)
+        self.assertIn("Chapter sources", doc)
+        # The style carries the APA hanging indent.
+        self.assertIn('w:styleId="ReferenceEntry"', styles)
+        self.assertIn("w:hanging=", styles)
+
+    def test_icml_references_story(self):
+        book = self.make()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "b.icml")
+            write_icml(book, path, link_citations=self.CITES, references=True)
+            text = open(path, encoding="utf-8").read()
+        ET.parse(io.StringIO(text))
+        self.assertIn("Reference Entry", text)
+        self.assertIn("How cats sleep", text)
+
+    def test_cli_references_flag(self):
+        args = build_parser().parse_args(["x.md", "--references"])
+        self.assertTrue(args.references)
+        args = build_parser().parse_args(["x.md"])
+        self.assertFalse(args.references)
+
+
 class CitableUrlsTests(unittest.TestCase):
     def test_only_call_links_are_listed(self):
         html = ('<p><a href="https://a.example/">one</a> and '

@@ -231,6 +231,7 @@ def run_build(params: dict, uploads: list, workdir: str,
     footnotes = _first(params, "no_footnotes") != "on"
     link_notes = _first(params, "no_link_notes") != "on"
     link_citations = _first(params, "no_link_citations") != "on"
+    references = _first(params, "references") == "on"
     font_size = _clean_size(_first(params, "font_size"),
                             themes.default_font_size(theme), _FONT_SIZE_RE)
     line_height = _clean_size(_first(params, "line_height"),
@@ -268,7 +269,7 @@ def run_build(params: dict, uploads: list, workdir: str,
         epub_path = os.path.join(out_dir, f"{name}.epub")
         epub_writer.write_epub(book, epub_path, theme=theme, drop_caps=drop_caps,
                                chapter_numbers=chapter_numbers, link_notes=link_notes,
-                               link_citations=citations)
+                               link_citations=citations, references=references)
         out.files[f"{name}.epub"] = epub_path
 
     if "docx" in formats:
@@ -277,7 +278,8 @@ def run_build(params: dict, uploads: list, workdir: str,
         docx_writer.write_docx(book, docx_path, theme=theme, trim=trim,
                                font_size=font_size, line_height=line_height,
                                chapter_numbers=chapter_numbers,
-                               link_notes=link_notes, link_citations=citations)
+                               link_notes=link_notes, link_citations=citations,
+                               references=references)
         out.files[f"{name}.docx"] = docx_path
 
     if "icml" in formats:
@@ -285,7 +287,8 @@ def run_build(params: dict, uploads: list, workdir: str,
         icml_path = os.path.join(out_dir, f"{name}.icml")
         icml_writer.write_icml(book, icml_path, theme=theme, font_size=font_size,
                                line_height=line_height, chapter_numbers=chapter_numbers,
-                               link_notes=link_notes, link_citations=citations)
+                               link_notes=link_notes, link_citations=citations,
+                               references=references)
         out.files[f"{name}.icml"] = icml_path
 
     if "idml" in formats:
@@ -294,7 +297,8 @@ def run_build(params: dict, uploads: list, workdir: str,
         idml_writer.write_idml(book, idml_path, theme=theme, trim=trim,
                                font_size=font_size, line_height=line_height,
                                chapter_start=chapter_start, chapter_numbers=chapter_numbers,
-                               link_notes=link_notes, link_citations=citations)
+                               link_notes=link_notes, link_citations=citations,
+                               references=references)
         out.files[f"{name}.idml"] = idml_path
 
     if ({"icml", "idml"} & formats) and book.assets:
@@ -314,6 +318,7 @@ def run_build(params: dict, uploads: list, workdir: str,
             line_height=line_height, chapter_start=chapter_start,
             toc=toc, drop_caps=drop_caps, chapter_numbers=chapter_numbers,
             footnotes=footnotes, link_notes=link_notes, link_citations=citations,
+            references=references,
         )
         with open(html_path, "w", encoding="utf-8") as fh:
             fh.write(page)
@@ -867,6 +872,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
           <label><input type="checkbox" name="no_footnotes"> Endnotes instead of foot-of-page notes</label>
           <label><input type="checkbox" name="no_link_notes"> Keep hyperlinks as-is (no L1, L2&hellip; URL notes)</label>
           <label><input type="checkbox" name="no_link_citations"> Bare URLs in link notes (skip APA-style citations)</label>
+          <label><input type="checkbox" name="references"> Append an APA References page</label>
         </div>
       </details>
     </div>
