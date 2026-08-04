@@ -901,7 +901,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
           <label><input type="checkbox" name="drop_caps"> Drop caps on chapter openings</label>
           <label><input type="checkbox" name="no_chapter_numbers"> Omit &ldquo;Chapter N&rdquo; labels</label>
           <label><input type="checkbox" name="no_toc"> Omit the contents page (print)</label>
-          <label><input type="checkbox" name="no_footnotes"> Endnotes instead of foot-of-page notes</label>
+          <label><input type="checkbox" name="no_footnotes"> Content footnotes: collect as endnotes</label>
           <label><input type="checkbox" name="no_link_citations"> Bare URLs in link notes (skip APA-style citations)</label>
         </div>
       </details>
@@ -1042,14 +1042,15 @@ def _theme_picker_html() -> str:
     a data URI — the page stays a single self-contained document on every
     host (local server and serverless alike)."""
     cards = []
-    for value, label, blurb, trim in (
-        ("classic", "Classic", "serif, indents, centered heads", ""),
-        ("modern", "Modern", "sans heads, spaced paragraphs", ""),
-        ("classical", "Classical", "small-cap heads, quiet openers", ""),
-        ("vsi", "VSI", "Oxford pocket style, gray sans openers", "vsi"),
-        ("classicthesis", "ClassicThesis", "Palatino, spaced small caps", "a4"),
-        ("short intro", "Short Intro", "Miller Text, ragged right, pocket page", "vsi"),
+    for value, label, blurb in (
+        ("classic", "Classic", "serif, indents, centered heads"),
+        ("modern", "Modern", "sans heads, spaced paragraphs"),
+        ("classical", "Classical", "small-cap heads, quiet openers"),
+        ("vsi", "VSI", "Oxford pocket style, gray sans openers"),
+        ("classicthesis", "ClassicThesis", "Palatino, spaced small caps"),
+        ("short intro", "Short Intro", "Miller Text, ragged right, pocket page"),
     ):
+        trim = themes.default_trim(value)  # the page the theme is drawn for
         path = os.path.join(os.path.dirname(__file__), "thumbs",
                             value.replace(" ", "-") + ".webp")
         try:

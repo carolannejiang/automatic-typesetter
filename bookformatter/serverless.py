@@ -123,7 +123,8 @@ def _page() -> str:
     return page
 
 
-def _respond(start_response, code: int, body: bytes, content_type: str, extra=None):
+def _respond(start_response, code: int, body: bytes, content_type: str, extra=None,
+             cache: str = "no-store"):
     reasons = {200: "OK", 400: "Bad Request", 403: "Forbidden",
                404: "Not Found", 405: "Method Not Allowed", 413: "Payload Too Large",
                500: "Internal Server Error"}
@@ -131,7 +132,7 @@ def _respond(start_response, code: int, body: bytes, content_type: str, extra=No
         ("Content-Type", content_type),
         ("Content-Length", str(len(body))),
         ("X-Content-Type-Options", "nosniff"),
-        ("Cache-Control", "no-store"),
+        ("Cache-Control", cache),
     ] + list((extra or {}).items())
     start_response(f"{code} {reasons.get(code, 'OK')}", headers)
     return [body]
@@ -208,7 +209,11 @@ def app(environ, start_response):
 
     if path in ("/", "/index.html", "/api/index") and method in ("GET", "HEAD"):
         body = b"" if method == "HEAD" else _page().encode("utf-8")
-        return _respond(start_response, 200, body, "text/html; charset=utf-8")
+        # The page is static (built once) and carries ~128 KB of inlined
+        # thumbnails; let visitors cache it briefly instead of re-fetching
+        # them every load. A short max-age keeps it fresh across deploys.
+        return _respond(start_response, 200, body, "text/html; charset=utf-8",
+                        cache="public, max-age=600")
     if path.endswith("/build") or path == "/build":
         if method != "POST":
             return _json(start_response, 405, {"error": "POST here to build a book"})
