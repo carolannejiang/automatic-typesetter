@@ -91,7 +91,13 @@ def fetch_citation(url: str, timeout: float = CITE_TIMEOUT) -> Optional[Citation
         # No declared type: accept only if it reads like an HTML document.
         if base or not re.search(r"<(!doctype|html)\b", text[:1024], re.I):
             return None
-    doc = extract_article(text, base_url=url)
+    try:
+        doc = extract_article(text, base_url=url)
+    except Exception:
+        # Linked pages are arbitrary web HTML; one too broken to parse
+        # (pathological nesting, mislabeled binary) must cost its citation,
+        # not the book build.
+        return None
     title = htmldom.normalize_ws(doc.title or "")
     if not title or title == "Untitled":
         return None

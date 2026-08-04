@@ -148,6 +148,14 @@ class FetchCitationTests(unittest.TestCase):
         with mock.patch.object(fetch, "fetch_text", boom):
             self.assertIsNone(apacite.fetch_citation("https://down.example/"))
 
+    def test_unparseable_page_gives_none(self):
+        # A pathologically nested page must cost its citation, not the build.
+        page = ("<html><head><title>Deep</title></head><body>"
+                + "<div>" * 4000 + "x" + "</div>" * 4000 + "</body></html>")
+        fake = mock.Mock(return_value=(page, "text/html", ""))
+        with mock.patch.object(fetch, "fetch_text", fake):
+            self.assertIsNone(apacite.fetch_citation("https://deep.example/x"))
+
     def test_no_title_gives_none(self):
         page = "<html><body><article><p>%s</p></article></body></html>" % ("Hi. " * 60)
         fake = mock.Mock(return_value=(page, "text/html", ""))
