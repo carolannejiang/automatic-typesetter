@@ -246,6 +246,73 @@ class UrlIngestTests(unittest.TestCase):
         self.assertEqual(len(result.chapters), 1)
         self.assertIn("barely a post", result.chapters[0].html)
 
+    def test_curated_link_list_imports_each_post(self):
+        # A "start here" page: a list whose items each lead to one of the
+        # site's posts, wrapped in a blurb. Import the posts, not the list.
+        blurb = "A short note on why this one is worth reading. " * 2
+        items = "".join(
+            f'<li><a href="/blog/post-{n}">Reasons to read post {n}</a> — {blurb}</li>'
+            for n in range(1, 7)
+        )
+        page = f"""<html><head><title>Best Of — Example Blog</title></head>
+        <body><main><p>I have a lot of posts, so here is where to start.</p>
+        <ul>{items}</ul></main></body></html>"""
+        post = lambda n: (f"<html><head><title>Post {n}</title></head>"
+                          f"<body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>")
+        fake = _FakeWeb({"https://blog.example/best": (page, "text/html"),
+                         **{f"https://blog.example/blog/post-{n}": (post(n), "text/html")
+                            for n in range(1, 7)}})
+        result = self._ingest(fake, "https://blog.example/best")
+        self.assertEqual([c.title for c in result.chapters],
+                         [f"Post {n}" for n in range(1, 7)])
+        self.assertIn("scores well in extraction", result.chapters[0].html)
+        self.assertEqual(result.title_hint, "Best Of — Example Blog")
+
+    def test_link_list_respects_max_items_in_document_order(self):
+        blurb = "A short note on why this one is worth reading. " * 2
+        items = "".join(
+            f'<li><a href="/blog/post-{n}">Reasons to read post {n}</a> — {blurb}</li>'
+            for n in range(1, 7)
+        )
+        page = f"""<html><head><title>Best Of</title></head>
+        <body><main><ul>{items}</ul></main></body></html>"""
+        post = lambda n: (f"<html><head><title>Post {n}</title></head>"
+                          f"<body><article><p>{PROSE}</p></article></body></html>")
+        fake = _FakeWeb({"https://blog.example/best": (page, "text/html"),
+                         **{f"https://blog.example/blog/post-{n}": (post(n), "text/html")
+                            for n in range(1, 7)}})
+        result = self._ingest(fake, "https://blog.example/best", max_items=2)
+        self.assertEqual([c.title for c in result.chapters], ["Post 1", "Post 2"])
+
+    def test_article_with_related_links_is_not_crawled(self):
+        # A real post that ends with a short "related" list of its own posts:
+        # the prose dominates, so it stays one chapter and nothing is fetched.
+        page = f"""<html><head><title>An Essay — Example Blog</title></head>
+        <body><article><p>{PROSE}</p><p>{PROSE}</p><p>{PROSE}</p>
+        <ul><li><a href="/blog/other-one">See also my other post</a></li>
+        <li><a href="/blog/other-two">And this earlier one</a></li></ul>
+        </article></body></html>"""
+        fake = _FakeWeb({"https://blog.example/essays/one": (page, "text/html")})
+        result = self._ingest(fake, "https://blog.example/essays/one")
+        self.assertEqual(len(result.chapters), 1)
+        self.assertIn("An Essay", result.chapters[0].title)
+        self.assertNotIn("https://blog.example/blog/other-one", fake.requested)
+
+    def test_link_list_ignores_off_site_links(self):
+        # A roundup that links out to other sites is not a list of *our* posts;
+        # the same-site filter leaves it as a single chapter.
+        blurb = "Some commentary on an external piece worth your time. " * 2
+        items = "".join(
+            f'<li><a href="https://other{n}.example/x">External piece {n}</a> — {blurb}</li>'
+            for n in range(1, 7)
+        )
+        page = f"""<html><head><title>Weekly Links</title></head>
+        <body><main><ul>{items}</ul></main></body></html>"""
+        fake = _FakeWeb({"https://blog.example/links": (page, "text/html")})
+        result = self._ingest(fake, "https://blog.example/links")
+        self.assertEqual(len(result.chapters), 1)
+        self.assertNotIn("https://other1.example/x", fake.requested)
+
     def test_js_shell_page_warns_and_adds_nothing(self):
         page = """<html><head><title>Notion | Where work happens</title></head>
         <body><div id="notion-app"></div><script src="/app.js"></script></body></html>"""

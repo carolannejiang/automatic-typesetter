@@ -211,6 +211,20 @@ FULL_PAGE_MIN = 300
 # placeholder, a link-only reblog — unless an image is the actual post.
 NEAR_EMPTY_LEN = 40
 
+# A curated "start here" / "best of" page is a list of links to the site's own
+# posts, not one article and not a feed (its feed would give recent posts, not
+# the curation). When a page's content is organized as such a list, follow the
+# links and make one chapter per post. The trigger keys on list structure, not
+# a global link-to-text ratio: these pages wrap each post link in a blurb, so
+# links are a small share of the text but most *list items* still lead to a
+# post. Requiring the linked items to hold most of the content keeps a normal
+# essay with a "related posts" tail (prose in <p>, links in a short list) from
+# being mistaken for one.
+LINK_LIST_MIN = 5           # distinct post links / list items required
+LINK_LIST_ITEM_RATIO = 0.5  # share of list items that must lead to a post
+LINK_LIST_TEXT_RATIO = 0.5  # share of content those items must hold
+LINK_TEXT_MIN = 8           # a post-title link, not "more" or a bare date
+
 
 def _host(url: str) -> str:
     try:
@@ -433,6 +447,96 @@ def _visible_len(html_text: str) -> int:
     return len(htmldom.normalize_ws(root.text_content()))
 
 
+def _post_links(node, site_host: str, page_url: str) -> list:
+    """Same-site links under node that look like posts, in document order: an
+    http(s) link with title-length text, to another page on this site that is
+    neither the list page itself nor a listing (so the crawl never loops)."""
+    out = []
+    for a in node.find_all("a"):
+        href = a.get("href") or ""
+        text = htmldom.normalize_ws(a.text_content())
+        if (href.startswith(("http://", "https://"))
+                and _same_site(href, site_host)
+                and href.rstrip("/") != page_url.rstrip("/")
+                and not _looks_like_index_url(href)
+                and len(text) >= LINK_TEXT_MIN):
+            out.append(href)
+    return out
+
+
+def _link_list_targets(html_text: str, page_url: str) -> list:
+    """Ordered distinct post links when a page reads as a list of the site's
+    own posts, else []. A page qualifies only when its list items — not stray
+    inline links — carry the posts and hold most of the content, so an article
+    that merely links to a few of its neighbours is left as one chapter."""
+    site_host = _host(page_url)
+    if not site_host:
+        return []
+    root = htmldom.parse(html_text)
+    total = len(htmldom.normalize_ws(root.text_content()))
+    if total < 1:
+        return []
+    # Leaf list items only: an outer <li> wrapping a nested list would double
+    # count its children's text against the total.
+    items = [li for li in root.find_all("li")
+             if not any(d is not li and d.tag == "li" for d in li.walk())]
+    if len(items) < LINK_LIST_MIN:
+        return []
+    linked = [li for li in items if _post_links(li, site_host, page_url)]
+    if len(linked) < LINK_LIST_ITEM_RATIO * len(items):
+        return []
+    linked_text = sum(len(htmldom.normalize_ws(li.text_content())) for li in linked)
+    if linked_text < LINK_LIST_TEXT_RATIO * total:
+        return []
+    targets, seen = [], set()
+    for li in linked:
+        for href in _post_links(li, site_host, page_url):
+            key = href.split("#")[0].rstrip("/")  # same post, different anchor
+            if key not in seen:
+                seen.add(key)
+                targets.append(href)
+    return targets if len(targets) >= LINK_LIST_MIN else []
+
+
+def _ingest_link_list(page_url: str, page_title: str, targets: list,
+                      opts: IngestOptions, result: IngestResult) -> bool:
+    """Fetch each linked post and add it as a chapter, in the list's order.
+    Returns False (nothing usable fetched) so the caller can fall back to
+    keeping the list page itself."""
+    if opts.max_items > 0:
+        targets = targets[: opts.max_items]
+    _log(opts, f"link list: {page_url} — fetching {len(targets)} linked post(s)")
+    pages = _fetch_parallel(targets, fetch.fetch_text, "Fetching linked posts…", opts)
+    chapters, failures = [], []
+    for link in targets:
+        page = pages[link]
+        if isinstance(page, fetch.FetchError):
+            failures.append(str(page))
+            continue
+        page_text, _, final_url = page
+        doc = extract.extract_article(page_text, base_url=final_url)
+        if _visible_len(doc.html) < NEAR_EMPTY_LEN:
+            failures.append(f"{link}: no readable article content")
+            continue
+        chapters.append(Chapter(title=doc.title, html=doc.html, source=link,
+                                author=doc.author, date=doc.date))
+    if not chapters:
+        return False
+    result.chapters.extend(chapters)
+    result.warn(f"{page_url}: read as a list of posts; imported "
+                f"{len(chapters)} linked post(s) as chapters")
+    for message in failures:
+        result.warn(message)
+    if not result.title_hint and page_title and page_title != "Untitled":
+        result.title_hint = page_title
+    authors = {c.author for c in chapters if c.author}
+    if len(authors) == 1 and not result.author_hint:
+        result.author_hint = next(iter(authors))
+    if not result.source_url:
+        result.source_url = page_url
+    return True
+
+
 def _fetch_feed(feed_url: str):
     """Fetch and parse a candidate feed URL; None if it isn't a live feed.
     Returns (feed, final_url) — a redirect can land on another host, and
@@ -587,6 +691,12 @@ def _ingest_url(url: str, opts: IngestOptions, result: IngestResult) -> None:
                 _ingest_feed(feed_final, parsed, opts, result, auto_full=False)
                 return
             break  # a live feed without this post: keep the page result
+
+    # A curated list of the site's own posts: import each linked post instead
+    # of the bare list. Only when no feed already claimed the page above.
+    targets = _link_list_targets(doc.html, final_url)
+    if targets and _ingest_link_list(final_url, doc.title, targets, opts, result):
+        return
 
     if content_len < 40:
         result.warn(
