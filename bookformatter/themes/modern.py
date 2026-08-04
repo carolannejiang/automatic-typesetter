@@ -22,8 +22,6 @@ PRINT_EXTRA = None
 margins = base.default_margins
 chapter_label = base.default_chapter_label
 
-_MODERN_PARA = "p + p { margin-top: 0.6em; }"
-
 
 def params(font_size: str, line_height: str) -> dict:
     return {
@@ -36,7 +34,8 @@ def params(font_size: str, line_height: str) -> dict:
         "FONT_SIZE": font_size,
         "LINE_HEIGHT": line_height,
         "INDENT": "0",
-        "PARA_EXTRA": _MODERN_PARA,
+        # Block paragraphs: exactly one text line between, no indent.
+        "PARA_EXTRA": f"p + p {{ margin-top: {line_height}em; }}",
         "TITLE_EXTRA": "",
         "CHAPTER_DROP": "2.4em",
         "TITLE_DROP": "1.8in",
