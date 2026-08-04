@@ -19,6 +19,8 @@ module supplies:
     DEFAULT_FONT_SIZE, DEFAULT_LINE_HEIGHT  optional: the body type the
                    design is drawn for; pickers default to them when no
                    size is chosen (else 11pt / 1.45)
+    PRINT_SPECS    optional: selected-theme print guidance shown by the
+                   web interface (title, items, and an optional note)
 
 To add a theme, write such a module and list it in `_THEME_MODULES` below.
 Unknown theme names fall back to classic.
@@ -66,6 +68,11 @@ def default_font_size(theme: str) -> str:
 def default_line_height(theme: str) -> str:
     """The leading a theme is designed around ("1.45" unless it declares one)."""
     return getattr(_theme(theme), "DEFAULT_LINE_HEIGHT", "1.45")
+
+
+def print_specs(theme: str):
+    """Theme-specific production guidance, or None when none is declared."""
+    return getattr(_theme(theme), "PRINT_SPECS", None)
 
 
 def theme_params(theme: str, font_size: str, line_height: str) -> dict:
