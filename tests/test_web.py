@@ -86,6 +86,15 @@ class WebTests(unittest.TestCase):
                       "no_toc"):
             self.assertIn(f'name="{field}"', page, f"missing form field {field}")
 
+    def test_theme_picker_cards_with_thumbnails(self):
+        code, body = self._get("/")
+        page = body.decode()
+        for value in ("classic", "modern", "classical", "vsi",
+                      "classicthesis", "short intro"):
+            self.assertIn(f'name="theme" value="{value}"', page)
+        self.assertEqual(page.count("data:image/webp;base64,"), 6)
+        self.assertIn('value="classic" data-trim="" checked', page)
+
     def test_build_from_pasted_text_with_options(self):
         form = urllib.parse.urlencode(
             {
