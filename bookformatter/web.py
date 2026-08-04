@@ -11,6 +11,7 @@ served strictly from each job's registry (never from request paths).
 
 from __future__ import annotations
 
+import base64
 import datetime as _dt
 import email.parser
 import email.policy
@@ -670,6 +671,16 @@ textarea:focus-visible, select:focus-visible, summary:focus-visible {
 }
 .row { display: flex; gap: 1rem; flex-wrap: wrap; }
 .row > div { flex: 1 1 160px; }
+.themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 0.7rem; margin-top: 0.35rem; }
+.theme-card { position: relative; cursor: pointer; text-align: center; font-size: 0.78rem; color: var(--ink); margin: 0; }
+.theme-card input { position: absolute; opacity: 0; pointer-events: none; }
+.theme-card .frame { display: block; border: 1px solid var(--line); border-radius: 8px; padding: 6px; background: var(--field); transition: border-color .15s, box-shadow .15s; }
+.theme-card img { width: 100%; height: auto; display: block; border-radius: 3px; }
+.theme-card:hover .frame { border-color: var(--accent); }
+.theme-card input:checked + .frame { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.theme-card input:focus-visible + .frame { outline: 2px solid var(--accent); outline-offset: 2px; }
+.theme-card .tname { display: block; font-weight: 600; margin-top: 0.35rem; }
+.theme-card small { color: var(--muted); line-height: 1.25; display: block; }
 .checks { display: flex; gap: 1.2rem; flex-wrap: wrap; margin-top: 0.4rem; }
 .checks label { display: inline-flex; gap: 0.4rem; align-items: center; margin: 0; color: var(--ink); font-size: 0.9rem; }
 details { margin-top: 0.9rem; }
@@ -761,16 +772,9 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
 
     <div class="card">
       <h2>III &middot; Design</h2>
-      <div class="row">
-        <div><label for="theme">Theme</label>
-          <select id="theme" name="theme">
-            <option value="classic">Classic — serif, indents, centered heads</option>
-            <option value="modern">Modern — sans heads, spaced paragraphs</option>
-            <option value="classical">Classical — small-cap heads, top-corner folios, quiet openers</option>
-            <option value="vsi" data-trim="vsi">VSI — Oxford pocket style: gray sans openers, vertical margin running heads</option>
-            <option value="classicthesis">ClassicThesis — Palatino, spaced small caps, gray chapter numbers</option>
-            <option value="short intro" data-trim="vsi">Short Intro — 8.5/12 Miller Text, ragged right on a 20.5-pica measure, block paragraphs</option>
-          </select></div>
+      <label>Theme</label>
+      <div class="themes" id="theme-picker">__THEME_PICKER__</div>
+      <div class="row" style="margin-top:0.9rem">
         <div><label for="trim">Trim size (print)</label>
           <select id="trim" name="trim">
             <option value="6x9">6 &times; 9 in (trade)</option>
@@ -891,14 +895,15 @@ function showBusy(running, message) {
   }
 }
 
-// A theme can carry its natural page (data-trim on its option): picking the
+// A theme can carry its natural page (data-trim on its card): picking the
 // theme sets the trim to match, until the trim is chosen by hand.
-const themeSel = document.getElementById("theme");
+const themePicker = document.getElementById("theme-picker");
 const trimSel = document.getElementById("trim");
 let trimTouched = false;
 trimSel.addEventListener("change", () => { trimTouched = true; });
-themeSel.addEventListener("change", () => {
-  if (!trimTouched) trimSel.value = themeSel.selectedOptions[0].dataset.trim || "6x9";
+themePicker.addEventListener("change", (ev) => {
+  if (ev.target.name === "theme" && !trimTouched)
+    trimSel.value = ev.target.dataset.trim || "6x9";
 });
 
 form.addEventListener("submit", async (ev) => {
@@ -965,6 +970,39 @@ function showError(text) {
 </body>
 </html>
 """
+
+
+def _theme_picker_html() -> str:
+    """The theme cards, one radio per theme with its sample page inlined as
+    a data URI — the page stays a single self-contained document on every
+    host (local server and serverless alike)."""
+    cards = []
+    for value, label, blurb, trim in (
+        ("classic", "Classic", "serif, indents, centered heads", ""),
+        ("modern", "Modern", "sans heads, spaced paragraphs", ""),
+        ("classical", "Classical", "small-cap heads, quiet openers", ""),
+        ("vsi", "VSI", "Oxford pocket style, gray sans openers", "vsi"),
+        ("classicthesis", "ClassicThesis", "Palatino, spaced small caps", ""),
+        ("short intro", "Short Intro", "Miller Text, ragged right, pocket page", "vsi"),
+    ):
+        path = os.path.join(os.path.dirname(__file__), "thumbs",
+                            value.replace(" ", "-") + ".webp")
+        try:
+            with open(path, "rb") as fh:
+                uri = "data:image/webp;base64," + base64.b64encode(fh.read()).decode("ascii")
+            img = '<img src="%s" alt="%s theme sample page">' % (uri, label)
+        except OSError:  # missing thumb: keep the picker usable, sans image
+            img = ""
+        cards.append(
+            '<label class="theme-card"><input type="radio" name="theme" '
+            'value="%s" data-trim="%s"%s><span class="frame">%s</span>'
+            '<span class="tname">%s</span><small>%s</small></label>'
+            % (value, trim, " checked" if value == "classic" else "",
+               img, label, blurb))
+    return "".join(cards)
+
+
+PAGE = PAGE.replace("__THEME_PICKER__", _theme_picker_html())
 
 
 if __name__ == "__main__":

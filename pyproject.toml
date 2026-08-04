@@ -29,3 +29,6 @@ bookformatter-web = "bookformatter.web:main"
 
 [tool.setuptools.packages.find]
 include = ["bookformatter*"]
+
+[tool.setuptools.package-data]
+bookformatter = ["thumbs/*.webp"]
