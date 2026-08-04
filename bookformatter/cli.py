@@ -7,6 +7,7 @@ import datetime as _dt
 import os
 import sys
 
+from . import apacite
 from . import docx as docx_writer
 from . import epub as epub_writer
 from . import icml as icml_writer
@@ -15,6 +16,7 @@ from . import ingest as ingester
 from . import printbook, themes
 from .fetch import sniff_image
 from .indesign import extract_link_assets
+from .linknotes import citable_urls
 from .models import Asset, Book, BookMeta, slugify
 
 
@@ -84,6 +86,9 @@ def build_parser() -> argparse.ArgumentParser:
     design.add_argument("--no-link-notes", action="store_true",
                         help="keep hyperlinks as-is instead of presenting each as an "
                              "L-numbered note carrying its URL at the foot of the page")
+    design.add_argument("--no-link-citations", action="store_true",
+                        help="set link notes as bare URLs instead of fetching each "
+                             "linked page to expand its note into an APA-style citation")
 
     content = parser.add_argument_group("content handling")
     content.add_argument("--split", default="auto", choices=["auto", "h1", "h2", "none"],
@@ -162,12 +167,30 @@ def main(argv=None) -> int:
         file=sys.stderr,
     )
 
+    citations = None
+    if not args.no_link_notes and not args.no_link_citations:
+        urls = list(dict.fromkeys(
+            u for ch in book.chapters for u in citable_urls(ch.html)))
+        if urls:
+            print(f"Citing {len(urls)} linked page(s)...", file=sys.stderr)
+            citations = apacite.collect(urls)
+            missed = [u for u in urls if u not in citations]
+            if missed:
+                print(
+                    f"  {len(missed)} page(s) offered no citation metadata; "
+                    "their notes keep the bare URL.",
+                    file=sys.stderr,
+                )
+                if args.verbose:
+                    for u in missed:
+                        print(f"    {u}", file=sys.stderr)
+
     if "epub" in formats:
         epub_path = os.path.join(args.output_dir, f"{name}.epub")
         epub_writer.write_epub(
             book, epub_path, theme=args.theme, drop_caps=args.drop_caps,
             chapter_numbers=not args.no_chapter_numbers,
-            link_notes=not args.no_link_notes,
+            link_notes=not args.no_link_notes, link_citations=citations,
         )
         written.append(epub_path)
 
@@ -177,7 +200,7 @@ def main(argv=None) -> int:
             book, docx_path, theme=args.theme, trim=args.trim,
             font_size=args.font_size, line_height=args.line_height,
             chapter_numbers=not args.no_chapter_numbers,
-            link_notes=not args.no_link_notes,
+            link_notes=not args.no_link_notes, link_citations=citations,
         )
         written.append(docx_path)
 
@@ -186,7 +209,7 @@ def main(argv=None) -> int:
         icml_writer.write_icml(
             book, icml_path, theme=args.theme, font_size=args.font_size,
             line_height=args.line_height, chapter_numbers=not args.no_chapter_numbers,
-            link_notes=not args.no_link_notes,
+            link_notes=not args.no_link_notes, link_citations=citations,
         )
         written.append(icml_path)
 
@@ -197,7 +220,7 @@ def main(argv=None) -> int:
             font_size=args.font_size, line_height=args.line_height,
             chapter_start=args.chapter_start,
             chapter_numbers=not args.no_chapter_numbers,
-            link_notes=not args.no_link_notes,
+            link_notes=not args.no_link_notes, link_citations=citations,
         )
         written.append(idml_path)
 
@@ -217,7 +240,7 @@ def main(argv=None) -> int:
             toc=not args.no_toc, drop_caps=args.drop_caps,
             chapter_numbers=not args.no_chapter_numbers,
             footnotes=not args.no_footnotes,
-            link_notes=not args.no_link_notes,
+            link_notes=not args.no_link_notes, link_citations=citations,
         )
         with open(html_path, "w", encoding="utf-8") as fh:
             fh.write(page)

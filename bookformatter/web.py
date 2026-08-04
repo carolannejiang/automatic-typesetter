@@ -28,6 +28,7 @@ import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from . import apacite
 from . import docx as docx_writer
 from . import epub as epub_writer
 from . import icml as icml_writer
@@ -36,6 +37,7 @@ from . import ingest as ingester
 from . import printbook, themes
 from .fetch import sniff_image
 from .indesign import extract_link_assets
+from .linknotes import citable_urls
 from .models import Asset, Book, BookMeta, slugify
 
 MAX_BODY = 100 * 1024 * 1024  # 100 MB upload cap
@@ -228,6 +230,7 @@ def run_build(params: dict, uploads: list, workdir: str,
     toc = _first(params, "no_toc") != "on"
     footnotes = _first(params, "no_footnotes") != "on"
     link_notes = _first(params, "no_link_notes") != "on"
+    link_citations = _first(params, "no_link_citations") != "on"
     font_size = _clean_size(_first(params, "font_size"),
                             themes.default_font_size(theme), _FONT_SIZE_RE)
     line_height = _clean_size(_first(params, "line_height"),
@@ -249,11 +252,23 @@ def run_build(params: dict, uploads: list, workdir: str,
     os.makedirs(out_dir, exist_ok=True)
     name = slugify(_first(params, "name") or meta.title)
 
+    citations = None
+    if link_notes and link_citations:
+        urls = list(dict.fromkeys(
+            u for ch in book.chapters for u in citable_urls(ch.html)))
+        if urls:
+            progress(f"Citing {len(urls)} linked page(s)…")
+            citations = apacite.collect(
+                urls,
+                progress=lambda done, total: progress(
+                    f"Citing linked pages… {done}/{total}"))
+
     if "epub" in formats:
         progress("Writing EPUB…")
         epub_path = os.path.join(out_dir, f"{name}.epub")
         epub_writer.write_epub(book, epub_path, theme=theme, drop_caps=drop_caps,
-                               chapter_numbers=chapter_numbers, link_notes=link_notes)
+                               chapter_numbers=chapter_numbers, link_notes=link_notes,
+                               link_citations=citations)
         out.files[f"{name}.epub"] = epub_path
 
     if "docx" in formats:
@@ -262,7 +277,7 @@ def run_build(params: dict, uploads: list, workdir: str,
         docx_writer.write_docx(book, docx_path, theme=theme, trim=trim,
                                font_size=font_size, line_height=line_height,
                                chapter_numbers=chapter_numbers,
-                               link_notes=link_notes)
+                               link_notes=link_notes, link_citations=citations)
         out.files[f"{name}.docx"] = docx_path
 
     if "icml" in formats:
@@ -270,7 +285,7 @@ def run_build(params: dict, uploads: list, workdir: str,
         icml_path = os.path.join(out_dir, f"{name}.icml")
         icml_writer.write_icml(book, icml_path, theme=theme, font_size=font_size,
                                line_height=line_height, chapter_numbers=chapter_numbers,
-                               link_notes=link_notes)
+                               link_notes=link_notes, link_citations=citations)
         out.files[f"{name}.icml"] = icml_path
 
     if "idml" in formats:
@@ -279,7 +294,7 @@ def run_build(params: dict, uploads: list, workdir: str,
         idml_writer.write_idml(book, idml_path, theme=theme, trim=trim,
                                font_size=font_size, line_height=line_height,
                                chapter_start=chapter_start, chapter_numbers=chapter_numbers,
-                               link_notes=link_notes)
+                               link_notes=link_notes, link_citations=citations)
         out.files[f"{name}.idml"] = idml_path
 
     if ({"icml", "idml"} & formats) and book.assets:
@@ -298,7 +313,7 @@ def run_build(params: dict, uploads: list, workdir: str,
             book, theme=theme, trim=trim, font_size=font_size,
             line_height=line_height, chapter_start=chapter_start,
             toc=toc, drop_caps=drop_caps, chapter_numbers=chapter_numbers,
-            footnotes=footnotes, link_notes=link_notes,
+            footnotes=footnotes, link_notes=link_notes, link_citations=citations,
         )
         with open(html_path, "w", encoding="utf-8") as fh:
             fh.write(page)
@@ -851,6 +866,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
           <label><input type="checkbox" name="no_toc"> Omit the contents page (print)</label>
           <label><input type="checkbox" name="no_footnotes"> Endnotes instead of foot-of-page notes</label>
           <label><input type="checkbox" name="no_link_notes"> Keep hyperlinks as-is (no L1, L2&hellip; URL notes)</label>
+          <label><input type="checkbox" name="no_link_citations"> Bare URLs in link notes (skip APA-style citations)</label>
         </div>
       </details>
     </div>
