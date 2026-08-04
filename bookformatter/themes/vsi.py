@@ -97,9 +97,19 @@ from . import base
 
 NAME = "vsi"
 
-# The page this design was measured on (base.TRIM_SIZES["vsi"], 111 x 174 mm);
-# the CLI and web form fall back to it when the theme is chosen without a trim.
+# Longest title (chars) the title page holds at full size, measured on
+# the calibration page (TITLE_FIT_TRIM / TITLE_FIT_SIZE, default 5x8 at
+# 11pt); longer titles are scaled down to fit (see themes.print_css).
+TITLE_FIT_CHARS = 23
+TITLE_FIT_TRIM = "vsi"
+TITLE_FIT_SIZE = "8.5pt"
+
+# The page and text setting this design was measured on (base.TRIM_SIZES
+# ["vsi"], 111 x 174 mm; 8.5/12 pt body); the CLI and web form fall back to
+# them when the theme is chosen without a trim or size.
 DEFAULT_TRIM = "vsi"
+DEFAULT_FONT_SIZE = "8.5pt"
+DEFAULT_LINE_HEIGHT = "1.41"
 
 # ---------------------------------------------------------------- fonts ----
 # Miller Text is commercial; Georgia is the closest widely installed Scotch
@@ -136,8 +146,9 @@ _TOKENS = {
     # Contents sinks to the same grid line from its (single-line) head:
     # measured head-baseline -> first-entry-baseline gap 136.6 pt.
     "VSI_TOC_SINK": "14.4rem",
-    # title page drops (measured author baseline 159.3 pt from trim top)
-    "VSI_AUTHOR_DROP": "14.2rem",
+    # title page drops (measured author baseline 159.3 pt from trim top);
+    # em over the 1.41em author line so the title-fit scale reaches it
+    "VSI_AUTHOR_DROP": "10.07em",
 }
 
 
@@ -212,7 +223,10 @@ figcaption {
 }
 
 /* Title page: a flush-right stack — author over big caps over subtitle,
-   publisher at the foot (flex order restores the series' running order). */
+   publisher at the foot (flex order restores the series' running order).
+   Sizes here are em, not rem, so the one-leaf title-fit scale on the
+   section (see themes.print_css) reaches them; at full scale em == rem
+   because the section inherits the root size unchanged. */
 section.titlepage {
   display: flex; flex-direction: column; align-items: flex-end;
   text-align: right;
@@ -222,13 +236,13 @@ section.titlepage .book-author {
   margin-top: $VSI_AUTHOR_DROP;
   font-family: $HEADING_FONT;
   font-weight: 300;
-  font-size: 1.41rem;         /* 12 pt */
+  font-size: 1.41em;          /* 12 pt */
   letter-spacing: 0;
   text-transform: none;
 }
 section.titlepage .book-title {
   order: 2;
-  font-size: 3.29rem;         /* 28 pt display caps (Lithos in the source) */
+  font-size: 3.29em;          /* 28 pt display caps (Lithos in the source) */
   font-weight: 300;
   line-height: 1.1;
   text-transform: uppercase;
@@ -240,15 +254,15 @@ section.titlepage .book-subtitle {
   font-family: $HEADING_FONT;
   font-style: normal;
   font-weight: 300;
-  font-size: 1.65rem;         /* 14 pt */
+  font-size: 1.65em;          /* 14 pt */
   margin-top: 0.55em;
 }
 section.titlepage .book-publisher {
   order: 4;
-  margin-top: 15rem;
+  margin-top: 15.96em;        /* 15 rem over the 0.94em publisher line */
   font-family: $HEADING_FONT;
   font-weight: bold;
-  font-size: 0.94rem;
+  font-size: 0.94em;
   letter-spacing: 0.35em;
   text-transform: uppercase;
 }
@@ -333,6 +347,12 @@ PRINT_EXTRA = Template(
   @left-middle { content: none; }
   @right-middle { content: none; }
 }
+
+/* The base sheet pins the title page to one leaf with continue: discard,
+   but discard doesn't reach flex columns like this one — cap the two
+   variable slots (two display lines each) so the stack always fits. */
+section.titlepage .book-title { max-height: 7.3rem; overflow: hidden; continue: discard; }
+section.titlepage .book-subtitle { max-height: 4.7rem; overflow: hidden; continue: discard; }
 
 /* Contents folios: plain numbers a short gap after each title — the series
    sets no leaders and does not right-align. */

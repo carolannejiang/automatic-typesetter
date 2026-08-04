@@ -11,6 +11,11 @@ from . import base
 
 NAME = "classic"
 
+# Longest title (chars) the title page holds at full size, measured on
+# the calibration page (TITLE_FIT_TRIM / TITLE_FIT_SIZE, default 5x8 at
+# 11pt); longer titles are scaled down to fit (see themes.print_css).
+TITLE_FIT_CHARS = 135
+
 EXTRA = None
 PRINT_EXTRA = None
 

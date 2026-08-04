@@ -35,10 +35,9 @@ python3 -m bookformatter chapters/ -t "Essays" -f epub,pdf,html \
 # top outer corners, chapter openers stripped of all page furniture
 python3 -m bookformatter chapters/ -t "Essays" --theme classical
 
-# Or after André Miede's ClassicThesis LaTeX style (an homage to
-# Bringhurst): Palatino, letterspaced small-cap heads, outsize gray
-# chapter numbers over a title rule, folio and running head sharing
-# the top outer corner, dot-leaderless contents
+# Or match André Miede's supplied ClassicThesis v4.2 reference: its native
+# A4 page, 11/14.3pt Palatino, 336pt measure, margin-hung gray Euler chapter
+# numbers, letterspaced small-cap heads, and dot-leaderless contents
 python3 -m bookformatter chapters/ -t "Essays" --theme classicthesis
 
 # Oxford Very Short Introduction pocket design (see themes/vsi.py for the
@@ -152,7 +151,12 @@ chapters; References → Table of Contents just works), body/quote/
 code/caption formatting rides on named styles derived from the chosen
 theme (restyle the book by editing a style), footnotes are real Word
 footnotes that renumber as you edit, lists and tables are native,
-hyperlinks stay live, images are embedded. Page size and mirrored
+images are embedded. Hyperlinks stay live *and* each external link
+carries its `L1`, `L2`, … URL note as a real footnote with a custom
+mark — Word keeps custom-marked notes out of the automatic numbering,
+so content footnotes stay an unbroken 1, 2, 3 (`--no-link-notes` keeps
+plain hyperlinks only; feeding the file back in folds the L notes back
+out). Page size and mirrored
 margins follow the chosen trim, so the page count roughly tracks the
 print edition. Edit it, then either export from Word directly (KDP
 accepts .docx) — or simply feed the edited file back in:
@@ -162,7 +166,7 @@ typeset PDF/EPUB, chapters split at the Heading 1s.
 **Print HTML → PDF** — a single self-contained HTML file typeset with CSS
 Paged Media:
 
-- real trim sizes (`--trim 5x8, 5.25x8, 5.5x8.5, 6x9, a5`) with mirrored
+- real trim sizes (`--trim 5x8, 5.25x8, 5.5x8.5, 6x9, a4, a5`) with mirrored
   margins (larger inner margin for the gutter)
 - justified, hyphenated text; first-line indents with no gap between
   paragraphs (the traditional convention); widow/orphan control
@@ -180,7 +184,22 @@ Paged Media:
   link keeps its text and gains a small `L1`, `L2`, … call, with the
   destination URL set as a matching note at the foot of the page (a live
   link in the PDF). The L series is separate from content footnotes, which
-  keep their own 1, 2, 3; `--no-link-notes` turns the rule off
+  keep their own 1, 2, 3. A link quoted *inside* a footnote spawns no
+  note-on-a-note: its URL unfolds in parentheses right there in the note,
+  in every output format — and a `mailto:` link unfolds the same way in
+  the text (`write to Jane (jane@x.com)`), an address being short enough
+  to read in line. `--link-notes end` gathers the notes in a Notes
+  section at the end of the book instead (listed in the contents, each
+  note cross-linked with its call); `--no-link-notes` turns the rule off
+- link notes cite, not just point: each linked page is fetched once and its
+  note set as an APA-style citation — `Doe, J. (2024, June 3).
+  *Article title.* Site Name. https://…` — built from the page's own
+  metadata (og:/meta tags, JSON-LD, `<title>`), the URL still a live link.
+  A page that can't be fetched or names no title keeps the bare URL;
+  `--no-link-citations` keeps every note a bare URL and skips the fetching
+- opened in a browser on screen (before printing), footnotes and link
+  notes render as bracketed inline asides, so the same file doubles as a
+  proof
 - `* * *` scene-break ornaments for `---`/`<hr>`, styled blockquotes,
   tables, figures with captions, code blocks
 

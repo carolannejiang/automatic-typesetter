@@ -11,13 +11,16 @@ from . import base
 
 NAME = "modern"
 
+# Longest title (chars) the title page holds at full size, measured on
+# the calibration page (TITLE_FIT_TRIM / TITLE_FIT_SIZE, default 5x8 at
+# 11pt); longer titles are scaled down to fit (see themes.print_css).
+TITLE_FIT_CHARS = 195
+
 EXTRA = None
 PRINT_EXTRA = None
 
 margins = base.default_margins
 chapter_label = base.default_chapter_label
-
-_MODERN_PARA = "p + p { margin-top: 0.6em; }"
 
 
 def params(font_size: str, line_height: str) -> dict:
@@ -31,7 +34,8 @@ def params(font_size: str, line_height: str) -> dict:
         "FONT_SIZE": font_size,
         "LINE_HEIGHT": line_height,
         "INDENT": "0",
-        "PARA_EXTRA": _MODERN_PARA,
+        # Block paragraphs: exactly one text line between, no indent.
+        "PARA_EXTRA": f"p + p {{ margin-top: {line_height}em; }}",
         "TITLE_EXTRA": "",
         "CHAPTER_DROP": "2.4em",
         "TITLE_DROP": "1.8in",

@@ -15,6 +15,11 @@ from . import base
 
 NAME = "classical"
 
+# Longest title (chars) the title page holds at full size, measured on
+# the calibration page (TITLE_FIT_TRIM / TITLE_FIT_SIZE, default 5x8 at
+# 11pt); longer titles are scaled down to fit (see themes.print_css).
+TITLE_FIT_CHARS = 195
+
 # The WeasyPrint book-classical sample ships Source Serif Pro; fall back to
 # kindred transitional serifs where it isn't installed.
 SERIF_STACK = ('"Source Serif Pro", "Source Serif 4", "Source Serif", '

@@ -1,4 +1,5 @@
 import os
+import re
 import tempfile
 import unittest
 import zipfile
@@ -38,6 +39,9 @@ class DefaultTrimTests(unittest.TestCase):
         self.assertEqual(themes.default_trim("classic"), "6x9")
         self.assertEqual(themes.default_trim("classical"), "6x9")
         self.assertEqual(themes.default_trim("nonsense"), "6x9")
+
+    def test_classicthesis_declares_its_reference_a4_page(self):
+        self.assertEqual(themes.default_trim("classicthesis"), "a4")
 
 
 class ClassicalCssTests(unittest.TestCase):
@@ -84,6 +88,18 @@ class ClassicthesisCssTests(unittest.TestCase):
     def test_chapter_label_is_the_bare_number(self):
         self.assertEqual(themes.chapter_label("classicthesis", 3), "3")
 
+    def test_exposes_reference_print_guidance(self):
+        specs = themes.print_specs("classicthesis")
+        self.assertEqual(specs["title"], "Recommended ClassicThesis print setup")
+        guidance = " ".join(value for _, value in specs["items"])
+        self.assertIn("A4 (210 × 297 mm)", guidance)
+        self.assertIn("Duplex", guidance)
+        self.assertIn("5 mm binding correction", guidance)
+        self.assertIn("100% / Actual Size", guidance)
+
+    def test_themes_without_guidance_return_none(self):
+        self.assertIsNone(themes.print_specs("classic"))
+
     def test_print_css_joins_folio_and_headmark_in_the_outer_corner(self):
         css = themes.print_css(theme="classicthesis", book_title="Field Notes")
         # Folio and running head share one outer corner box per side...
@@ -103,17 +119,26 @@ class ClassicthesisCssTests(unittest.TestCase):
         self.assertIn("header.chapter-head { page: clean; }", css)
         self.assertIn("section.chapter { page: auto; }", css)
         clean = css.index("@page clean")
-        self.assertIn("@bottom-center { content: counter(page)", css[clean:])
+        self.assertIn("@bottom-right", css[clean:])
+        self.assertIn("content: counter(page)", css[clean:])
 
     def test_print_geometry_widens_the_outer_margin(self):
         css = themes.print_css(theme="classicthesis", trim="6x9")
         self.assertIn("margin: 0.78in 1.05in 0.95in 0.72in;", css)
+
+    def test_reference_geometry_uses_a4_and_the_measured_336pt_column(self):
+        css = themes.print_css(theme="classicthesis", trim="a4")
+        self.assertIn("size: 8.26772in 11.6929in;", css)
+        self.assertIn("margin: 0.95in 2.27in 1.32in 1.33in;", css)
+        self.assertIn("left: calc(100% + 0.278in);", css)
+        self.assertIn('font-family: "Euler Math", "AMS Euler"', css)
 
     def test_epub_css_restyles_without_paged_furniture(self):
         css = themes.epub_css(theme="classicthesis")
         self.assertIn("classicthesis overrides", css)
         self.assertNotIn("@top-left", css)
         self.assertNotIn("page: clean", css)
+        self.assertNotIn("left: calc(100% + 0.278in);", css)
 
 
 class VsiCssTests(unittest.TestCase):
@@ -186,6 +211,77 @@ class ThemeBuildTests(unittest.TestCase):
                 chapter = zf.read("OEBPS/text/chapter-001.xhtml").decode()
         self.assertIn("classical overrides", css)
         self.assertIn('<span class="chapter-number">Chapter 1</span>', chapter)
+
+
+class TitleFitTests(unittest.TestCase):
+    """The title page holds exactly one leaf: long titles scale to fit."""
+
+    LONG = ("An Exceedingly Long and Ponderous Chronicle of the Rise and "
+            "Fall of Nearly Everything That Ever Mattered " * 6).strip()
+
+    @staticmethod
+    def _scale(css):
+        m = re.search(r"section\.titlepage \{ font-size: ([0-9.]+)em; \}", css)
+        return float(m.group(1)) if m else None
+
+    def test_one_leaf_clamp_is_universal(self):
+        for theme in themes.THEME_NAMES:
+            css = themes.print_css(theme=theme, book_title="Field Notes")
+            self.assertIn("continue: discard;", css)
+            self.assertRegex(css, r"section\.titlepage \{\n  height: [0-9.]+in;")
+
+    def test_short_title_keeps_full_size(self):
+        css = themes.print_css(theme="classic", book_title="Field Notes")
+        self.assertIsNone(self._scale(css))
+
+    def test_long_title_scales_down_in_every_theme(self):
+        for theme in themes.THEME_NAMES:
+            css = themes.print_css(theme=theme, trim=themes.default_trim(theme),
+                                   book_title=self.LONG)
+            scale = self._scale(css)
+            self.assertIsNotNone(scale, theme)
+            self.assertLess(scale, 1.0, theme)
+            self.assertGreater(scale, 0.0, theme)
+
+    def test_longer_titles_scale_smaller(self):
+        shorter = self._scale(themes.print_css(theme="classic", book_title=self.LONG))
+        longer = self._scale(themes.print_css(theme="classic", book_title=self.LONG * 3))
+        self.assertLess(longer, shorter)
+
+    def test_roomier_trim_scales_less(self):
+        tight = self._scale(themes.print_css(theme="classic", trim="5x8",
+                                             book_title=self.LONG))
+        roomy = self._scale(themes.print_css(theme="classic", trim="6x9",
+                                             book_title=self.LONG))
+        self.assertGreater(roomy, tight)
+
+    def test_smaller_body_type_scales_less(self):
+        big = self._scale(themes.print_css(theme="classic", font_size="11pt",
+                                           book_title=self.LONG))
+        small = self._scale(themes.print_css(theme="classic", font_size="9pt",
+                                             book_title=self.LONG))
+        self.assertGreater(small, big)
+
+    def test_long_subtitle_counts_toward_the_fit(self):
+        css = themes.print_css(theme="classic", book_title="Field Notes",
+                               book_subtitle=self.LONG * 3)
+        self.assertIsNotNone(self._scale(css))
+
+
+class DefaultTypeTests(unittest.TestCase):
+    def test_pocket_themes_declare_their_design_setting(self):
+        for theme in ("vsi", "short intro"):
+            self.assertEqual(themes.default_font_size(theme), "8.5pt")
+            self.assertEqual(themes.default_line_height(theme), "1.41")
+
+    def test_other_themes_default_to_house_setting(self):
+        for theme in ("classic", "nonsense"):
+            self.assertEqual(themes.default_font_size(theme), "11pt")
+            self.assertEqual(themes.default_line_height(theme), "1.45")
+
+    def test_classicthesis_uses_the_reference_type_setting(self):
+        self.assertEqual(themes.default_font_size("classicthesis"), "11pt")
+        self.assertEqual(themes.default_line_height("classicthesis"), "1.30")
 
 
 if __name__ == "__main__":

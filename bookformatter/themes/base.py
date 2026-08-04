@@ -22,6 +22,9 @@ TRIM_SIZES = {
     "5.25x8": (5.25, 8.0),
     "5.5x8.5": (5.5, 8.5),
     "6x9": (6.0, 9.0),
+    # Exact ISO dimensions, converted from 210 x 297 mm.  ClassicThesis
+    # v4.2 is designed on this page rather than a US trade-book trim.
+    "a4": (210 / 25.4, 297 / 25.4),
     "a5": (5.83, 8.27),
     "vsi": (4.37, 6.85),
 }
@@ -175,7 +178,9 @@ section.titlepage .book-title { margin-top: 15%; }
    the line would stretch the lone space after the L label into a gap. */
 aside.linknote { font-size: 0.85em; margin: 0.4em 0; }
 aside.linknote p { text-indent: 0; margin: 0; text-align: left; }
-aside.linknote a.linknote-url { overflow-wrap: anywhere; word-break: break-all; }
+/* Bare selector: the URL anchor also appears parenthesized inside content
+   footnotes, where links unfold in place rather than gaining an L note. */
+a.linknote-url { overflow-wrap: anywhere; word-break: break-all; }
 """
 )
 
@@ -221,6 +226,15 @@ PRINT_EXTRA = Template(
 
 .frontmatter { page: frontmatter; }
 section.titlepage, section.copyrightpage, nav.print-toc { break-before: page; page-break-before: always; }
+/* The title page is always exactly one leaf: fix it to the page's content
+   height so an overlong title can't spill onto a second page. WeasyPrint
+   honors `continue: discard` (CSS Overflow 3) and drops the lines that
+   don't fit; Chrome ignores it but clips via overflow: hidden. */
+section.titlepage {
+  height: ${CONTENT_H}in;
+  overflow: hidden;
+  continue: discard;
+}
 /* The invisible page that closes the front matter: forcing a left page here
    means any blank inserted before chapter 1 still belongs to the
    frontmatter page group, keeping the body's first folio at 1 on a recto. */
@@ -285,7 +299,39 @@ span.linknote {
 }
 span.linknote::footnote-call { content: none; }
 span.linknote::footnote-marker { content: none; }
-span.linknote a.linknote-url { overflow-wrap: anywhere; }
+/* Bare selector: a link already inside a content footnote unfolds its URL
+   in parentheses within that note (span.footnote), not as an L note. */
+a.linknote-url { overflow-wrap: anywhere; }
+
+/* Book-end link notes: with the "end" placement the L notes gather in a
+   back-matter Notes section instead of floating to each page's foot. The
+   section opens like a chapter — same break, and its chapter-head sets the
+   running-head strings — but stays outside section.chapter so chapter-only
+   dress (justification, drop caps, first-paragraph rules) can't touch the
+   note list. */
+section.endnotes {
+  break-before: $CHAPTER_BREAK; page-break-before: $CHAPTER_BREAK_LEGACY;
+  page: chapter;
+}
+section.endnotes p.endnote {
+  font-size: 0.85em;
+  line-height: 1.35;
+  margin: 0.35em 0;
+  text-align: left;
+  text-indent: 0;
+  hyphens: none; -webkit-hyphens: none;
+}
+
+/* On screen the paged machinery is inert (float:footnote, @page), so the
+   same file doubles as a proof when opened in a browser before printing:
+   notes read as bracketed inline asides instead of raw runs of small
+   text. Print engines use the print medium and never see this block. */
+@media screen {
+  span.footnote, span.linknote { font-size: 0.82em; color: #444; }
+  span.footnote::before, span.linknote::before { content: " [ "; color: #999; }
+  span.footnote::after, span.linknote::after { content: " ]"; color: #999; }
+  span.linknote .linknote-label { font-weight: 600; }
+}
 """
 )
 

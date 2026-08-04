@@ -21,7 +21,7 @@ import tempfile
 
 from . import htmldom, themes
 from .footnotes import inline_footnotes
-from .linknotes import annotate_links
+from .linknotes import annotate_links, note_body_html
 from .models import Book
 
 _CHROME_CANDIDATES = [
@@ -59,13 +59,62 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = "6x9",
                      font_size: str = "11pt", line_height: str = "1.45",
                      chapter_start: str = "right", toc: bool = True,
                      drop_caps: bool = False, chapter_numbers: bool = True,
-                     footnotes: bool = True, link_notes: bool = True) -> str:
+                     footnotes: bool = True, link_notes="foot",
+                     link_citations: dict = None) -> str:
+    """link_notes places the hyperlink URL notes (L1, L2, ...): "foot" sets
+    each at the foot of its citing page, "end" gathers them in a Notes
+    section at the end of the book, "off" keeps hyperlinks as-is. True and
+    False are accepted as "foot" and "off" for older callers."""
+    if link_notes is True:
+        link_notes = "foot"
+    elif not link_notes:
+        link_notes = "off"
     meta = book.meta
     css = themes.print_css(
         theme=theme, trim=trim, font_size=font_size, line_height=line_height,
-        book_title=meta.title, chapter_start=chapter_start, drop_caps=drop_caps,
+        book_title=meta.title, book_subtitle=meta.description or "",
+        chapter_start=chapter_start, drop_caps=drop_caps,
     )
     assets_by_name = {a.filename: a for a in book.assets}
+
+    # Chapters are set before the front matter so the contents page can
+    # list the Notes section when book-end link notes produce one.
+    next_link_note = 1
+    endnotes: list = []  # (number, url) when link_notes == "end"
+    chapter_parts: list = []
+    for i, chapter in enumerate(book.chapters, 1):
+        content = htmldom.normalize_fragment(chapter.html)
+        content = _inline_assets(content, assets_by_name)
+        if footnotes:
+            content = inline_footnotes(content)
+        if link_notes == "end":
+            content, next_link_note = annotate_links(
+                content, start=next_link_note, mode="endnote",
+                citations=link_citations, notes=endnotes)
+        elif link_notes != "off":
+            content, next_link_note = annotate_links(
+                content, start=next_link_note, citations=link_citations)
+        chapter_parts.append(f'<section class="chapter" id="chapter-{i}">')
+        chapter_parts.append('<header class="chapter-head">')
+        if chapter_numbers:
+            chapter_parts.append(f'<span class="chapter-number">{themes.chapter_label(theme, i)}</span>')
+        chapter_parts.append(f'<h1 class="chapter-title">{_esc(chapter.title)}</h1>')
+        chapter_parts.append("</header>")
+        chapter_parts.append(content)
+        chapter_parts.append("</section>")
+
+    if endnotes:
+        chapter_parts.append('<section class="endnotes" id="endnotes">')
+        chapter_parts.append('<header class="chapter-head">')
+        chapter_parts.append('<h1 class="chapter-title">Notes</h1>')
+        chapter_parts.append("</header>")
+        for number, href in endnotes:
+            chapter_parts.append(
+                f'<p class="endnote" id="ln-{number}">'
+                f'<a class="linknote-label" href="#lnref-{number}">L{number}</a> '
+                f'{note_body_html(href, link_citations)}</p>')
+        chapter_parts.append("</section>")
+
     parts: list = []
 
     parts.append('<section class="titlepage frontmatter">')
@@ -95,27 +144,13 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = "6x9",
         parts.append("<ol>")
         for i, chapter in enumerate(book.chapters, 1):
             parts.append(f'<li><a href="#chapter-{i}">{_esc(chapter.title)}</a></li>')
+        if endnotes:
+            parts.append('<li><a href="#endnotes">Notes</a></li>')
         parts.append("</ol>")
         parts.append("</nav>")
 
     parts.append('<div class="frontmatter fm-end"></div>')
-
-    next_link_note = 1
-    for i, chapter in enumerate(book.chapters, 1):
-        content = htmldom.normalize_fragment(chapter.html)
-        content = _inline_assets(content, assets_by_name)
-        if footnotes:
-            content = inline_footnotes(content)
-        if link_notes:
-            content, next_link_note = annotate_links(content, start=next_link_note)
-        parts.append(f'<section class="chapter" id="chapter-{i}">')
-        parts.append('<header class="chapter-head">')
-        if chapter_numbers:
-            parts.append(f'<span class="chapter-number">{themes.chapter_label(theme, i)}</span>')
-        parts.append(f'<h1 class="chapter-title">{_esc(chapter.title)}</h1>')
-        parts.append("</header>")
-        parts.append(content)
-        parts.append("</section>")
+    parts.extend(chapter_parts)
 
     body = "\n".join(parts)
     return f"""<!DOCTYPE html>

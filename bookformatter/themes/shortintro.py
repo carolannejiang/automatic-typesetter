@@ -31,8 +31,18 @@ from .vsi import SERIF_STACK
 
 NAME = "short intro"
 
-# The ~112 mm pocket page the spec's margins are quoted against.
+# Longest title (chars) the title page holds at full size, measured on
+# the calibration page (TITLE_FIT_TRIM / TITLE_FIT_SIZE, default 5x8 at
+# 11pt); longer titles are scaled down to fit (see themes.print_css).
+TITLE_FIT_CHARS = 150
+TITLE_FIT_TRIM = "vsi"
+TITLE_FIT_SIZE = "8.5pt"
+
+# The ~112 mm pocket page the spec's margins are quoted against, and the
+# specified 8.5/12 pt text setting (12 pt leading on the 8.5 pt body).
 DEFAULT_TRIM = "vsi"
+DEFAULT_FONT_SIZE = "8.5pt"
+DEFAULT_LINE_HEIGHT = "1.41"
 
 # The specified measure, in inches.
 _MEASURE = 20.5 / 6.0  # 20.5 picas ≈ 3.417 in ≈ 86.7 mm

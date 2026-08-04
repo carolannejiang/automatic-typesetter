@@ -28,6 +28,7 @@ import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from . import apacite
 from . import docx as docx_writer
 from . import epub as epub_writer
 from . import icml as icml_writer
@@ -36,6 +37,7 @@ from . import ingest as ingester
 from . import printbook, themes
 from .fetch import sniff_image
 from .indesign import extract_link_assets
+from .linknotes import citable_urls
 from .models import Asset, Book, BookMeta, slugify
 
 MAX_BODY = 100 * 1024 * 1024  # 100 MB upload cap
@@ -227,9 +229,16 @@ def run_build(params: dict, uploads: list, workdir: str,
     chapter_numbers = _first(params, "no_chapter_numbers") != "on"
     toc = _first(params, "no_toc") != "on"
     footnotes = _first(params, "no_footnotes") != "on"
-    link_notes = _first(params, "no_link_notes") != "on"
-    font_size = _clean_size(_first(params, "font_size"), "11pt", _FONT_SIZE_RE)
-    line_height = _clean_size(_first(params, "line_height"), "1.45", _LINE_HEIGHT_RE)
+    link_notes = _first(params, "link_notes", "foot")
+    if link_notes not in ("foot", "end", "off"):
+        link_notes = "foot"
+    if _first(params, "no_link_notes") == "on":  # pre-select cached form
+        link_notes = "off"
+    link_citations = _first(params, "no_link_citations") != "on"
+    font_size = _clean_size(_first(params, "font_size"),
+                            themes.default_font_size(theme), _FONT_SIZE_RE)
+    line_height = _clean_size(_first(params, "line_height"),
+                              themes.default_line_height(theme), _LINE_HEIGHT_RE)
     pdf_engine = _first(params, "pdf_engine", "auto")
     if pdf_engine not in ("auto", "weasyprint", "chrome", "none"):
         pdf_engine = "auto"
@@ -247,11 +256,24 @@ def run_build(params: dict, uploads: list, workdir: str,
     os.makedirs(out_dir, exist_ok=True)
     name = slugify(_first(params, "name") or meta.title)
 
+    citations = None
+    if link_notes != "off" and link_citations:
+        urls = list(dict.fromkeys(
+            u for ch in book.chapters for u in citable_urls(ch.html)))
+        if urls:
+            progress(f"Citing {len(urls)} linked page(s)…")
+            citations = apacite.collect(
+                urls,
+                progress=lambda done, total: progress(
+                    f"Citing linked pages… {done}/{total}"))
+
     if "epub" in formats:
         progress("Writing EPUB…")
         epub_path = os.path.join(out_dir, f"{name}.epub")
         epub_writer.write_epub(book, epub_path, theme=theme, drop_caps=drop_caps,
-                               chapter_numbers=chapter_numbers, link_notes=link_notes)
+                               chapter_numbers=chapter_numbers,
+                               link_notes=link_notes != "off",
+                               link_citations=citations)
         out.files[f"{name}.epub"] = epub_path
 
     if "docx" in formats:
@@ -259,7 +281,9 @@ def run_build(params: dict, uploads: list, workdir: str,
         docx_path = os.path.join(out_dir, f"{name}.docx")
         docx_writer.write_docx(book, docx_path, theme=theme, trim=trim,
                                font_size=font_size, line_height=line_height,
-                               chapter_numbers=chapter_numbers)
+                               chapter_numbers=chapter_numbers,
+                               link_notes=link_notes != "off",
+                               link_citations=citations)
         out.files[f"{name}.docx"] = docx_path
 
     if "icml" in formats:
@@ -267,7 +291,8 @@ def run_build(params: dict, uploads: list, workdir: str,
         icml_path = os.path.join(out_dir, f"{name}.icml")
         icml_writer.write_icml(book, icml_path, theme=theme, font_size=font_size,
                                line_height=line_height, chapter_numbers=chapter_numbers,
-                               link_notes=link_notes)
+                               link_notes=link_notes != "off",
+                               link_citations=citations)
         out.files[f"{name}.icml"] = icml_path
 
     if "idml" in formats:
@@ -276,7 +301,8 @@ def run_build(params: dict, uploads: list, workdir: str,
         idml_writer.write_idml(book, idml_path, theme=theme, trim=trim,
                                font_size=font_size, line_height=line_height,
                                chapter_start=chapter_start, chapter_numbers=chapter_numbers,
-                               link_notes=link_notes)
+                               link_notes=link_notes != "off",
+                               link_citations=citations)
         out.files[f"{name}.idml"] = idml_path
 
     if ({"icml", "idml"} & formats) and book.assets:
@@ -295,7 +321,7 @@ def run_build(params: dict, uploads: list, workdir: str,
             book, theme=theme, trim=trim, font_size=font_size,
             line_height=line_height, chapter_start=chapter_start,
             toc=toc, drop_caps=drop_caps, chapter_numbers=chapter_numbers,
-            footnotes=footnotes, link_notes=link_notes,
+            footnotes=footnotes, link_notes=link_notes, link_citations=citations,
         )
         with open(html_path, "w", encoding="utf-8") as fh:
             fh.write(page)
@@ -681,6 +707,19 @@ textarea:focus-visible, select:focus-visible, summary:focus-visible {
 .theme-card input:focus-visible + .frame { outline: 2px solid var(--accent); outline-offset: 2px; }
 .theme-card .tname { display: block; font-weight: 600; margin-top: 0.35rem; }
 .theme-card small { color: var(--muted); line-height: 1.25; display: block; }
+.theme-specs { margin-top: 0.9rem; }
+.theme-specs section {
+  border: 1px solid var(--line); border-radius: 8px; background: var(--field);
+  padding: 0.8rem 0.9rem;
+}
+.theme-specs h3 { margin: 0 0 0.55rem; font-size: 0.86rem; font-weight: 650; }
+.theme-specs dl {
+  display: grid; grid-template-columns: max-content 1fr; column-gap: 0.8rem;
+  row-gap: 0.25rem; margin: 0; font-size: 0.8rem;
+}
+.theme-specs dt { color: var(--muted); font-weight: 600; }
+.theme-specs dd { margin: 0; }
+.theme-specs p { color: var(--muted); font-size: 0.76rem; margin: 0.65rem 0 0; }
 .checks { display: flex; gap: 1.2rem; flex-wrap: wrap; margin-top: 0.4rem; }
 .checks label { display: inline-flex; gap: 0.4rem; align-items: center; margin: 0; color: var(--ink); font-size: 0.9rem; }
 details { margin-top: 0.9rem; }
@@ -724,8 +763,8 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
 <body>
 <div class="wrap">
   <header class="masthead">
-    <h1>bookformatter</h1>
-    <p>Turn websites, blogs, and manuscripts into traditional books.</p>
+    <h1>Typesetting tool</h1>
+    <p>Turn blogs / rss feeds / manuscripts into printable book format.</p>
   </header>
 
   <form id="form">
@@ -774,6 +813,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
       <h2>III &middot; Design</h2>
       <label>Theme</label>
       <div class="themes" id="theme-picker">__THEME_PICKER__</div>
+      <div class="theme-specs" id="theme-specs" aria-live="polite">__THEME_SPECS__</div>
       <div class="row" style="margin-top:0.9rem">
         <div><label for="trim">Trim size (print)</label>
           <select id="trim" name="trim">
@@ -781,6 +821,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
             <option value="5.5x8.5">5.5 &times; 8.5 in</option>
             <option value="5.25x8">5.25 &times; 8 in</option>
             <option value="5x8">5 &times; 8 in</option>
+            <option value="a4">A4 (210 &times; 297 mm)</option>
             <option value="a5">A5</option>
             <option value="vsi">4.37 &times; 6.85 in (111 &times; 174 mm pocket)</option>
           </select></div>
@@ -798,9 +839,9 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
         <summary>Fine print — typography, chapters, images, feeds, engine</summary>
         <div class="row">
           <div><label for="font_size">Body size (print)</label>
-            <input type="text" id="font_size" name="font_size" placeholder="11pt"></div>
+            <input type="text" id="font_size" name="font_size" placeholder="theme default"></div>
           <div><label for="line_height">Leading (line height)</label>
-            <input type="text" id="line_height" name="line_height" placeholder="1.45"></div>
+            <input type="text" id="line_height" name="line_height" placeholder="theme default"></div>
           <div><label for="pdf_engine">PDF engine</label>
             <select id="pdf_engine" name="pdf_engine">
               <option value="auto">Auto (WeasyPrint, else Chrome)</option>
@@ -828,6 +869,12 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
               <option value="link">Leave as links</option>
               <option value="strip">Remove</option>
             </select></div>
+          <div><label for="link_notes">Hyperlink URL notes (L1, L2&hellip;)</label>
+            <select id="link_notes" name="link_notes">
+              <option value="foot">At the foot of each page</option>
+              <option value="end">At the end of the book (print/PDF)</option>
+              <option value="off">Off &mdash; keep hyperlinks as-is</option>
+            </select></div>
         </div>
         <div class="row">
           <div><label for="order">Feed order</label>
@@ -847,7 +894,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
           <label><input type="checkbox" name="no_chapter_numbers"> Omit &ldquo;Chapter N&rdquo; labels</label>
           <label><input type="checkbox" name="no_toc"> Omit the contents page (print)</label>
           <label><input type="checkbox" name="no_footnotes"> Endnotes instead of foot-of-page notes</label>
-          <label><input type="checkbox" name="no_link_notes"> Keep hyperlinks as-is (no L1, L2&hellip; URL notes)</label>
+          <label><input type="checkbox" name="no_link_citations"> Bare URLs in link notes (skip APA-style citations)</label>
         </div>
       </details>
     </div>
@@ -898,13 +945,23 @@ function showBusy(running, message) {
 // A theme can carry its natural page (data-trim on its card): picking the
 // theme sets the trim to match, until the trim is chosen by hand.
 const themePicker = document.getElementById("theme-picker");
+const themeSpecs = document.getElementById("theme-specs");
 const trimSel = document.getElementById("trim");
 let trimTouched = false;
 trimSel.addEventListener("change", () => { trimTouched = true; });
+function updateThemeSpecs(theme) {
+  themeSpecs.querySelectorAll("[data-theme-spec]").forEach((panel) => {
+    panel.hidden = panel.dataset.themeSpec !== theme;
+  });
+}
 themePicker.addEventListener("change", (ev) => {
-  if (ev.target.name === "theme" && !trimTouched)
-    trimSel.value = ev.target.dataset.trim || "6x9";
+  if (ev.target.name === "theme") {
+    if (!trimTouched) trimSel.value = ev.target.dataset.trim || "6x9";
+    updateThemeSpecs(ev.target.value);
+  }
 });
+const selectedTheme = themePicker.querySelector('input[name="theme"]:checked');
+updateThemeSpecs(selectedTheme ? selectedTheme.value : "");
 
 form.addEventListener("submit", async (ev) => {
   ev.preventDefault();
@@ -982,7 +1039,7 @@ def _theme_picker_html() -> str:
         ("modern", "Modern", "sans heads, spaced paragraphs", ""),
         ("classical", "Classical", "small-cap heads, quiet openers", ""),
         ("vsi", "VSI", "Oxford pocket style, gray sans openers", "vsi"),
-        ("classicthesis", "ClassicThesis", "Palatino, spaced small caps", ""),
+        ("classicthesis", "ClassicThesis", "Palatino, spaced small caps", "a4"),
         ("short intro", "Short Intro", "Miller Text, ragged right, pocket page", "vsi"),
     ):
         path = os.path.join(os.path.dirname(__file__), "thumbs",
@@ -1002,7 +1059,29 @@ def _theme_picker_html() -> str:
     return "".join(cards)
 
 
+def _theme_specs_html() -> str:
+    """Accessible, pre-rendered production notes toggled by theme choice."""
+    panels = []
+    for theme in themes.THEME_NAMES:
+        specs = themes.print_specs(theme)
+        if not specs:
+            continue
+        items = "".join(
+            "<dt>%s</dt><dd>%s</dd>" % (html.escape(label), html.escape(value))
+            for label, value in specs.get("items", ())
+        )
+        note = specs.get("note")
+        note_html = "<p>%s</p>" % html.escape(note) if note else ""
+        panels.append(
+            '<section data-theme-spec="%s" hidden><h3>%s</h3><dl>%s</dl>%s</section>'
+            % (html.escape(theme, quote=True), html.escape(specs["title"]),
+               items, note_html)
+        )
+    return "".join(panels)
+
+
 PAGE = PAGE.replace("__THEME_PICKER__", _theme_picker_html())
+PAGE = PAGE.replace("__THEME_SPECS__", _theme_specs_html())
 
 
 if __name__ == "__main__":

@@ -18,9 +18,13 @@ printout pasted into one.
 - Real bulleted/numbered lists (numbering.xml; each ordered list restarts
   at 1) and real tables — both flattened to plain text in the InDesign
   exports, but first-class here.
-- Hyperlinks kept live, images embedded (not linked), and chapters opened
-  with a plain page break rather than a section break — the friendliest
-  construct to edit around.
+- Hyperlinks kept live — and each external link also carries its ``L1``,
+  ``L2``, … link note as a real footnote with a custom mark, which Word
+  keeps outside the automatic footnote numbering (link_notes=False keeps
+  plain hyperlinks only).
+- Images embedded (not linked), and chapters opened with a plain page
+  break rather than a section break — the friendliest construct to edit
+  around.
 - Page size and mirrored margins from the chosen trim, body size and
   leading from the theme, folios in the footer, so the page count roughly
   tracks the print edition.
@@ -554,15 +558,28 @@ class _Parts:
             for i, para in enumerate(run.paras):
                 lead = ""
                 if i == 0:
+                    # A link note carries its custom L mark; Word leaves
+                    # custom-marked notes out of the automatic numbering,
+                    # so content footnotes keep an unbroken 1, 2, 3.
+                    marker = ("<w:footnoteRef/>" if not run.label else
+                              '<w:t xml:space="preserve">%s</w:t>' % esc(run.label))
                     lead = ('<w:r><w:rPr><w:rStyle w:val="FootnoteReference"/>'
-                            "</w:rPr><w:footnoteRef/></w:r>"
-                            '<w:r><w:t xml:space="preserve"> </w:t></w:r>')
+                            "</w:rPr>%s</w:r>"
+                            '<w:r><w:t xml:space="preserve"> </w:t></w:r>' % marker)
                 paras.append('<w:p><w:pPr><w:pStyle w:val="FootnoteText"/></w:pPr>%s%s</w:p>'
                              % (lead, self.runs_xml(para.runs)))
         finally:
             self._in_note = False
         self.notes.append('<w:footnote w:id="%d">%s</w:footnote>'
                           % (fid, "".join(paras)))
+        if run.label:
+            # The call is the custom mark itself, set subscript like the
+            # L calls in the other output formats.
+            return ('<w:r><w:rPr><w:rStyle w:val="FootnoteReference"/>'
+                    '<w:vertAlign w:val="subscript"/></w:rPr>'
+                    '<w:footnoteReference w:customMarkFollows="1" w:id="%d"/>'
+                    '<w:t xml:space="preserve">%s</w:t></w:r>'
+                    % (fid, esc(run.label)))
         return ('<w:r><w:rPr><w:rStyle w:val="FootnoteReference"/></w:rPr>'
                 '<w:footnoteReference w:id="%d"/></w:r>' % fid)
 
@@ -768,10 +785,13 @@ def _document_rels_xml(parts: _Parts) -> str:
 
 def write_docx(book: Book, path: str, theme: str = "classic",
                trim: str = "6x9", font_size: str = "11pt",
-               line_height: str = "1.45", chapter_numbers: bool = True) -> None:
+               line_height: str = "1.45", chapter_numbers: bool = True,
+               link_notes: bool = True, link_citations: dict = None) -> None:
     catalog = build_styles(theme, font_size, line_height)
     items = book_to_story_items(book, theme, chapter_numbers,
-                                converter_cls=_WordConverter, link_notes=False)
+                                converter_cls=_WordConverter,
+                                link_notes=link_notes, link_note_mode="word",
+                                link_citations=link_citations)
     ordered_lists = _renumber_ordered_lists(items)
 
     width_in, height_in = themes.TRIM_SIZES.get(trim, themes.TRIM_SIZES["6x9"])

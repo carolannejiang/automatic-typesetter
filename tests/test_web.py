@@ -83,8 +83,30 @@ class WebTests(unittest.TestCase):
                       "theme", "trim", "formats", "font_size", "line_height",
                       "pdf_engine", "chapter_start", "split", "images", "order",
                       "max_items", "fetch_full", "drop_caps", "no_chapter_numbers",
-                      "no_toc"):
+                      "no_toc", "link_notes"):
             self.assertIn(f'name="{field}"', page, f"missing form field {field}")
+
+    def test_build_with_end_of_book_link_notes(self):
+        form = urllib.parse.urlencode(
+            {
+                "pasted": "# One\n\nSee [the spec](https://example.com/spec).\n",
+                "title": "Noted",
+                "formats": "html",
+                "link_notes": "end",
+                "name": "noted",
+            }
+        ).encode()
+        code, body = self._post("/build", form, "application/x-www-form-urlencoded")
+        self.assertEqual(code, 200)
+        job_id = json.loads(body)["id"]
+        status = self._wait_for_job(job_id)
+        self.assertEqual(status["status"], "done", status["message"])
+        code, page = self._get(f"/download?id={job_id}&file=noted.html")
+        self.assertEqual(code, 200)
+        html_body = page.decode().split("</style>")[1]
+        self.assertIn('<section class="endnotes" id="endnotes">', html_body)
+        self.assertIn('id="ln-1"', html_body)
+        self.assertNotIn('<span class="linknote">', html_body)
 
     def test_theme_picker_cards_with_thumbnails(self):
         code, body = self._get("/")
@@ -94,6 +116,12 @@ class WebTests(unittest.TestCase):
             self.assertIn(f'name="theme" value="{value}"', page)
         self.assertEqual(page.count("data:image/webp;base64,"), 6)
         self.assertIn('value="classic" data-trim="" checked', page)
+        self.assertIn('value="classicthesis" data-trim="a4"', page)
+        self.assertIn('<option value="a4">A4 (210 &times; 297 mm)</option>', page)
+        self.assertIn('data-theme-spec="classicthesis" hidden', page)
+        self.assertIn("Recommended ClassicThesis print setup", page)
+        self.assertIn("80–90 gsm uncoated stock", page)
+        self.assertIn("updateThemeSpecs(ev.target.value)", page)
 
     def test_build_from_pasted_text_with_options(self):
         form = urllib.parse.urlencode(
@@ -148,6 +176,25 @@ class WebTests(unittest.TestCase):
         code, page = self._get(f"/download?id={job_id}&file={name}")
         self.assertEqual(code, 200)
         self.assertIn("size: 4.37in 6.85in", page.decode())
+
+    def test_classicthesis_defaults_to_its_reference_a4_setting(self):
+        form = urllib.parse.urlencode(
+            {"pasted": PASTED, "title": "A Classic Thesis",
+             "theme": "classicthesis", "formats": ["html"]},
+            doseq=True,
+        ).encode()
+        code, body = self._post("/build", form, "application/x-www-form-urlencoded")
+        self.assertEqual(code, 200)
+        job_id = json.loads(body)["id"]
+        status = self._wait_for_job(job_id)
+        self.assertEqual(status["status"], "done", status["message"])
+        name = status["files"][0]["name"]
+        code, page = self._get(f"/download?id={job_id}&file={name}")
+        self.assertEqual(code, 200)
+        output = page.decode()
+        self.assertIn("size: 8.26772in 11.6929in", output)
+        self.assertIn("font-size: 11pt", output)
+        self.assertIn("line-height: 1.30", output)
 
     def test_build_multipart_with_file_and_cover(self):
         boundary = "testboundary42"

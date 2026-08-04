@@ -7,6 +7,7 @@ import datetime as _dt
 import os
 import sys
 
+from . import apacite
 from . import docx as docx_writer
 from . import epub as epub_writer
 from . import icml as icml_writer
@@ -15,6 +16,7 @@ from . import ingest as ingester
 from . import printbook, themes
 from .fetch import sniff_image
 from .indesign import extract_link_assets
+from .linknotes import citable_urls
 from .models import Asset, Book, BookMeta, slugify
 
 
@@ -66,9 +68,15 @@ def build_parser() -> argparse.ArgumentParser:
                              "Miede's ClassicThesis LaTeX style (default: classic)")
     design.add_argument("--trim", default=None, choices=sorted(themes.TRIM_SIZES),
                         help="print trim size in inches (default: the theme's own "
-                             "page — 4.37x6.85 for vsi, 6x9 otherwise)")
-    design.add_argument("--font-size", default="11pt", help="print body size (default: 11pt)")
-    design.add_argument("--line-height", default="1.45", help="body leading (default: 1.45)")
+                             "page — A4 for classicthesis, 4.37x6.85 for vsi, "
+                             "6x9 otherwise)")
+    design.add_argument("--font-size", default=None,
+                        help="print body size (default: the theme's design size — "
+                             "8.5pt for vsi and short intro, 11pt otherwise)")
+    design.add_argument("--line-height", default=None,
+                        help="body leading (default: the theme's design leading — "
+                             "1.30 for classicthesis, 1.41 for vsi and short intro, "
+                             "1.45 otherwise)")
     design.add_argument("--chapter-start", default="right", choices=["right", "any"],
                         help="print: chapters open on a recto page or any page (default: right)")
     design.add_argument("--drop-caps", action="store_true", help="drop cap on each chapter's first paragraph")
@@ -77,9 +85,18 @@ def build_parser() -> argparse.ArgumentParser:
     design.add_argument("--no-toc", action="store_true", help="omit the table of contents page in print output")
     design.add_argument("--no-footnotes", action="store_true",
                         help="keep footnotes as an end-of-chapter list instead of setting them at the foot of the page")
+    design.add_argument("--link-notes", default="foot", choices=["foot", "end", "off"],
+                        help="where each hyperlink's L-numbered URL note is set in "
+                             "print output: at the foot of its page, or gathered in "
+                             "a Notes section at the end of the book; off keeps "
+                             "hyperlinks as-is in every format (default: foot)")
     design.add_argument("--no-link-notes", action="store_true",
-                        help="keep hyperlinks as-is instead of presenting each as an "
-                             "L-numbered note carrying its URL at the foot of the page")
+                        help="synonym for --link-notes off: keep hyperlinks as-is "
+                             "instead of presenting each as an L-numbered note "
+                             "carrying its URL")
+    design.add_argument("--no-link-citations", action="store_true",
+                        help="set link notes as bare URLs instead of fetching each "
+                             "linked page to expand its note into an APA-style citation")
 
     content = parser.add_argument_group("content handling")
     content.add_argument("--split", default="auto", choices=["auto", "h1", "h2", "none"],
@@ -115,6 +132,11 @@ def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
     if args.trim is None:
         args.trim = themes.default_trim(args.theme)
+    if args.font_size is None:
+        args.font_size = themes.default_font_size(args.theme)
+    if args.line_height is None:
+        args.line_height = themes.default_line_height(args.theme)
+    link_notes = "off" if args.no_link_notes else args.link_notes
     formats = {f.strip().lower() for f in args.formats.split(",") if f.strip()}
     unknown = formats - {"epub", "pdf", "html", "docx", "icml", "idml"}
     if unknown:
@@ -154,12 +176,30 @@ def main(argv=None) -> int:
         file=sys.stderr,
     )
 
+    citations = None
+    if link_notes != "off" and not args.no_link_citations:
+        urls = list(dict.fromkeys(
+            u for ch in book.chapters for u in citable_urls(ch.html)))
+        if urls:
+            print(f"Citing {len(urls)} linked page(s)...", file=sys.stderr)
+            citations = apacite.collect(urls)
+            missed = [u for u in urls if u not in citations]
+            if missed:
+                print(
+                    f"  {len(missed)} page(s) offered no citation metadata; "
+                    "their notes keep the bare URL.",
+                    file=sys.stderr,
+                )
+                if args.verbose:
+                    for u in missed:
+                        print(f"    {u}", file=sys.stderr)
+
     if "epub" in formats:
         epub_path = os.path.join(args.output_dir, f"{name}.epub")
         epub_writer.write_epub(
             book, epub_path, theme=args.theme, drop_caps=args.drop_caps,
             chapter_numbers=not args.no_chapter_numbers,
-            link_notes=not args.no_link_notes,
+            link_notes=link_notes != "off", link_citations=citations,
         )
         written.append(epub_path)
 
@@ -169,6 +209,7 @@ def main(argv=None) -> int:
             book, docx_path, theme=args.theme, trim=args.trim,
             font_size=args.font_size, line_height=args.line_height,
             chapter_numbers=not args.no_chapter_numbers,
+            link_notes=link_notes != "off", link_citations=citations,
         )
         written.append(docx_path)
 
@@ -177,7 +218,7 @@ def main(argv=None) -> int:
         icml_writer.write_icml(
             book, icml_path, theme=args.theme, font_size=args.font_size,
             line_height=args.line_height, chapter_numbers=not args.no_chapter_numbers,
-            link_notes=not args.no_link_notes,
+            link_notes=link_notes != "off", link_citations=citations,
         )
         written.append(icml_path)
 
@@ -188,7 +229,7 @@ def main(argv=None) -> int:
             font_size=args.font_size, line_height=args.line_height,
             chapter_start=args.chapter_start,
             chapter_numbers=not args.no_chapter_numbers,
-            link_notes=not args.no_link_notes,
+            link_notes=link_notes != "off", link_citations=citations,
         )
         written.append(idml_path)
 
@@ -208,7 +249,7 @@ def main(argv=None) -> int:
             toc=not args.no_toc, drop_caps=args.drop_caps,
             chapter_numbers=not args.no_chapter_numbers,
             footnotes=not args.no_footnotes,
-            link_notes=not args.no_link_notes,
+            link_notes=link_notes, link_citations=citations,
         )
         with open(html_path, "w", encoding="utf-8") as fh:
             fh.write(page)
