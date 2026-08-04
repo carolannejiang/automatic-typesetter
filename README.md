@@ -35,10 +35,9 @@ python3 -m bookformatter chapters/ -t "Essays" -f epub,pdf,html \
 # top outer corners, chapter openers stripped of all page furniture
 python3 -m bookformatter chapters/ -t "Essays" --theme classical
 
-# Or after André Miede's ClassicThesis LaTeX style (an homage to
-# Bringhurst): Palatino, letterspaced small-cap heads, outsize gray
-# chapter numbers over a title rule, folio and running head sharing
-# the top outer corner, dot-leaderless contents
+# Or match André Miede's supplied ClassicThesis v4.2 reference: its native
+# A4 page, 11/14.3pt Palatino, 336pt measure, margin-hung gray Euler chapter
+# numbers, letterspaced small-cap heads, and dot-leaderless contents
 python3 -m bookformatter chapters/ -t "Essays" --theme classicthesis
 
 # Oxford Very Short Introduction pocket design (see themes/vsi.py for the
@@ -167,7 +166,7 @@ typeset PDF/EPUB, chapters split at the Heading 1s.
 **Print HTML → PDF** — a single self-contained HTML file typeset with CSS
 Paged Media:
 
-- real trim sizes (`--trim 5x8, 5.25x8, 5.5x8.5, 6x9, a5`) with mirrored
+- real trim sizes (`--trim 5x8, 5.25x8, 5.5x8.5, 6x9, a4, a5`) with mirrored
   margins (larger inner margin for the gutter)
 - justified, hyphenated text; first-line indents with no gap between
   paragraphs (the traditional convention); widow/orphan control

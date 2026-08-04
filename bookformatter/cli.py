@@ -68,13 +68,15 @@ def build_parser() -> argparse.ArgumentParser:
                              "Miede's ClassicThesis LaTeX style (default: classic)")
     design.add_argument("--trim", default=None, choices=sorted(themes.TRIM_SIZES),
                         help="print trim size in inches (default: the theme's own "
-                             "page — 4.37x6.85 for vsi, 6x9 otherwise)")
+                             "page — A4 for classicthesis, 4.37x6.85 for vsi, "
+                             "6x9 otherwise)")
     design.add_argument("--font-size", default=None,
                         help="print body size (default: the theme's design size — "
                              "8.5pt for vsi and short intro, 11pt otherwise)")
     design.add_argument("--line-height", default=None,
                         help="body leading (default: the theme's design leading — "
-                             "1.41 for vsi and short intro, 1.45 otherwise)")
+                             "1.30 for classicthesis, 1.41 for vsi and short intro, "
+                             "1.45 otherwise)")
     design.add_argument("--chapter-start", default="right", choices=["right", "any"],
                         help="print: chapters open on a recto page or any page (default: right)")
     design.add_argument("--drop-caps", action="store_true", help="drop cap on each chapter's first paragraph")

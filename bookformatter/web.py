@@ -707,6 +707,19 @@ textarea:focus-visible, select:focus-visible, summary:focus-visible {
 .theme-card input:focus-visible + .frame { outline: 2px solid var(--accent); outline-offset: 2px; }
 .theme-card .tname { display: block; font-weight: 600; margin-top: 0.35rem; }
 .theme-card small { color: var(--muted); line-height: 1.25; display: block; }
+.theme-specs { margin-top: 0.9rem; }
+.theme-specs section {
+  border: 1px solid var(--line); border-radius: 8px; background: var(--field);
+  padding: 0.8rem 0.9rem;
+}
+.theme-specs h3 { margin: 0 0 0.55rem; font-size: 0.86rem; font-weight: 650; }
+.theme-specs dl {
+  display: grid; grid-template-columns: max-content 1fr; column-gap: 0.8rem;
+  row-gap: 0.25rem; margin: 0; font-size: 0.8rem;
+}
+.theme-specs dt { color: var(--muted); font-weight: 600; }
+.theme-specs dd { margin: 0; }
+.theme-specs p { color: var(--muted); font-size: 0.76rem; margin: 0.65rem 0 0; }
 .checks { display: flex; gap: 1.2rem; flex-wrap: wrap; margin-top: 0.4rem; }
 .checks label { display: inline-flex; gap: 0.4rem; align-items: center; margin: 0; color: var(--ink); font-size: 0.9rem; }
 details { margin-top: 0.9rem; }
@@ -800,6 +813,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
       <h2>III &middot; Design</h2>
       <label>Theme</label>
       <div class="themes" id="theme-picker">__THEME_PICKER__</div>
+      <div class="theme-specs" id="theme-specs" aria-live="polite">__THEME_SPECS__</div>
       <div class="row" style="margin-top:0.9rem">
         <div><label for="trim">Trim size (print)</label>
           <select id="trim" name="trim">
@@ -807,6 +821,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
             <option value="5.5x8.5">5.5 &times; 8.5 in</option>
             <option value="5.25x8">5.25 &times; 8 in</option>
             <option value="5x8">5 &times; 8 in</option>
+            <option value="a4">A4 (210 &times; 297 mm)</option>
             <option value="a5">A5</option>
             <option value="vsi">4.37 &times; 6.85 in (111 &times; 174 mm pocket)</option>
           </select></div>
@@ -930,13 +945,23 @@ function showBusy(running, message) {
 // A theme can carry its natural page (data-trim on its card): picking the
 // theme sets the trim to match, until the trim is chosen by hand.
 const themePicker = document.getElementById("theme-picker");
+const themeSpecs = document.getElementById("theme-specs");
 const trimSel = document.getElementById("trim");
 let trimTouched = false;
 trimSel.addEventListener("change", () => { trimTouched = true; });
+function updateThemeSpecs(theme) {
+  themeSpecs.querySelectorAll("[data-theme-spec]").forEach((panel) => {
+    panel.hidden = panel.dataset.themeSpec !== theme;
+  });
+}
 themePicker.addEventListener("change", (ev) => {
-  if (ev.target.name === "theme" && !trimTouched)
-    trimSel.value = ev.target.dataset.trim || "6x9";
+  if (ev.target.name === "theme") {
+    if (!trimTouched) trimSel.value = ev.target.dataset.trim || "6x9";
+    updateThemeSpecs(ev.target.value);
+  }
 });
+const selectedTheme = themePicker.querySelector('input[name="theme"]:checked');
+updateThemeSpecs(selectedTheme ? selectedTheme.value : "");
 
 form.addEventListener("submit", async (ev) => {
   ev.preventDefault();
@@ -1014,7 +1039,7 @@ def _theme_picker_html() -> str:
         ("modern", "Modern", "sans heads, spaced paragraphs", ""),
         ("classical", "Classical", "small-cap heads, quiet openers", ""),
         ("vsi", "VSI", "Oxford pocket style, gray sans openers", "vsi"),
-        ("classicthesis", "ClassicThesis", "Palatino, spaced small caps", ""),
+        ("classicthesis", "ClassicThesis", "Palatino, spaced small caps", "a4"),
         ("short intro", "Short Intro", "Miller Text, ragged right, pocket page", "vsi"),
     ):
         path = os.path.join(os.path.dirname(__file__), "thumbs",
@@ -1034,7 +1059,29 @@ def _theme_picker_html() -> str:
     return "".join(cards)
 
 
+def _theme_specs_html() -> str:
+    """Accessible, pre-rendered production notes toggled by theme choice."""
+    panels = []
+    for theme in themes.THEME_NAMES:
+        specs = themes.print_specs(theme)
+        if not specs:
+            continue
+        items = "".join(
+            "<dt>%s</dt><dd>%s</dd>" % (html.escape(label), html.escape(value))
+            for label, value in specs.get("items", ())
+        )
+        note = specs.get("note")
+        note_html = "<p>%s</p>" % html.escape(note) if note else ""
+        panels.append(
+            '<section data-theme-spec="%s" hidden><h3>%s</h3><dl>%s</dl>%s</section>'
+            % (html.escape(theme, quote=True), html.escape(specs["title"]),
+               items, note_html)
+        )
+    return "".join(panels)
+
+
 PAGE = PAGE.replace("__THEME_PICKER__", _theme_picker_html())
+PAGE = PAGE.replace("__THEME_SPECS__", _theme_specs_html())
 
 
 if __name__ == "__main__":

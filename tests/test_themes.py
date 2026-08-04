@@ -40,6 +40,9 @@ class DefaultTrimTests(unittest.TestCase):
         self.assertEqual(themes.default_trim("classical"), "6x9")
         self.assertEqual(themes.default_trim("nonsense"), "6x9")
 
+    def test_classicthesis_declares_its_reference_a4_page(self):
+        self.assertEqual(themes.default_trim("classicthesis"), "a4")
+
 
 class ClassicalCssTests(unittest.TestCase):
     def test_chapter_label_spells_out_chapter(self):
@@ -85,6 +88,18 @@ class ClassicthesisCssTests(unittest.TestCase):
     def test_chapter_label_is_the_bare_number(self):
         self.assertEqual(themes.chapter_label("classicthesis", 3), "3")
 
+    def test_exposes_reference_print_guidance(self):
+        specs = themes.print_specs("classicthesis")
+        self.assertEqual(specs["title"], "Recommended ClassicThesis print setup")
+        guidance = " ".join(value for _, value in specs["items"])
+        self.assertIn("A4 (210 × 297 mm)", guidance)
+        self.assertIn("Duplex", guidance)
+        self.assertIn("5 mm binding correction", guidance)
+        self.assertIn("100% / Actual Size", guidance)
+
+    def test_themes_without_guidance_return_none(self):
+        self.assertIsNone(themes.print_specs("classic"))
+
     def test_print_css_joins_folio_and_headmark_in_the_outer_corner(self):
         css = themes.print_css(theme="classicthesis", book_title="Field Notes")
         # Folio and running head share one outer corner box per side...
@@ -104,17 +119,26 @@ class ClassicthesisCssTests(unittest.TestCase):
         self.assertIn("header.chapter-head { page: clean; }", css)
         self.assertIn("section.chapter { page: auto; }", css)
         clean = css.index("@page clean")
-        self.assertIn("@bottom-center { content: counter(page)", css[clean:])
+        self.assertIn("@bottom-right", css[clean:])
+        self.assertIn("content: counter(page)", css[clean:])
 
     def test_print_geometry_widens_the_outer_margin(self):
         css = themes.print_css(theme="classicthesis", trim="6x9")
         self.assertIn("margin: 0.78in 1.05in 0.95in 0.72in;", css)
+
+    def test_reference_geometry_uses_a4_and_the_measured_336pt_column(self):
+        css = themes.print_css(theme="classicthesis", trim="a4")
+        self.assertIn("size: 8.26772in 11.6929in;", css)
+        self.assertIn("margin: 0.95in 2.27in 1.32in 1.33in;", css)
+        self.assertIn("left: calc(100% + 0.278in);", css)
+        self.assertIn('font-family: "Euler Math", "AMS Euler"', css)
 
     def test_epub_css_restyles_without_paged_furniture(self):
         css = themes.epub_css(theme="classicthesis")
         self.assertIn("classicthesis overrides", css)
         self.assertNotIn("@top-left", css)
         self.assertNotIn("page: clean", css)
+        self.assertNotIn("left: calc(100% + 0.278in);", css)
 
 
 class VsiCssTests(unittest.TestCase):
@@ -254,6 +278,10 @@ class DefaultTypeTests(unittest.TestCase):
         for theme in ("classic", "nonsense"):
             self.assertEqual(themes.default_font_size(theme), "11pt")
             self.assertEqual(themes.default_line_height(theme), "1.45")
+
+    def test_classicthesis_uses_the_reference_type_setting(self):
+        self.assertEqual(themes.default_font_size("classicthesis"), "11pt")
+        self.assertEqual(themes.default_line_height("classicthesis"), "1.30")
 
 
 if __name__ == "__main__":
