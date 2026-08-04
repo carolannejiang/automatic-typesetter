@@ -257,5 +257,26 @@ class WebTests(unittest.TestCase):
         self.assertEqual(code, 404)
 
 
+class ThemeThumbnailTests(unittest.TestCase):
+    """Every theme needs a picker thumbnail, or its card renders imageless.
+    Regenerate with tools/regen_theme_thumbs.py after a theme changes."""
+
+    def test_every_theme_has_a_thumbnail(self):
+        import os
+        from bookformatter import themes
+        thumbs = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                              "bookformatter", "thumbs")
+        for name in themes.THEME_NAMES:
+            path = os.path.join(thumbs, name.replace(" ", "-") + ".webp")
+            self.assertTrue(os.path.exists(path), f"missing thumbnail for {name!r}")
+
+    def test_picker_renders_a_card_per_theme(self):
+        from bookformatter import themes, web
+        html = web._theme_picker_html()
+        self.assertEqual(html.count("data:image/webp;base64,"), len(themes.THEME_NAMES))
+        for name in themes.THEME_NAMES:
+            self.assertIn(f'name="theme" value="{name}"', html)
+
+
 if __name__ == "__main__":
     unittest.main()
