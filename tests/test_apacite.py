@@ -177,6 +177,26 @@ class CollectTests(unittest.TestCase):
     def test_collect_empty(self):
         self.assertEqual(apacite.collect([]), {})
 
+    def test_collect_budget_returns_partial(self):
+        import threading
+        release = threading.Event()
+
+        def fake(url, timeout=None):
+            if "slow" in url:
+                release.wait(5)  # blocks well past the budget
+                return Citation(url=url, title="Slow")
+            return Citation(url=url, title="Fast")
+
+        try:
+            with mock.patch.object(apacite, "fetch_citation", fake):
+                out = apacite.collect(
+                    ["https://fast.example/", "https://slow.example/"],
+                    budget=0.2)
+            # Budget elapses before the slow page: only the fast one is cited.
+            self.assertEqual(set(out), {"https://fast.example/"})
+        finally:
+            release.set()
+
 
 if __name__ == "__main__":
     unittest.main()

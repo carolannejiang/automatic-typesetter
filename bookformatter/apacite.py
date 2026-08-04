@@ -28,7 +28,8 @@ import datetime as _dt
 import re
 import threading
 import urllib.parse
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import (
+    ThreadPoolExecutor, as_completed, TimeoutError as _FuturesTimeout)
 from dataclasses import dataclass
 from typing import Optional
 
@@ -102,12 +103,19 @@ def fetch_citation(url: str, timeout: float = CITE_TIMEOUT) -> Optional[Citation
                     site_name=doc.site_name or host or None)
 
 
-def collect(urls, timeout: float = CITE_TIMEOUT, progress=None) -> dict:
+def collect(urls, timeout: float = CITE_TIMEOUT, progress=None,
+            budget: float = None) -> dict:
     """Fetch citations for many URLs in parallel: {url: Citation}.
 
     URLs whose pages yield no citation are simply absent, so a lookup miss
     means "keep the bare URL". progress, if given, is called as
     progress(done, total) after each page.
+
+    budget, if given, caps the total wall-clock seconds spent waiting: once
+    it elapses, whatever citations have arrived are returned and the rest
+    keep their bare URLs (pending fetches are abandoned). This keeps a
+    link-heavy build from overrunning a hosted request's time limit. Without
+    a budget every URL is awaited, as before.
     """
     unique = list(dict.fromkeys(u for u in urls if u))
     if not unique:
@@ -121,14 +129,21 @@ def collect(urls, timeout: float = CITE_TIMEOUT, progress=None) -> dict:
             return fetch_citation(u, timeout)
 
     results: dict = {}
-    with ThreadPoolExecutor(max_workers=min(8, len(unique))) as pool:
-        futures = {pool.submit(polite, u): u for u in unique}
-        for done, future in enumerate(as_completed(futures), 1):
+    pool = ThreadPoolExecutor(max_workers=min(8, len(unique)))
+    futures = {pool.submit(polite, u): u for u in unique}
+    try:
+        for done, future in enumerate(as_completed(futures, timeout=budget), 1):
             cite = future.result()
             if cite is not None:
                 results[futures[future]] = cite
             if progress is not None:
                 progress(done, len(unique))
+    except _FuturesTimeout:
+        pass  # budget spent — return the citations gathered so far
+    finally:
+        for future in futures:
+            future.cancel()  # drop any not-yet-started fetches
+        pool.shutdown(wait=False)
     return results
 
 
