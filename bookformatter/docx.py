@@ -344,7 +344,7 @@ def _styles_xml(catalog, lang: str) -> str:
         '<w:rPr><w:vertAlign w:val="superscript"/></w:rPr></w:style>',
         '<w:style w:type="character" w:styleId="Hyperlink">'
         '<w:name w:val="Hyperlink"/>'
-        '<w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr></w:style>',
+        '<w:rPr><w:color w:val="555555"/><w:u w:val="none"/></w:rPr></w:style>',
     ]
     for style in catalog.paragraph.values():
         if style.name in _HANDLED_ELSEWHERE:
