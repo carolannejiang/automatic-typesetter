@@ -495,7 +495,13 @@ class Handler(BaseHTTPRequestHandler):
         if path is None:
             return
         if path in ("", "/", "/index.html"):
-            self._send(200, PAGE.encode("utf-8"), "text/html; charset=utf-8")
+            # On a public deployment the homepage is static (built once) and
+            # carries ~128 KB of inlined thumbnails; let visitors cache it
+            # briefly. Local mode stays uncached so a restarted dev server's
+            # edits show at once.
+            extra = ({"Cache-Control": "public, max-age=600"}
+                     if getattr(self.server, "public", False) else None)
+            self._send(200, PAGE.encode("utf-8"), "text/html; charset=utf-8", extra)
         elif path == "/status":
             query = urllib.parse.parse_qs(parsed.query)
             job = _jobs.get(_first(query, "id"))

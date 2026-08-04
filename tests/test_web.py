@@ -74,6 +74,24 @@ class WebTests(unittest.TestCase):
             self.assertEqual(resp.status, 200)
             self.assertIn("text/html", resp.headers.get("Content-Type", ""))
 
+    def test_public_homepage_is_cacheable(self):
+        from bookformatter import fetch
+        # The local (shared) server does not cache — dev edits show at once.
+        with urllib.request.urlopen(self.base + "/") as resp:
+            self.assertIsNone(resp.headers.get("Cache-Control"))
+        was_public = fetch.PUBLIC_MODE
+        pub = make_server(port=0, public=True)
+        base = f"http://127.0.0.1:{pub.server_address[1]}"
+        thread = threading.Thread(target=pub.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with urllib.request.urlopen(base + "/") as resp:
+                self.assertIn("max-age=600", resp.headers.get("Cache-Control", ""))
+        finally:
+            pub.shutdown()
+            pub.server_close()
+            fetch.PUBLIC_MODE = was_public  # make_server flips this global
+
     def test_index_serves_form_with_all_knobs(self):
         code, body = self._get("/")
         self.assertEqual(code, 200)
