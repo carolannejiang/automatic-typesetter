@@ -170,9 +170,11 @@ section.titlepage .book-title { margin-top: 15%; }
 @page { margin: 0; }
 
 /* Link notes: readers with pop-up footnote support show each aside on tap
-   of its L call; others render them as a note list at the chapter's end. */
+   of its L call; others render them as a note list at the chapter's end.
+   Set ragged right: a long URL wraps at arbitrary points, and justifying
+   the line would stretch the lone space after the L label into a gap. */
 aside.linknote { font-size: 0.85em; margin: 0.4em 0; }
-aside.linknote p { text-indent: 0; margin: 0; }
+aside.linknote p { text-indent: 0; margin: 0; text-align: left; }
 aside.linknote a.linknote-url { overflow-wrap: anywhere; word-break: break-all; }
 """
 )

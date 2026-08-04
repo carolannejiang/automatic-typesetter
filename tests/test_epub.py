@@ -98,6 +98,16 @@ class EpubTests(unittest.TestCase):
         opf = self.zf.read("OEBPS/package.opf").decode("utf-8")
         self.assertIn('properties="cover-image"', opf)
 
+    def test_linknotes_are_ragged_not_justified(self):
+        # A wrapping URL note must not inherit the chapter's justified
+        # alignment, or the lone space between the L-label and the URL is
+        # stretched into a visible gap (spaceless URLs give justify nowhere
+        # else to put the slack).
+        css = self.zf.read("OEBPS/css/book.css").decode("utf-8")
+        self.assertIn("aside.linknote p", css)
+        rule = css.split("aside.linknote p", 1)[1].split("}", 1)[0]
+        self.assertIn("text-align: left", rule)
+
     def test_deterministic_identifier(self):
         with tempfile.TemporaryDirectory() as tmp2:
             other = os.path.join(tmp2, "again.epub")
