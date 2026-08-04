@@ -229,7 +229,11 @@ def run_build(params: dict, uploads: list, workdir: str,
     chapter_numbers = _first(params, "no_chapter_numbers") != "on"
     toc = _first(params, "no_toc") != "on"
     footnotes = _first(params, "no_footnotes") != "on"
-    link_notes = _first(params, "no_link_notes") != "on"
+    link_notes = _first(params, "link_notes", "foot")
+    if link_notes not in ("foot", "end", "off"):
+        link_notes = "foot"
+    if _first(params, "no_link_notes") == "on":  # pre-select cached form
+        link_notes = "off"
     link_citations = _first(params, "no_link_citations") != "on"
     font_size = _clean_size(_first(params, "font_size"),
                             themes.default_font_size(theme), _FONT_SIZE_RE)
@@ -253,7 +257,7 @@ def run_build(params: dict, uploads: list, workdir: str,
     name = slugify(_first(params, "name") or meta.title)
 
     citations = None
-    if link_notes and link_citations:
+    if link_notes != "off" and link_citations:
         urls = list(dict.fromkeys(
             u for ch in book.chapters for u in citable_urls(ch.html)))
         if urls:
@@ -267,7 +271,8 @@ def run_build(params: dict, uploads: list, workdir: str,
         progress("Writing EPUB…")
         epub_path = os.path.join(out_dir, f"{name}.epub")
         epub_writer.write_epub(book, epub_path, theme=theme, drop_caps=drop_caps,
-                               chapter_numbers=chapter_numbers, link_notes=link_notes,
+                               chapter_numbers=chapter_numbers,
+                               link_notes=link_notes != "off",
                                link_citations=citations)
         out.files[f"{name}.epub"] = epub_path
 
@@ -277,7 +282,8 @@ def run_build(params: dict, uploads: list, workdir: str,
         docx_writer.write_docx(book, docx_path, theme=theme, trim=trim,
                                font_size=font_size, line_height=line_height,
                                chapter_numbers=chapter_numbers,
-                               link_notes=link_notes, link_citations=citations)
+                               link_notes=link_notes != "off",
+                               link_citations=citations)
         out.files[f"{name}.docx"] = docx_path
 
     if "icml" in formats:
@@ -285,7 +291,8 @@ def run_build(params: dict, uploads: list, workdir: str,
         icml_path = os.path.join(out_dir, f"{name}.icml")
         icml_writer.write_icml(book, icml_path, theme=theme, font_size=font_size,
                                line_height=line_height, chapter_numbers=chapter_numbers,
-                               link_notes=link_notes, link_citations=citations)
+                               link_notes=link_notes != "off",
+                               link_citations=citations)
         out.files[f"{name}.icml"] = icml_path
 
     if "idml" in formats:
@@ -294,7 +301,8 @@ def run_build(params: dict, uploads: list, workdir: str,
         idml_writer.write_idml(book, idml_path, theme=theme, trim=trim,
                                font_size=font_size, line_height=line_height,
                                chapter_start=chapter_start, chapter_numbers=chapter_numbers,
-                               link_notes=link_notes, link_citations=citations)
+                               link_notes=link_notes != "off",
+                               link_citations=citations)
         out.files[f"{name}.idml"] = idml_path
 
     if ({"icml", "idml"} & formats) and book.assets:
@@ -846,6 +854,12 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
               <option value="link">Leave as links</option>
               <option value="strip">Remove</option>
             </select></div>
+          <div><label for="link_notes">Hyperlink URL notes (L1, L2&hellip;)</label>
+            <select id="link_notes" name="link_notes">
+              <option value="foot">At the foot of each page</option>
+              <option value="end">At the end of the book (print/PDF)</option>
+              <option value="off">Off &mdash; keep hyperlinks as-is</option>
+            </select></div>
         </div>
         <div class="row">
           <div><label for="order">Feed order</label>
@@ -865,7 +879,6 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
           <label><input type="checkbox" name="no_chapter_numbers"> Omit &ldquo;Chapter N&rdquo; labels</label>
           <label><input type="checkbox" name="no_toc"> Omit the contents page (print)</label>
           <label><input type="checkbox" name="no_footnotes"> Endnotes instead of foot-of-page notes</label>
-          <label><input type="checkbox" name="no_link_notes"> Keep hyperlinks as-is (no L1, L2&hellip; URL notes)</label>
           <label><input type="checkbox" name="no_link_citations"> Bare URLs in link notes (skip APA-style citations)</label>
         </div>
       </details>

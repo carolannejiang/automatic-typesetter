@@ -83,9 +83,15 @@ def build_parser() -> argparse.ArgumentParser:
     design.add_argument("--no-toc", action="store_true", help="omit the table of contents page in print output")
     design.add_argument("--no-footnotes", action="store_true",
                         help="keep footnotes as an end-of-chapter list instead of setting them at the foot of the page")
+    design.add_argument("--link-notes", default="foot", choices=["foot", "end", "off"],
+                        help="where each hyperlink's L-numbered URL note is set in "
+                             "print output: at the foot of its page, or gathered in "
+                             "a Notes section at the end of the book; off keeps "
+                             "hyperlinks as-is in every format (default: foot)")
     design.add_argument("--no-link-notes", action="store_true",
-                        help="keep hyperlinks as-is instead of presenting each as an "
-                             "L-numbered note carrying its URL at the foot of the page")
+                        help="synonym for --link-notes off: keep hyperlinks as-is "
+                             "instead of presenting each as an L-numbered note "
+                             "carrying its URL")
     design.add_argument("--no-link-citations", action="store_true",
                         help="set link notes as bare URLs instead of fetching each "
                              "linked page to expand its note into an APA-style citation")
@@ -128,6 +134,7 @@ def main(argv=None) -> int:
         args.font_size = themes.default_font_size(args.theme)
     if args.line_height is None:
         args.line_height = themes.default_line_height(args.theme)
+    link_notes = "off" if args.no_link_notes else args.link_notes
     formats = {f.strip().lower() for f in args.formats.split(",") if f.strip()}
     unknown = formats - {"epub", "pdf", "html", "docx", "icml", "idml"}
     if unknown:
@@ -168,7 +175,7 @@ def main(argv=None) -> int:
     )
 
     citations = None
-    if not args.no_link_notes and not args.no_link_citations:
+    if link_notes != "off" and not args.no_link_citations:
         urls = list(dict.fromkeys(
             u for ch in book.chapters for u in citable_urls(ch.html)))
         if urls:
@@ -190,7 +197,7 @@ def main(argv=None) -> int:
         epub_writer.write_epub(
             book, epub_path, theme=args.theme, drop_caps=args.drop_caps,
             chapter_numbers=not args.no_chapter_numbers,
-            link_notes=not args.no_link_notes, link_citations=citations,
+            link_notes=link_notes != "off", link_citations=citations,
         )
         written.append(epub_path)
 
@@ -200,7 +207,7 @@ def main(argv=None) -> int:
             book, docx_path, theme=args.theme, trim=args.trim,
             font_size=args.font_size, line_height=args.line_height,
             chapter_numbers=not args.no_chapter_numbers,
-            link_notes=not args.no_link_notes, link_citations=citations,
+            link_notes=link_notes != "off", link_citations=citations,
         )
         written.append(docx_path)
 
@@ -209,7 +216,7 @@ def main(argv=None) -> int:
         icml_writer.write_icml(
             book, icml_path, theme=args.theme, font_size=args.font_size,
             line_height=args.line_height, chapter_numbers=not args.no_chapter_numbers,
-            link_notes=not args.no_link_notes, link_citations=citations,
+            link_notes=link_notes != "off", link_citations=citations,
         )
         written.append(icml_path)
 
@@ -220,7 +227,7 @@ def main(argv=None) -> int:
             font_size=args.font_size, line_height=args.line_height,
             chapter_start=args.chapter_start,
             chapter_numbers=not args.no_chapter_numbers,
-            link_notes=not args.no_link_notes, link_citations=citations,
+            link_notes=link_notes != "off", link_citations=citations,
         )
         written.append(idml_path)
 
@@ -240,7 +247,7 @@ def main(argv=None) -> int:
             toc=not args.no_toc, drop_caps=args.drop_caps,
             chapter_numbers=not args.no_chapter_numbers,
             footnotes=not args.no_footnotes,
-            link_notes=not args.no_link_notes, link_citations=citations,
+            link_notes=link_notes, link_citations=citations,
         )
         with open(html_path, "w", encoding="utf-8") as fh:
             fh.write(page)

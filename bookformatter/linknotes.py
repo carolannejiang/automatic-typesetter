@@ -8,7 +8,7 @@ the bottom of the page, itself a live link in outputs that support them
 (PDF, EPUB). The ``L`` series is separate from content footnotes, so a
 reader can tell "this note is a web address" at a glance.
 
-The rule renders four ways, one per output medium:
+The rule renders five ways, one per output medium and note placement:
 
 * ``inline`` (print/PDF) — the note travels inline as
   ``<span class="linknote">``, which the print stylesheet floats into the
@@ -30,6 +30,11 @@ The rule renders four ways, one per output medium:
   The docx writer sets that span as a real Word footnote whose custom
   ``L1`` mark stays outside Word's automatic numbering, so the L series
   survives into the manuscript while content footnotes keep their 1, 2, 3.
+* ``endnote`` (print, notes at the end of the book) — only the call is
+  emitted, as a subscript link to its note's anchor; each destination is
+  appended to the caller's ``notes`` list as ``(number, url)``. The
+  caller sets the collected notes in a back-matter Notes section
+  (printbook.py), each entry carrying the ``ln-N`` id the call targets.
 
 A note normally carries the bare destination URL. Given a ``citations``
 mapping (see apacite.py), a note whose URL has an entry is instead set as
@@ -75,7 +80,7 @@ _URL_CLASS = re.compile(r"(?:^|\s)linknote-url(?:$|\s)")
 
 
 def annotate_links(fragment: str, start: int = 1, mode: str = "inline",
-                   citations: dict = None):
+                   citations: dict = None, notes: list = None):
     """Rewrite external links in a body fragment into link notes.
 
     Returns ``(html, next_number)`` so callers can thread one continuous
@@ -83,7 +88,9 @@ def annotate_links(fragment: str, start: int = 1, mode: str = "inline",
     in parentheses in place, consuming no L number. The fragment comes back
     unchanged when it holds no convertible links. citations maps a URL to
     an apacite.Citation; a note whose URL has one is set as that citation
-    instead of the bare address.
+    instead of the bare address. In ``endnote`` mode each converted link
+    appends ``(number, url)`` to *notes*, for the caller to set as a note
+    list at the end of the book.
     """
     root = htmldom.parse(fragment)
     calls, unfold = [], []
@@ -131,6 +138,14 @@ def annotate_links(fragment: str, start: int = 1, mode: str = "inline",
             call.append(ref)
             nodes.append(call)
             asides.append(_aside(number, label, href, citations))
+        elif mode == "endnote":
+            call = Node("sub", {"class": "linknote-call", "id": f"lnref-{number}"})
+            ref = Node("a", {"href": f"#ln-{number}"})
+            ref.append(Node(text=label))
+            call.append(ref)
+            nodes.append(call)
+            if notes is not None:
+                notes.append((number, href))
         else:  # inline
             call = Node("sub", {"class": "linknote-call"})
             call.append(Node(text=label))
@@ -168,6 +183,12 @@ def _note_body(href: str, citations) -> list:
     if cite is not None:
         return apacite.citation_nodes(cite, _url_anchor(href))
     return [_url_anchor(href)]
+
+
+def note_body_html(href: str, citations=None) -> str:
+    """Serialize the same URL-or-APA body used by every link-note mode."""
+    return "".join(htmldom.serialize(item)
+                   for item in _note_body(href, citations))
 
 
 def _classify(a: Node):

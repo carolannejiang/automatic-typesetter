@@ -88,8 +88,11 @@ their address in parentheses right in the text. Each URL note is set as an
 APA-style citation (author, date, italicized title, site, then the URL)
 built from the linked page's own metadata; a page that can't be fetched
 keeps the bare URL, and `--no-link-citations` keeps them all bare.
-Exporting with `--no-link-notes` (or the web UI checkbox) drops the URL
-notes and keeps plain linked text.
+`--no-link-notes` (or the web UI's hyperlink-notes option) drops the URL
+notes and keeps plain linked text. The print output's `--link-notes end`
+placement (a book-end Notes section) doesn't apply here — InDesign owns
+note placement; convert footnotes to endnotes in InDesign itself
+(**Type → Convert Footnote and Endnote**) if the design calls for it.
 
 ## Table of contents and running heads
 

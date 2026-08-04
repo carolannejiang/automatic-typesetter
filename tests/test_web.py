@@ -83,8 +83,30 @@ class WebTests(unittest.TestCase):
                       "theme", "trim", "formats", "font_size", "line_height",
                       "pdf_engine", "chapter_start", "split", "images", "order",
                       "max_items", "fetch_full", "drop_caps", "no_chapter_numbers",
-                      "no_toc"):
+                      "no_toc", "link_notes"):
             self.assertIn(f'name="{field}"', page, f"missing form field {field}")
+
+    def test_build_with_end_of_book_link_notes(self):
+        form = urllib.parse.urlencode(
+            {
+                "pasted": "# One\n\nSee [the spec](https://example.com/spec).\n",
+                "title": "Noted",
+                "formats": "html",
+                "link_notes": "end",
+                "name": "noted",
+            }
+        ).encode()
+        code, body = self._post("/build", form, "application/x-www-form-urlencoded")
+        self.assertEqual(code, 200)
+        job_id = json.loads(body)["id"]
+        status = self._wait_for_job(job_id)
+        self.assertEqual(status["status"], "done", status["message"])
+        code, page = self._get(f"/download?id={job_id}&file=noted.html")
+        self.assertEqual(code, 200)
+        html_body = page.decode().split("</style>")[1]
+        self.assertIn('<section class="endnotes" id="endnotes">', html_body)
+        self.assertIn('id="ln-1"', html_body)
+        self.assertNotIn('<span class="linknote">', html_body)
 
     def test_theme_picker_cards_with_thumbnails(self):
         code, body = self._get("/")
