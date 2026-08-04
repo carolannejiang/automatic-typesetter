@@ -115,7 +115,8 @@ class WebTests(unittest.TestCase):
                       "classicthesis", "short intro"):
             self.assertIn(f'name="theme" value="{value}"', page)
         self.assertEqual(page.count("data:image/webp;base64,"), 6)
-        self.assertIn('value="classic" data-trim="" checked', page)
+        # data-trim is driven by themes.default_trim so it can't drift.
+        self.assertIn('value="classic" data-trim="6x9" checked', page)
         self.assertIn('value="classicthesis" data-trim="a4"', page)
         self.assertIn('<option value="a4">A4 (210 &times; 297 mm)</option>', page)
         self.assertIn('data-theme-spec="classicthesis" hidden', page)
