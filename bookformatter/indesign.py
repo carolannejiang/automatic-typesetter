@@ -610,7 +610,8 @@ def _copyright_lines(book: Book) -> list:
 def book_to_story_items(book: Book, theme: str = "classic",
                         chapter_numbers: bool = True,
                         converter_cls=None, link_notes: bool = True,
-                        link_note_mode: str = "native") -> list:
+                        link_note_mode: str = "native",
+                        link_citations: dict = None) -> list:
     """The whole book as a flat list of Para items: front matter, then the
     chapters. Chapter openers carry start="NextOddPage" (write_idml maps that
     to "NextPage" when chapter_start is not "right"). converter_cls swaps in
@@ -637,7 +638,8 @@ def book_to_story_items(book: Book, theme: str = "classic",
         markup = footnotes.inline_footnotes(chapter.html)
         if link_notes:
             markup, next_link_note = annotate_links(
-                markup, start=next_link_note, mode=link_note_mode)
+                markup, start=next_link_note, mode=link_note_mode,
+                citations=link_citations)
         root = htmldom.parse(markup)
         opener: list = []
         title_attrs = None

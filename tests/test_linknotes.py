@@ -1,3 +1,4 @@
+import datetime
 import unittest
 import zipfile
 import io
@@ -6,10 +7,11 @@ import tempfile
 import xml.etree.ElementTree as ET
 
 from bookformatter import themes
+from bookformatter.apacite import Citation
 from bookformatter.cli import build_parser
 from bookformatter.docx import write_docx
 from bookformatter.icml import write_icml
-from bookformatter.linknotes import annotate_links
+from bookformatter.linknotes import annotate_links, citable_urls
 from bookformatter.models import Book, BookMeta, Chapter
 from bookformatter.printbook import build_print_html
 from bookformatter.epub import write_epub
@@ -334,12 +336,99 @@ class WordIntegrationTests(unittest.TestCase):
         self.assertNotIn("https://a.example/p", notes)
 
 
+class CitationTests(unittest.TestCase):
+    CITES = {
+        "https://cats.example/naps": Citation(
+            url="https://cats.example/naps", title="How cats sleep",
+            author="Jane Doe", date=datetime.datetime(2024, 6, 3),
+            site_name="Cat Journal"),
+    }
+
+    def test_inline_note_carries_citation(self):
+        html = '<p>See <a href="https://cats.example/naps">a study</a>.</p>'
+        out, nxt = annotate_links(html, citations=self.CITES)
+        self.assertEqual(nxt, 2)
+        self.assertIn(
+            '<span class="linknote-label">L1</span> '
+            'Doe, J. (2024, June 3). <i>How cats sleep</i>. Cat Journal. '
+            '<a class="linknote-url" href="https://cats.example/naps">'
+            'https://cats.example/naps</a>', out)
+
+    def test_uncited_url_keeps_bare_address(self):
+        html = '<p>See <a href="https://other.example/p">that</a>.</p>'
+        out, _ = annotate_links(html, citations=self.CITES)
+        self.assertIn('<span class="linknote-label">L1</span> '
+                      '<a class="linknote-url" href="https://other.example/p">',
+                      out)
+
+    def test_aside_note_carries_citation(self):
+        html = '<p>See <a href="https://cats.example/naps">a study</a>.</p>'
+        out, _ = annotate_links(html, mode="aside", citations=self.CITES)
+        self.assertIn('Doe, J. (2024, June 3). <i>How cats sleep</i>. '
+                      'Cat Journal. <a class="linknote-url"', out)
+
+    def test_word_note_carries_citation(self):
+        html = '<p>See <a href="https://cats.example/naps">a study</a>.</p>'
+        out, _ = annotate_links(html, mode="word", citations=self.CITES)
+        self.assertIn('<span class="footnote" data-label="L1">'
+                      'Doe, J. (2024, June 3). <i>How cats sleep</i>. '
+                      'Cat Journal. <a class="linknote-url"', out)
+
+    def test_native_note_carries_citation(self):
+        html = '<p>See <a href="https://cats.example/naps">a study</a>.</p>'
+        out, _ = annotate_links(html, mode="native", citations=self.CITES)
+        self.assertIn('<span class="footnote">'
+                      'Doe, J. (2024, June 3). <i>How cats sleep</i>. '
+                      'Cat Journal. <a class="linknote-url"', out)
+
+    def test_unfolded_note_link_stays_bare(self):
+        # A link inside a content footnote unfolds; a citation would replace
+        # the note's own prose mid-sentence, so it keeps just the address.
+        html = ('<p>Claim.<span class="footnote">Per '
+                '<a href="https://cats.example/naps">the source</a>.</span></p>')
+        out, _ = annotate_links(html, citations=self.CITES)
+        self.assertIn('the source (<a class="linknote-url"', out)
+        self.assertNotIn("Doe, J.", out)
+
+    def test_docx_footnote_carries_italic_citation(self):
+        book = make_book([Chapter(
+            title="One",
+            html='<p>See <a href="https://cats.example/naps">a study</a>.</p>')])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "b.docx")
+            write_docx(book, path, link_citations=self.CITES)
+            with zipfile.ZipFile(path) as zf:
+                notes = zf.read("word/footnotes.xml").decode("utf-8")
+        self.assertIn("Doe, J. (2024, June 3).", notes)
+        self.assertIn("How cats sleep", notes)
+        self.assertIn("<w:i/>", notes)
+
+
+class CitableUrlsTests(unittest.TestCase):
+    def test_only_call_links_are_listed(self):
+        html = ('<p><a href="https://a.example/">one</a> and '
+                '<a href="https://a.example/">one again</a>, '
+                '<a href="mailto:j@x.com">mail</a>, '
+                '<a href="#fn1">1</a>.</p>'
+                '<h2><a href="https://h.example/">head</a></h2>'
+                '<p><span class="footnote">note '
+                '<a href="https://n.example/">link</a></span></p>')
+        self.assertEqual(citable_urls(html),
+                         ["https://a.example/", "https://a.example/"])
+
+
 class WiringTests(unittest.TestCase):
     def test_cli_flag_exists(self):
         args = build_parser().parse_args(["x.md", "--no-link-notes"])
         self.assertTrue(args.no_link_notes)
         args = build_parser().parse_args(["x.md"])
         self.assertFalse(args.no_link_notes)
+
+    def test_cli_citation_flag_exists(self):
+        args = build_parser().parse_args(["x.md", "--no-link-citations"])
+        self.assertTrue(args.no_link_citations)
+        args = build_parser().parse_args(["x.md"])
+        self.assertFalse(args.no_link_citations)
 
     def test_print_css_has_linknote_rules(self):
         for theme in themes.THEME_NAMES:

@@ -106,7 +106,7 @@ def _copyright_body(book: Book) -> str:
 
 def write_epub(book: Book, path: str, theme: str = "classic",
                drop_caps: bool = False, chapter_numbers: bool = True,
-               link_notes: bool = True) -> None:
+               link_notes: bool = True, link_citations: dict = None) -> None:
     meta = book.meta
     lang = meta.language or "en"
     book_id = "urn:uuid:" + str(
@@ -155,7 +155,8 @@ def write_epub(book: Book, path: str, theme: str = "classic",
         content = htmldom.inner_html(root)
         if link_notes:
             content, next_link_note = annotate_links(
-                content, start=next_link_note, mode="aside")
+                content, start=next_link_note, mode="aside",
+                citations=link_citations)
         body = _chapter_body(i, chapter.title, content, chapter_numbers, theme)
         href = f"text/chapter-{i:03d}.xhtml"
         files.append((f"OEBPS/{href}", _xhtml(chapter.title, body, lang)))
