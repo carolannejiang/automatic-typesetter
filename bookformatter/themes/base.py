@@ -131,7 +131,7 @@ table {
 th, td { border-bottom: 0.5pt solid #999; padding: 0.35em 0.7em; text-align: left; }
 thead th { border-bottom: 1pt solid #333; }
 
-a { color: inherit; text-decoration: none; }
+a { color: #555; text-decoration: none; }
 sup, sub { line-height: 0; font-size: 0.75em; }
 
 /* front matter */
