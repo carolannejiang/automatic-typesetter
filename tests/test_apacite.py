@@ -1,4 +1,7 @@
 import datetime as dt
+import json
+import os
+import tempfile
 import unittest
 from unittest import mock
 
@@ -184,6 +187,59 @@ class CollectTests(unittest.TestCase):
 
     def test_collect_empty(self):
         self.assertEqual(apacite.collect([]), {})
+
+
+class CacheTests(unittest.TestCase):
+    def _cite(self, url, timeout=None):
+        self.calls.append(url)
+        if "bad" in url:
+            return None
+        return Citation(url=url, title="T", date=dt.datetime(2024, 6, 3))
+
+    def setUp(self):
+        self.calls = []
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.path = os.path.join(self.tmp.name, "sub", "citations.json")
+
+    def test_second_collect_reads_the_cache(self):
+        urls = ["https://a.example/", "https://bad.example/"]
+        with mock.patch.object(apacite, "fetch_citation", self._cite):
+            first = apacite.collect(urls, cache_path=self.path)
+        self.assertEqual(len(self.calls), 2)
+        with mock.patch.object(apacite, "fetch_citation", self._cite):
+            second = apacite.collect(urls, cache_path=self.path)
+        self.assertEqual(len(self.calls), 2)  # no refetch, even the failure
+        self.assertEqual(set(second), set(first))
+        again = second["https://a.example/"]
+        self.assertEqual((again.title, again.date), ("T", dt.datetime(2024, 6, 3)))
+
+    def test_expired_entries_are_refetched(self):
+        with mock.patch.object(apacite, "fetch_citation", self._cite):
+            apacite.collect(["https://a.example/"], cache_path=self.path)
+        with open(self.path) as fh:
+            data = json.load(fh)
+        data["https://a.example/"]["t"] -= apacite.CACHE_TTL + 1
+        with open(self.path, "w") as fh:
+            json.dump(data, fh)
+        with mock.patch.object(apacite, "fetch_citation", self._cite):
+            apacite.collect(["https://a.example/"], cache_path=self.path)
+        self.assertEqual(len(self.calls), 2)
+
+    def test_corrupt_cache_is_ignored(self):
+        os.makedirs(os.path.dirname(self.path))
+        with open(self.path, "w") as fh:
+            fh.write("{not json")
+        with mock.patch.object(apacite, "fetch_citation", self._cite):
+            out = apacite.collect(["https://a.example/"], cache_path=self.path)
+        self.assertIn("https://a.example/", out)
+        with open(self.path) as fh:  # and the cache heals on save
+            self.assertIn("https://a.example/", json.load(fh))
+
+    def test_no_cache_path_never_touches_disk(self):
+        with mock.patch.object(apacite, "fetch_citation", self._cite):
+            apacite.collect(["https://a.example/"])
+        self.assertFalse(os.path.exists(self.path))
 
 
 if __name__ == "__main__":

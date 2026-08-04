@@ -173,7 +173,8 @@ def main(argv=None) -> int:
             u for ch in book.chapters for u in citable_urls(ch.html)))
         if urls:
             print(f"Citing {len(urls)} linked page(s)...", file=sys.stderr)
-            citations = apacite.collect(urls)
+            citations = apacite.collect(
+                urls, cache_path=apacite.default_cache_path())
             missed = [u for u in urls if u not in citations]
             if missed:
                 print(

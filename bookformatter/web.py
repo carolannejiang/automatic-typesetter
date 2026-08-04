@@ -259,7 +259,7 @@ def run_build(params: dict, uploads: list, workdir: str,
         if urls:
             progress(f"Citing {len(urls)} linked page(s)…")
             citations = apacite.collect(
-                urls,
+                urls, cache_path=apacite.default_cache_path(),
                 progress=lambda done, total: progress(
                     f"Citing linked pages… {done}/{total}"))
 
