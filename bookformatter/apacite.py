@@ -55,6 +55,11 @@ NEGATIVE_TTL = 24 * 3600
 # concurrent requests against any one host.
 _PER_HOST = 4
 
+# Hosted deployments run inside hard request time limits; serverless.py
+# sets this (alongside fetch.PUBLIC_MODE) so a link-heavy book cites its
+# first N pages instead of timing out the whole build. None = no cap.
+PAGE_CAP = None
+
 # English month names; calendar.month_name follows the process locale.
 _MONTHS = ("January", "February", "March", "April", "May", "June", "July",
            "August", "September", "October", "November", "December")
@@ -132,6 +137,8 @@ def collect(urls, timeout: float = CITE_TIMEOUT, progress=None,
     after (see CACHE_TTL/NEGATIVE_TTL); None fetches everything.
     """
     unique = list(dict.fromkeys(u for u in urls if u))
+    if PAGE_CAP is not None:
+        unique = unique[:PAGE_CAP]
     if not unique:
         return {}
     now = time.time()

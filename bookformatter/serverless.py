@@ -23,7 +23,7 @@ import tempfile
 import urllib.parse
 import zipfile
 
-from . import fetch
+from . import apacite, fetch
 from . import web as _web
 from .models import slugify
 
@@ -203,6 +203,7 @@ def _build(environ, start_response):
 def app(environ, start_response):
     """WSGI entry point."""
     fetch.PUBLIC_MODE = True  # hosted: never fetch internal addresses
+    apacite.PAGE_CAP = 20     # hosted: cite only so many pages per build
     method = environ.get("REQUEST_METHOD", "GET").upper()
     path = (environ.get("PATH_INFO") or "/").rstrip("/") or "/"
 

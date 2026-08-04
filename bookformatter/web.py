@@ -259,6 +259,12 @@ def run_build(params: dict, uploads: list, workdir: str,
             u for ch in book.chapters for u in citable_urls(ch.html)))
         if urls:
             progress(f"Citing {len(urls)} linked page(s)…")
+            if apacite.PAGE_CAP is not None and len(urls) > apacite.PAGE_CAP:
+                out.warnings.append(
+                    f"Cited only the first {apacite.PAGE_CAP} of {len(urls)} "
+                    "linked pages — this host builds inside a time limit; "
+                    "the rest keep their bare URLs."
+                )
             citations = apacite.collect(
                 urls, cache_path=apacite.default_cache_path(),
                 progress=lambda done, total: progress(

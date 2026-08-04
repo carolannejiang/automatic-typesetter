@@ -270,6 +270,14 @@ class CacheTests(unittest.TestCase):
             apacite.collect(["https://a.example/"])
         self.assertFalse(os.path.exists(self.path))
 
+    def test_page_cap_bounds_the_fetching(self):
+        urls = [f"https://s{i}.example/" for i in range(5)]
+        with mock.patch.object(apacite, "PAGE_CAP", 2), \
+                mock.patch.object(apacite, "fetch_citation", self._cite):
+            out = apacite.collect(urls)
+        self.assertEqual(self.calls, urls[:2])
+        self.assertEqual(set(out), set(urls[:2]))
+
 
 if __name__ == "__main__":
     unittest.main()
