@@ -31,6 +31,14 @@ The rule renders four ways, one per output medium:
   ``L1`` mark stays outside Word's automatic numbering, so the L series
   survives into the manuscript while content footnotes keep their 1, 2, 3.
 
+A note normally carries the bare destination URL. Given a ``citations``
+mapping (see apacite.py), a note whose URL has an entry is instead set as
+an APA-style citation — author, date, italicized title, site — still
+ending in the URL as a live link. URLs without an entry keep the bare
+address, so citing degrades gracefully when a page offers no metadata.
+Links that unfold in place (below) always show just the address: a
+citation is a note-sized object, not something to drop mid-sentence.
+
 Only external web links (http/https) become L notes. A ``mailto:`` link
 instead unfolds where it stands — ``write to Jane (jane@x.com)``, the
 address itself a live link — an address is short enough to read in line,
@@ -47,7 +55,7 @@ from __future__ import annotations
 
 import re
 
-from . import htmldom
+from . import apacite, htmldom
 # The same id/class heuristic footnotes.py uses to recognize notes, so the
 # two passes agree on what "inside a footnote" means.
 from .footnotes import _NOTE_HINT
@@ -66,13 +74,16 @@ _LINKNOTE_CLASS = re.compile(r"(?:^|\s)linknote(?:$|\s)")
 _URL_CLASS = re.compile(r"(?:^|\s)linknote-url(?:$|\s)")
 
 
-def annotate_links(fragment: str, start: int = 1, mode: str = "inline"):
+def annotate_links(fragment: str, start: int = 1, mode: str = "inline",
+                   citations: dict = None):
     """Rewrite external links in a body fragment into link notes.
 
     Returns ``(html, next_number)`` so callers can thread one continuous
     L series across chapters. A link already inside a note unfolds its URL
     in parentheses in place, consuming no L number. The fragment comes back
-    unchanged when it holds no convertible links.
+    unchanged when it holds no convertible links. citations maps a URL to
+    an apacite.Citation; a note whose URL has one is set as that citation
+    instead of the bare address.
     """
     root = htmldom.parse(fragment)
     calls, unfold = [], []
@@ -97,7 +108,8 @@ def annotate_links(fragment: str, start: int = 1, mode: str = "inline"):
             if _already_noted(a):
                 continue
             note = Node("span", {"class": "footnote", "data-label": label})
-            note.append(_url_anchor(href))
+            for item in _note_body(href, citations):
+                note.append(item)
             items = [note]
             trailing = _split_trailing(a)
             if trailing:
@@ -108,7 +120,8 @@ def annotate_links(fragment: str, start: int = 1, mode: str = "inline"):
         nodes, trailing = _unwrapped_content(a)
         if mode == "native":
             note = Node("span", {"class": "footnote"})
-            note.append(_url_anchor(href))
+            for item in _note_body(href, citations):
+                note.append(item)
             nodes.append(note)
         elif mode == "aside":
             call = Node("sub", {"class": "linknote-call", "id": f"lnref-{number}"})
@@ -117,7 +130,7 @@ def annotate_links(fragment: str, start: int = 1, mode: str = "inline"):
             ref.append(Node(text=label))
             call.append(ref)
             nodes.append(call)
-            asides.append(_aside(number, label, href))
+            asides.append(_aside(number, label, href, citations))
         else:  # inline
             call = Node("sub", {"class": "linknote-call"})
             call.append(Node(text=label))
@@ -126,7 +139,8 @@ def annotate_links(fragment: str, start: int = 1, mode: str = "inline"):
             marker.append(Node(text=label))
             note.append(marker)
             note.append(Node(text=" "))
-            note.append(_url_anchor(href))
+            for item in _note_body(href, citations):
+                note.append(item)
             nodes.extend([call, note])
         if trailing:
             nodes.append(Node(text=trailing))
@@ -135,6 +149,25 @@ def annotate_links(fragment: str, start: int = 1, mode: str = "inline"):
     for aside in asides:
         root.append(aside)
     return htmldom.inner_html(root), number
+
+
+def citable_urls(fragment: str) -> list:
+    """The href of every link annotate_links would turn into an L note, in
+    document order (duplicates included) — the fetch list for
+    apacite.collect, computed by the same classification the rewrite uses.
+    """
+    root = htmldom.parse(fragment)
+    return [(a.get("href") or "").strip()
+            for a in root.find_all("a") if _classify(a) == "call"]
+
+
+def _note_body(href: str, citations) -> list:
+    """The note's content: an APA citation when one is known for this URL,
+    otherwise the bare address — either way ending in the live link."""
+    cite = (citations or {}).get(href)
+    if cite is not None:
+        return apacite.citation_nodes(cite, _url_anchor(href))
+    return [_url_anchor(href)]
 
 
 def _classify(a: Node):
@@ -238,7 +271,7 @@ def _url_anchor(href: str, text: str = None) -> Node:
     return a
 
 
-def _aside(number: int, label: str, href: str) -> Node:
+def _aside(number: int, label: str, href: str, citations=None) -> Node:
     aside = Node("aside", {"class": "linknote", "id": f"ln-{number}",
                            "epub:type": "footnote", "role": "doc-footnote"})
     p = Node("p")
@@ -246,7 +279,8 @@ def _aside(number: int, label: str, href: str) -> Node:
     back.append(Node(text=label))
     p.append(back)
     p.append(Node(text=" "))
-    p.append(_url_anchor(href))
+    for item in _note_body(href, citations):
+        p.append(item)
     aside.append(p)
     return aside
 

@@ -786,11 +786,12 @@ def _document_rels_xml(parts: _Parts) -> str:
 def write_docx(book: Book, path: str, theme: str = "classic",
                trim: str = "6x9", font_size: str = "11pt",
                line_height: str = "1.45", chapter_numbers: bool = True,
-               link_notes: bool = True) -> None:
+               link_notes: bool = True, link_citations: dict = None) -> None:
     catalog = build_styles(theme, font_size, line_height)
     items = book_to_story_items(book, theme, chapter_numbers,
                                 converter_cls=_WordConverter,
-                                link_notes=link_notes, link_note_mode="word")
+                                link_notes=link_notes, link_note_mode="word",
+                                link_citations=link_citations)
     ordered_lists = _renumber_ordered_lists(items)
 
     width_in, height_in = themes.TRIM_SIZES.get(trim, themes.TRIM_SIZES["6x9"])

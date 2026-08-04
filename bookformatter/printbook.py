@@ -59,7 +59,8 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = "6x9",
                      font_size: str = "11pt", line_height: str = "1.45",
                      chapter_start: str = "right", toc: bool = True,
                      drop_caps: bool = False, chapter_numbers: bool = True,
-                     footnotes: bool = True, link_notes: bool = True) -> str:
+                     footnotes: bool = True, link_notes: bool = True,
+                     link_citations: dict = None) -> str:
     meta = book.meta
     css = themes.print_css(
         theme=theme, trim=trim, font_size=font_size, line_height=line_height,
@@ -108,7 +109,8 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = "6x9",
         if footnotes:
             content = inline_footnotes(content)
         if link_notes:
-            content, next_link_note = annotate_links(content, start=next_link_note)
+            content, next_link_note = annotate_links(
+                content, start=next_link_note, citations=link_citations)
         parts.append(f'<section class="chapter" id="chapter-{i}">')
         parts.append('<header class="chapter-head">')
         if chapter_numbers:
