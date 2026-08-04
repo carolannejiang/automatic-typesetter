@@ -298,6 +298,25 @@ span.linknote::footnote-marker { content: none; }
    in parentheses within that note (span.footnote), not as an L note. */
 a.linknote-url { overflow-wrap: anywhere; }
 
+/* Book-end link notes: with the "end" placement the L notes gather in a
+   back-matter Notes section instead of floating to each page's foot. The
+   section opens like a chapter — same break, and its chapter-head sets the
+   running-head strings — but stays outside section.chapter so chapter-only
+   dress (justification, drop caps, first-paragraph rules) can't touch the
+   note list. */
+section.endnotes {
+  break-before: $CHAPTER_BREAK; page-break-before: $CHAPTER_BREAK_LEGACY;
+  page: chapter;
+}
+section.endnotes p.endnote {
+  font-size: 0.85em;
+  line-height: 1.35;
+  margin: 0.35em 0;
+  text-align: left;
+  text-indent: 0;
+  hyphens: none; -webkit-hyphens: none;
+}
+
 /* On screen the paged machinery is inert (float:footnote, @page), so the
    same file doubles as a proof when opened in a browser before printing:
    notes read as bracketed inline asides instead of raw runs of small

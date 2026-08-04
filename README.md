@@ -189,7 +189,9 @@ Paged Media:
   note-on-a-note: its URL unfolds in parentheses right there in the note,
   in every output format — and a `mailto:` link unfolds the same way in
   the text (`write to Jane (jane@x.com)`), an address being short enough
-  to read in line. `--no-link-notes` turns the rule off
+  to read in line. `--link-notes end` gathers the notes in a Notes
+  section at the end of the book instead (listed in the contents, each
+  note cross-linked with its call); `--no-link-notes` turns the rule off
 - link notes cite, not just point: each linked page is fetched once and its
   note set as an APA-style citation — `Doe, J. (2024, June 3).
   *Article title.* Site Name. https://…` — built from the page's own
