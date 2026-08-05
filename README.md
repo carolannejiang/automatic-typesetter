@@ -166,7 +166,7 @@ typeset PDF/EPUB, chapters split at the Heading 1s.
 **Print HTML → PDF** — a single self-contained HTML file typeset with CSS
 Paged Media:
 
-- real trim sizes (`--trim 5x8, 5.25x8, 5.5x8.5, 6x9, a4, a5`) with mirrored
+- real trim sizes (`--trim 5x8, 5.25x8, 5.5x8.5, 6x9, 8.5x11, a4, a5`) with mirrored
   margins (larger inner margin for the gutter)
 - justified, hyphenated text; first-line indents with no gap between
   paragraphs (the traditional convention); widow/orphan control

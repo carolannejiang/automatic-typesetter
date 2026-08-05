@@ -765,6 +765,7 @@ footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top:
           <select id="trim" name="trim">
             <option value="6x9">6 &times; 9 in (trade)</option>
             <option value="5.5x8.5">5.5 &times; 8.5 in</option>
+            <option value="8.5x11">8.5 &times; 11 in (letter)</option>
             <option value="5.25x8">5.25 &times; 8 in</option>
             <option value="5x8">5 &times; 8 in</option>
             <option value="a4">A4 (210 &times; 297 mm)</option>

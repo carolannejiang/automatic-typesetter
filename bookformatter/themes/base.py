@@ -22,6 +22,7 @@ TRIM_SIZES = {
     "5.25x8": (5.25, 8.0),
     "5.5x8.5": (5.5, 8.5),
     "6x9": (6.0, 9.0),
+    "8.5x11": (8.5, 11.0),
     # Exact ISO dimensions, converted from 210 x 297 mm.  ClassicThesis
     # v4.2 is designed on this page rather than a US trade-book trim.
     "a4": (210 / 25.4, 297 / 25.4),
