@@ -12,6 +12,7 @@ license = { text = "MIT" }
 authors = [{ name = "Carol Anne Jiang" }]
 keywords = ["epub", "pdf", "book", "typesetting", "blog", "markdown"]
 classifiers = [
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Topic :: Text Processing :: Markup",
     "Topic :: Printing",

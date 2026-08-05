@@ -87,5 +87,27 @@ class SsrfGuardTests(unittest.TestCase):
         self.assertFalse(fetch.PUBLIC_MODE)
 
 
+class PasscodeTests(unittest.TestCase):
+    def test_passcode_gates_routes(self):
+        import base64
+        import os
+        import urllib.request
+        os.environ["BOOKFORMATTER_PASSCODE"] = "letmein"
+        fx = ServerFixture().start()
+        try:
+            code, _, headers = fx.get("/")  # no credentials
+            self.assertEqual(code, 401)
+            self.assertIn("Basic", headers.get("WWW-Authenticate", ""))
+
+            req = urllib.request.Request(fx.base + "/")
+            req.add_header("Authorization",
+                           "Basic " + base64.b64encode(b":letmein").decode())
+            with urllib.request.urlopen(req) as resp:
+                self.assertEqual(resp.status, 200)
+        finally:
+            fx.stop()
+            del os.environ["BOOKFORMATTER_PASSCODE"]
+
+
 if __name__ == "__main__":
     unittest.main()

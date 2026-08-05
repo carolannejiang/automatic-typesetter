@@ -178,12 +178,19 @@ def _build(environ, start_response):
         return _json(start_response, 500,
                      {"error": "The press jammed unexpectedly. Try again or simplify the input."})
     finally:
+        fetch.clear_cache()  # free fetched bodies before the next invocation
         shutil.rmtree(workdir, ignore_errors=True)
 
 
 def app(environ, start_response):
     """WSGI entry point."""
     fetch.PUBLIC_MODE = True  # hosted: never fetch internal addresses
+    passcode = (os.environ.get("BOOKFORMATTER_PASSCODE") or "").strip()
+    if passcode and not _web.check_basic_auth(
+            environ.get("HTTP_AUTHORIZATION"), passcode):
+        return _respond(start_response, 401, b"Authentication required.\n",
+                        "text/plain",
+                        {"WWW-Authenticate": 'Basic realm="bookformatter"'})
     method = environ.get("REQUEST_METHOD", "GET").upper()
     path = (environ.get("PATH_INFO") or "/").rstrip("/") or "/"
 

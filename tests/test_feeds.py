@@ -135,5 +135,21 @@ class FeedDateTests(unittest.TestCase):
                          ["Unknown zone", "Zoned", "Squarespace style"])
 
 
+BILLION_LAUGHS = """<?xml version="1.0"?>
+<!DOCTYPE rss [
+  <!ENTITY lol "lol">
+  <!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
+]>
+<rss version="2.0"><channel><title>&lol2;</title></channel></rss>"""
+
+
+class FeedEntityGuardTests(unittest.TestCase):
+    def test_doctype_feed_is_refused(self):
+        # A feed carrying an entity-expansion DTD must not be parsed
+        # (billion laughs); the guard raises ValueError like any bad feed.
+        with self.assertRaises(ValueError):
+            parse_feed(BILLION_LAUGHS)
+
+
 if __name__ == "__main__":
     unittest.main()

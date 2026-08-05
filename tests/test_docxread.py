@@ -235,5 +235,45 @@ class FullCircleTests(unittest.TestCase):
                         ET.parse(io.BytesIO(zf.read(name)))
 
 
+class DocxHardeningTests(unittest.TestCase):
+    def _write_docx(self, tmp):
+        path = os.path.join(tmp, "b.docx")
+        write_docx(make_book(), path)
+        return path
+
+    def test_oversize_docx_refused(self):
+        # The uncompressed-size cap stops a zip bomb before decompression;
+        # pinned with a tiny cap so a normal document trips it.
+        from bookformatter import docxread
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write_docx(tmp)
+            original = docxread.MAX_UNCOMPRESSED
+            docxread.MAX_UNCOMPRESSED = 10
+            try:
+                with self.assertRaises(DocxError):
+                    read_docx(path)
+            finally:
+                docxread.MAX_UNCOMPRESSED = original
+
+    def test_doctype_document_xml_refused(self):
+        # A document.xml carrying a DOCTYPE (entity-expansion vector) is
+        # rejected as malformed rather than expanded.
+        with tempfile.TemporaryDirectory() as tmp:
+            good = self._write_docx(tmp)
+            bomb = os.path.join(tmp, "bomb.docx")
+            with zipfile.ZipFile(good) as src:
+                names = src.namelist()
+                with zipfile.ZipFile(bomb, "w") as dst:
+                    for name in names:
+                        data = src.read(name)
+                        if name == "word/document.xml":
+                            data = (b'<?xml version="1.0"?>\n'
+                                    b'<!DOCTYPE w:document [<!ENTITY x "y">]>\n'
+                                    + data.split(b"?>", 1)[1])
+                        dst.writestr(name, data)
+            with self.assertRaises(DocxError):
+                read_docx(bomb)
+
+
 if __name__ == "__main__":
     unittest.main()
