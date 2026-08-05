@@ -1,4 +1,3 @@
-import base64
 import io
 import os
 import tempfile
@@ -7,26 +6,16 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 from bookformatter.epub import write_epub
-from bookformatter.models import Asset, Book, BookMeta, Chapter
-
-PNG_1PX = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
-)
+from bookformatter.models import Chapter
+from tests import support
 
 
 def make_book():
-    return Book(
-        meta=BookMeta(title="Test & Book", author="A. Author <tester>",
-                      language="en", date="2026-07-14",
-                      description="A sub<title>", rights="CC BY 4.0"),
-        chapters=[
-            Chapter(title="One & Only", html="<p>First chapter with an image.</p>"
-                                             '<img src="images/img-abc.png" alt="pic" />'),
-            Chapter(title="Two", html="<p>Unclosed paragraph<p>second"),
-        ],
-        assets=[Asset(filename="images/img-abc.png", data=PNG_1PX, media_type="image/png")],
-        cover=Asset(filename="images/cover.png", data=PNG_1PX, media_type="image/png"),
-    )
+    return support.make_book([
+        Chapter(title="One & Only", html="<p>First chapter with an image.</p>"
+                                         '<img src="images/img-abc.png" alt="pic" />'),
+        Chapter(title="Two", html="<p>Unclosed paragraph<p>second"),
+    ], cover=True)
 
 
 class EpubTests(unittest.TestCase):

@@ -15,7 +15,7 @@ import os
 import uuid
 import zipfile
 
-from . import htmldom, themes
+from . import frontmatter, htmldom, themes
 from .linknotes import annotate_links
 from .models import Book
 
@@ -61,14 +61,9 @@ def _build_date() -> str:
 
 def _chapter_body(number: int, title: str, content_html: str, show_number: bool,
                   theme: str = "classic") -> str:
-    head = ['<header class="chapter-head">']
-    if show_number:
-        head.append(f'<span class="chapter-number">{themes.chapter_label(theme, number)}</span>')
-    head.append(f'<h1 class="chapter-title">{_esc(title)}</h1>')
-    head.append("</header>")
     return (
         f'<section class="chapter" epub:type="chapter" role="doc-chapter">\n'
-        + "\n".join(head)
+        + frontmatter.chapter_head_html(theme, number, title, show_number)
         + "\n"
         + content_html
         + "\n</section>"
@@ -76,32 +71,19 @@ def _chapter_body(number: int, title: str, content_html: str, show_number: bool,
 
 
 def _titlepage_body(book: Book) -> str:
-    meta = book.meta
-    parts = ['<section class="titlepage frontmatter" epub:type="titlepage">']
-    parts.append(f'<div class="book-title">{_esc(meta.title)}</div>')
-    if meta.description:
-        parts.append(f'<div class="book-subtitle">{_esc(meta.description)}</div>')
-    if meta.author:
-        parts.append(f'<div class="book-author">{_esc(meta.author)}</div>')
-    if meta.publisher:
-        parts.append(f'<div class="book-publisher">{_esc(meta.publisher)}</div>')
-    parts.append("</section>")
-    return "\n".join(parts)
+    return "\n".join([
+        '<section class="titlepage frontmatter" epub:type="titlepage">',
+        frontmatter.titlepage_divs(book.meta),
+        "</section>",
+    ])
 
 
 def _copyright_body(book: Book) -> str:
-    meta = book.meta
-    year = (meta.date or str(_dt.date.today()))[:4]
-    lines = ['<section class="copyrightpage frontmatter" epub:type="copyright-page">']
-    if meta.author:
-        lines.append(f"<p>Copyright &#169; {year} {_esc(meta.author)}. All rights reserved.</p>")
-    if meta.rights:
-        lines.append(f"<p>{_esc(meta.rights)}</p>")
-    if meta.source_url:
-        lines.append(f"<p>Originally published at {_esc(meta.source_url)}.</p>")
-    lines.append("<p>Produced with bookformatter.</p>")
-    lines.append("</section>")
-    return "\n".join(lines)
+    return "\n".join([
+        '<section class="copyrightpage frontmatter" epub:type="copyright-page">',
+        frontmatter.copyright_paras(book),
+        "</section>",
+    ])
 
 
 def write_epub(book: Book, path: str, theme: str = "classic",

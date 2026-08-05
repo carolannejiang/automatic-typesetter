@@ -75,6 +75,28 @@ class Node:
         self.children = []
         self.detach()
 
+    def replace_with(self, *nodes: "Node") -> None:
+        """Replace this node with the given nodes."""
+        if self.parent is None:
+            return
+        parent = self.parent
+        idx = parent.children.index(self)
+        parent.children.pop(idx)
+        self.parent = None
+        for i, node in enumerate(nodes):
+            node.parent = parent
+            parent.children.insert(idx + i, node)
+
+    def insert_after(self, *nodes: "Node") -> None:
+        """Insert the given nodes as siblings directly after this node."""
+        if self.parent is None:
+            return
+        parent = self.parent
+        idx = parent.children.index(self)
+        for i, node in enumerate(nodes, 1):
+            node.parent = parent
+            parent.children.insert(idx + i, node)
+
     # -- queries -----------------------------------------------------------
 
     @property

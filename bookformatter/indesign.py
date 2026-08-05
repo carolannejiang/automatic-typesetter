@@ -21,12 +21,12 @@ footnote settings, not the L series the other outputs use.
 
 from __future__ import annotations
 
-import datetime as _dt
 import os
 import re
 import struct
 
 from . import footnotes, htmldom, themes
+from .frontmatter import copyright_lines
 from .linknotes import annotate_links
 from .models import Book
 
@@ -592,20 +592,6 @@ class _Converter:
                     self._list(sub, level + 1)
 
 
-def _copyright_lines(book: Book) -> list:
-    meta = book.meta
-    year = (meta.date or str(_dt.date.today()))[:4]
-    lines = []
-    if meta.author:
-        lines.append(f"Copyright © {year} {meta.author}. All rights reserved.")
-    if meta.rights:
-        lines.append(meta.rights)
-    if meta.source_url:
-        lines.append(f"Originally published at {meta.source_url}.")
-    lines.append("Produced with bookformatter.")
-    return lines
-
-
 def book_to_story_items(book: Book, theme: str = "classic",
                         chapter_numbers: bool = True,
                         converter_cls=None, link_notes: bool = True,
@@ -628,7 +614,7 @@ def book_to_story_items(book: Book, theme: str = "classic",
         items.append(Para("Book Author", [TextRun(meta.author)]))
     if meta.publisher:
         items.append(Para("Book Publisher", [TextRun(meta.publisher)]))
-    for i, line in enumerate(_copyright_lines(book)):
+    for i, line in enumerate(copyright_lines(book)):
         items.append(Para("Copyright", [TextRun(line)],
                           start="NextPage" if i == 0 else None))
 

@@ -142,6 +142,13 @@ class IngestTests(unittest.TestCase):
 PROSE = ("A reasonably long paragraph, with commas, that scores well in "
          "extraction and stands in for real writing. " * 4)
 
+
+def article_page(title="First Post", paras=2):
+    """The standard fetched-post page: an <article> of PROSE paragraphs."""
+    return ("<html><head><title>%s</title></head><body><article>%s"
+            "</article></body></html>" % (title, ("<p>%s</p>" % PROSE) * paras))
+
+
 FEED_XML = """<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
 <channel><title>Example Blog</title><link>https://blog.example/</link>
@@ -257,8 +264,7 @@ class UrlIngestTests(unittest.TestCase):
         page = f"""<html><head><title>Best Of — Example Blog</title></head>
         <body><main><p>I have a lot of posts, so here is where to start.</p>
         <ul>{items}</ul></main></body></html>"""
-        post = lambda n: (f"<html><head><title>Post {n}</title></head>"
-                          f"<body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>")
+        post = lambda n: article_page(f"Post {n}")
         fake = _FakeWeb({"https://blog.example/best": (page, "text/html"),
                          **{f"https://blog.example/blog/post-{n}": (post(n), "text/html")
                             for n in range(1, 7)}})
@@ -276,8 +282,7 @@ class UrlIngestTests(unittest.TestCase):
         )
         page = f"""<html><head><title>Best Of</title></head>
         <body><main><ul>{items}</ul></main></body></html>"""
-        post = lambda n: (f"<html><head><title>Post {n}</title></head>"
-                          f"<body><article><p>{PROSE}</p></article></body></html>")
+        post = lambda n: article_page(f"Post {n}", paras=1)
         fake = _FakeWeb({"https://blog.example/best": (page, "text/html"),
                          **{f"https://blog.example/blog/post-{n}": (post(n), "text/html")
                             for n in range(1, 7)}})
@@ -365,8 +370,7 @@ class UrlIngestTests(unittest.TestCase):
     def test_summary_only_feed_fetches_full_posts(self):
         # joecarlsmith.com-style feed: items carry only an excerpt, so each
         # post's page is fetched automatically for the full text.
-        page = f"""<html><head><title>First Post</title></head>
-        <body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>"""
+        page = article_page()
         fake = _FakeWeb({
             "https://blog.example/feed": (self._summary_feed(), "application/rss+xml"),
             "https://blog.example/posts/first": (page, "text/html"),
@@ -408,8 +412,7 @@ class UrlIngestTests(unittest.TestCase):
         # extraction must not replace it.
         feed_xml = self._summary_feed(
             '<![CDATA[<img src="https://imgs.example/strip-2931.png">]]>')
-        page = f"""<html><head><title>First Post</title></head>
-        <body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>"""
+        page = article_page()
         fake = _FakeWeb({
             "https://blog.example/feed": (feed_xml, "application/rss+xml"),
             "https://blog.example/posts/first": (page, "text/html"),
@@ -424,8 +427,7 @@ class UrlIngestTests(unittest.TestCase):
         css = "p { margin: 0 0 1em 0; color: #222222; line-height: 1.55; } " * 12
         feed_xml = self._summary_feed(
             "<![CDATA[<style>%s</style><p>One-line teaser only.</p>]]>" % css)
-        page = f"""<html><head><title>First Post</title></head>
-        <body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>"""
+        page = article_page()
         fake = _FakeWeb({
             "https://blog.example/feed": (feed_xml, "application/rss+xml"),
             "https://blog.example/posts/first": (page, "text/html"),
@@ -457,8 +459,7 @@ class UrlIngestTests(unittest.TestCase):
         feed_xml = self._summary_feed(
             '<![CDATA[<p>%s</p><img src="https://pixel.wp.example/b.gif" '
             'height="1" width="1">]]>' % self.TEASER)
-        page = f"""<html><head><title>First Post</title></head>
-        <body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>"""
+        page = article_page()
         fake = _FakeWeb({
             "https://blog.example/feed": (feed_xml, "application/rss+xml"),
             "https://blog.example/posts/first": (page, "text/html"),
@@ -470,8 +471,7 @@ class UrlIngestTests(unittest.TestCase):
     def test_uppercase_img_item_keeps_its_image(self):
         feed_xml = self._summary_feed(
             '<![CDATA[<IMG SRC="https://imgs.example/strip-2931.png">]]>')
-        page = f"""<html><head><title>First Post</title></head>
-        <body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>"""
+        page = article_page()
         fake = _FakeWeb({
             "https://blog.example/feed": (feed_xml, "application/rss+xml"),
             "https://blog.example/posts/first": (page, "text/html"),
@@ -508,8 +508,7 @@ class UrlIngestTests(unittest.TestCase):
         <item><title>First Post</title><link>https://blog.example/posts/first</link>
           <description>%s</description></item>
         </channel></rss>""" % self.TEASER
-        page = f"""<html><head><title>First Post</title></head>
-        <body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>"""
+        page = article_page()
         fake = _FakeWeb({
             "https://blog.example/feed": (feed_xml, "application/rss+xml"),
             "https://blog.example/posts/first": (page, "text/html"),
@@ -526,8 +525,7 @@ class UrlIngestTests(unittest.TestCase):
         <item><title>First Post</title><link>https://blog.example.test/posts/first</link>
           <description>%s</description></item>
         </channel></rss>""" % self.TEASER
-        page = f"""<html><head><title>First Post</title></head>
-        <body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>"""
+        page = article_page()
         fake = _FakeWeb({
             "https://example.test/feed": (feed_xml, "application/rss+xml"),
             "https://blog.example.test/posts/first": (page, "text/html"),
@@ -567,8 +565,7 @@ class UrlIngestTests(unittest.TestCase):
         self.assertTrue(any("no readable article" in w for w in result.warnings))
 
     def test_progress_callback_reports_page_fetches(self):
-        page = f"""<html><head><title>First Post</title></head>
-        <body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>"""
+        page = article_page()
         fake = _FakeWeb({
             "https://blog.example/feed": (self._summary_feed(), "application/rss+xml"),
             "https://blog.example/posts/first": (page, "text/html"),
@@ -595,8 +592,7 @@ class UrlIngestTests(unittest.TestCase):
         # landing host, and that's the host that must count as the site.
         feed_xml = self._summary_feed().replace(
             "<link>https://blog.example/</link>", "<link>/</link>")
-        page = f"""<html><head><title>First Post</title></head>
-        <body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>"""
+        page = article_page()
         fake = _FakeWeb({
             "https://old.example/feed":
                 (feed_xml, "application/rss+xml", "https://blog.example/feed"),
@@ -612,8 +608,7 @@ class UrlIngestTests(unittest.TestCase):
         feed_xml = self._summary_feed(
             '<![CDATA[<img src="https://feeds.example/~r/Blog/~4/xyz" '
             'height="1" width="1">]]>')
-        page = f"""<html><head><title>First Post</title></head>
-        <body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>"""
+        page = article_page()
         fake = _FakeWeb({
             "https://blog.example/feed": (feed_xml, "application/rss+xml"),
             "https://blog.example/posts/first": (page, "text/html"),
@@ -632,8 +627,7 @@ class UrlIngestTests(unittest.TestCase):
         feed_xml = self._summary_feed(
             "<![CDATA[<p>A one-line teaser only, honestly not the post.</p>"
             "<div>%s</div>]]>" % links)
-        page = f"""<html><head><title>First Post</title></head>
-        <body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>"""
+        page = article_page()
         fake = _FakeWeb({
             "https://blog.example/feed": (feed_xml, "application/rss+xml"),
             "https://blog.example/posts/first": (page, "text/html"),
@@ -643,8 +637,7 @@ class UrlIngestTests(unittest.TestCase):
         self.assertIn("reasonably long paragraph", result.chapters[0].html)
 
     def test_no_fetch_full_keeps_feed_text(self):
-        page = f"""<html><head><title>First Post</title></head>
-        <body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>"""
+        page = article_page()
         fake = _FakeWeb({
             "https://blog.example/feed": (self._summary_feed(), "application/rss+xml"),
             "https://blog.example/posts/first": (page, "text/html"),
@@ -664,8 +657,7 @@ class UrlIngestTests(unittest.TestCase):
         <item><title>One</title><link>https://blog.example/posts/one</link></item>
         <item><title>Two</title><link>https://blog.example/posts/two</link></item>
         </channel></rss>"""
-        page = f"""<html><head><title>Post</title></head>
-        <body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>"""
+        page = article_page('Post')
         fake = _FakeWeb({
             "https://feedpress.example/exampleblog": (feed_xml, "application/rss+xml"),
             "https://blog.example/posts/one": (page, "text/html"),
@@ -735,8 +727,7 @@ class UrlIngestTests(unittest.TestCase):
         <item><title>First Post</title><link>https://blog.example/posts/first</link>
           <description>%s</description></item>
         </channel></rss>""" % (self.TEASER, self.TEASER)
-        page = f"""<html><head><title>First Post</title></head>
-        <body><article><p>{PROSE}</p><p>{PROSE}</p></article></body></html>"""
+        page = article_page()
         fake = _FakeWeb({
             "https://blog.example/feed": (feed_xml, "application/rss+xml"),
             "https://blog.example/posts/first": (page, "text/html"),
