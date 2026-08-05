@@ -123,12 +123,6 @@ def _load_cover(path: str):
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
-    if args.trim is None:
-        args.trim = themes.default_trim(args.theme)
-    if args.font_size is None:
-        args.font_size = themes.default_font_size(args.theme)
-    if args.line_height is None:
-        args.line_height = themes.default_line_height(args.theme)
     link_notes = "off" if args.no_link_notes else args.link_notes
     formats = {f.strip().lower() for f in args.formats.split(",") if f.strip()}
     unknown = formats - {"epub", "pdf", "html", "docx", "icml", "idml"}

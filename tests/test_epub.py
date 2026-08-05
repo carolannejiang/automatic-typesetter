@@ -113,6 +113,25 @@ class EpubTests(unittest.TestCase):
         for info in self.zf.infolist():
             self.assertEqual(info.date_time, (1980, 1, 1, 0, 0, 0), info.filename)
 
+    def test_byte_deterministic_given_fixed_build_date(self):
+        # With the build date pinned, the whole archive is byte-identical
+        # across runs — fixed member dates (ziputil) plus the uuid5 book id.
+        old = os.environ.get("SOURCE_DATE_EPOCH")
+        os.environ["SOURCE_DATE_EPOCH"] = "1700000000"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                a = os.path.join(tmp, "a.epub")
+                b = os.path.join(tmp, "b.epub")
+                write_epub(make_book(), a)
+                write_epub(make_book(), b)
+                with open(a, "rb") as f1, open(b, "rb") as f2:
+                    self.assertEqual(f1.read(), f2.read())
+        finally:
+            if old is None:
+                del os.environ["SOURCE_DATE_EPOCH"]
+            else:
+                os.environ["SOURCE_DATE_EPOCH"] = old
+
 
 if __name__ == "__main__":
     unittest.main()

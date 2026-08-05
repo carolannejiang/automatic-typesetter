@@ -225,7 +225,7 @@ def run_build(params: dict, uploads: list, workdir: str,
     theme = _first(params, "theme", "classic")
     trim = _first(params, "trim", "")
     if trim not in themes.TRIM_SIZES:
-        trim = themes.default_trim(theme)
+        trim = None  # the writers resolve the theme's own page
     chapter_start = _first(params, "chapter_start", "right")
     drop_caps = _first(params, "drop_caps") == "on"
     chapter_numbers = _first(params, "no_chapter_numbers") != "on"
@@ -237,10 +237,8 @@ def run_build(params: dict, uploads: list, workdir: str,
     if _first(params, "no_link_notes") == "on":  # pre-select cached form
         link_notes = "off"
     link_citations = _first(params, "no_link_citations") != "on"
-    font_size = _clean_size(_first(params, "font_size"),
-                            themes.default_font_size(theme), _FONT_SIZE_RE)
-    line_height = _clean_size(_first(params, "line_height"),
-                              themes.default_line_height(theme), _LINE_HEIGHT_RE)
+    font_size = _clean_size(_first(params, "font_size"), None, _FONT_SIZE_RE)
+    line_height = _clean_size(_first(params, "line_height"), None, _LINE_HEIGHT_RE)
     pdf_engine = _first(params, "pdf_engine", "auto")
     if pdf_engine not in ("auto", "weasyprint", "chrome", "none"):
         pdf_engine = "auto"

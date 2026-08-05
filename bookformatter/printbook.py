@@ -55,8 +55,8 @@ def _inline_assets(fragment: str, assets_by_name: dict) -> str:
     return htmldom.inner_html(root)
 
 
-def build_print_html(book: Book, theme: str = "classic", trim: str = "6x9",
-                     font_size: str = "11pt", line_height: str = "1.45",
+def build_print_html(book: Book, theme: str = "classic", trim: str = None,
+                     font_size: str = None, line_height: str = None,
                      chapter_start: str = "right", toc: bool = True,
                      drop_caps: bool = False, chapter_numbers: bool = True,
                      footnotes: bool = True, link_notes="foot",
@@ -69,6 +69,10 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = "6x9",
         link_notes = "foot"
     elif not link_notes:
         link_notes = "off"
+    trim = trim if trim is not None else themes.default_trim(theme)
+    font_size = font_size if font_size is not None else themes.default_font_size(theme)
+    line_height = (line_height if line_height is not None
+                   else themes.default_line_height(theme))
     meta = book.meta
     css = themes.print_css(
         theme=theme, trim=trim, font_size=font_size, line_height=line_height,

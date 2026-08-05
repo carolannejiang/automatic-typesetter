@@ -13,11 +13,11 @@ import datetime as _dt
 import html
 import os
 import uuid
-import zipfile
 
 from . import frontmatter, htmldom, themes
 from .linknotes import annotate_links
 from .models import Book
+from .ziputil import write_zip_package
 
 _XHTML_SHELL = """<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
@@ -249,14 +249,5 @@ def write_epub(book: Book, path: str, theme: str = "classic",
 """
     files.append(("OEBPS/package.opf", opf))
 
-    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    with zipfile.ZipFile(path, "w") as zf:
-        info = zipfile.ZipInfo("mimetype", date_time=(1980, 1, 1, 0, 0, 0))
-        zf.writestr(info, "application/epub+zip", compress_type=zipfile.ZIP_STORED)
-        # Fixed dates on every member (as in idml.py) keep the archive
-        # byte-deterministic, as the module docstring promises.
-        for zip_path, payload in [("META-INF/container.xml", _CONTAINER_XML)] + files:
-            data = payload.encode("utf-8") if isinstance(payload, str) else payload
-            info = zipfile.ZipInfo(zip_path, date_time=(1980, 1, 1, 0, 0, 0))
-            info.compress_type = zipfile.ZIP_DEFLATED
-            zf.writestr(info, data)
+    write_zip_package(path, [("META-INF/container.xml", _CONTAINER_XML)] + files,
+                      mimetype="application/epub+zip")

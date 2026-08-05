@@ -26,10 +26,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import re
-import threading
 import urllib.parse
-from concurrent.futures import (
-    ThreadPoolExecutor, as_completed, TimeoutError as _FuturesTimeout)
 from dataclasses import dataclass
 from typing import Optional
 
@@ -38,10 +35,6 @@ from .extract import extract_article
 from .htmldom import Node
 
 CITE_TIMEOUT = 10.0
-
-# Politeness cap matching ingest.PER_HOST_FETCHES: at most this many
-# concurrent requests against any one host.
-_PER_HOST = 4
 
 # English month names; calendar.month_name follows the process locale.
 _MONTHS = ("January", "February", "March", "April", "May", "June", "July",
@@ -120,31 +113,9 @@ def collect(urls, timeout: float = CITE_TIMEOUT, progress=None,
     unique = list(dict.fromkeys(u for u in urls if u))
     if not unique:
         return {}
-    gates: dict = {}
-    for u in unique:
-        gates.setdefault(_host(u), threading.Semaphore(_PER_HOST))
-
-    def polite(u):
-        with gates[_host(u)]:
-            return fetch_citation(u, timeout)
-
-    results: dict = {}
-    pool = ThreadPoolExecutor(max_workers=min(8, len(unique)))
-    futures = {pool.submit(polite, u): u for u in unique}
-    try:
-        for done, future in enumerate(as_completed(futures, timeout=budget), 1):
-            cite = future.result()
-            if cite is not None:
-                results[futures[future]] = cite
-            if progress is not None:
-                progress(done, len(unique))
-    except _FuturesTimeout:
-        pass  # budget spent — return the citations gathered so far
-    finally:
-        for future in futures:
-            future.cancel()  # drop any not-yet-started fetches
-        pool.shutdown(wait=False)
-    return results
+    results = fetch.parallel(unique, lambda u: fetch_citation(u, timeout),
+                             progress=progress, budget=budget)
+    return {u: cite for u, cite in results.items() if cite is not None}
 
 
 # -- formatting -------------------------------------------------------------

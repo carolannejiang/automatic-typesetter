@@ -11,8 +11,6 @@ import hashlib
 import os
 import re
 import sys
-import threading
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 from urllib.parse import urljoin, urlparse, unquote
@@ -226,19 +224,7 @@ LINK_LIST_TEXT_RATIO = 0.5  # share of content those items must hold
 LINK_TEXT_MIN = 8           # a post-title link, not "more" or a bare date
 
 
-def _host(url: str) -> str:
-    try:
-        host = (urlparse(url).hostname or "").lower()
-    except ValueError:  # e.g. unbalanced IPv6 brackets in a feed's link
-        return ""
-    if host.startswith("www."):
-        host = host[4:]
-    try:
-        # IDN feeds mix Unicode and punycode spellings of the same host.
-        host = host.encode("idna").decode("ascii")
-    except UnicodeError:
-        pass
-    return host
+_host = fetch.host_key  # politeness/same-site host key, shared with fetch.parallel
 
 
 def _same_site(item_link: str, site_host: str) -> bool:
@@ -260,35 +246,23 @@ def _has_img(html_text: str) -> bool:
         for img in htmldom.parse(html_text).find_all("img"))
 
 
-# Concurrent connections per host — most of a build hits one blog, and
-# eight parallel requests to a small site is impolite.
-PER_HOST_FETCHES = 4
+PER_HOST_FETCHES = fetch.PER_HOST  # per-host politeness cap (see fetch.parallel)
 
 
 def _fetch_parallel(urls: list, fetch_one, label: str, opts: IngestOptions) -> dict:
     """Run fetch_one over URLs concurrently: {url: result or FetchError}.
     At most PER_HOST_FETCHES requests run against any one host at a time."""
-    results: dict = {}
-    if not urls:
-        return results
-    gates: dict = {}
-    for u in urls:
-        gates.setdefault(_host(u), threading.Semaphore(PER_HOST_FETCHES))
-
-    def polite(u):
-        with gates[_host(u)]:
+    def guarded(u):
+        try:
             return fetch_one(u)
+        except fetch.FetchError as exc:
+            return exc
 
-    with ThreadPoolExecutor(max_workers=min(8, len(urls))) as pool:
-        futures = {pool.submit(polite, u): u for u in urls}
-        for done, future in enumerate(as_completed(futures), 1):
-            try:
-                results[futures[future]] = future.result()
-            except fetch.FetchError as exc:
-                results[futures[future]] = exc
-            if opts.progress:
-                opts.progress(f"{label} {done}/{len(urls)}")
-    return results
+    def progress(done, total):
+        if opts.progress:
+            opts.progress(f"{label} {done}/{total}")
+
+    return fetch.parallel(urls, guarded, progress=progress)
 
 
 def _page_wins(doc_html: str, doc_len: int, item_html: str, item_len: int,

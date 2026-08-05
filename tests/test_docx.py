@@ -327,5 +327,17 @@ class DocxPipelineTests(unittest.TestCase):
                 self.assertIn("word/document.xml", zf.namelist())
 
 
+class DocxPackagingTests(unittest.TestCase):
+    def test_zip_entries_carry_fixed_dates(self):
+        # Deterministic packaging (ziputil): identical input, identical bytes.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "t.docx")
+            write_docx(make_book(), path)
+            with zipfile.ZipFile(path) as zf:
+                for info in zf.infolist():
+                    self.assertEqual(info.date_time, (1980, 1, 1, 0, 0, 0),
+                                     info.filename)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -28,13 +28,12 @@ processing instructions survive.
 from __future__ import annotations
 
 import math
-import os
-import zipfile
 
 from . import themes
 from .indesign import (IdGen, book_to_story_items, build_styles, esc, fmt,
                        render_story_text)
 from .models import Book
+from .ziputil import write_zip_package
 
 MIMETYPE = b"application/vnd.adobe.indesign-idml-package"
 
@@ -485,10 +484,14 @@ def _designmap_xml(spread_srcs, pages: int) -> str:
 
 
 def write_idml(book: Book, path: str, theme: str = "classic",
-               trim: str = "6x9", font_size: str = "11pt",
-               line_height: str = "1.45", chapter_start: str = "right",
+               trim: str = None, font_size: str = None,
+               line_height: str = None, chapter_start: str = "right",
                chapter_numbers: bool = True, link_notes: bool = True,
                link_citations: dict = None) -> None:
+    trim = trim if trim is not None else themes.default_trim(theme)
+    font_size = font_size if font_size is not None else themes.default_font_size(theme)
+    line_height = (line_height if line_height is not None
+                   else themes.default_line_height(theme))
     catalog = build_styles(theme, font_size, line_height)
     geometry = _Geometry(trim, theme)
 
@@ -543,12 +546,4 @@ def write_idml(book: Book, path: str, theme: str = "classic",
         ("Stories/Story_u112.xml", _folio_story_xml("u112")),
     ]
 
-    parent = os.path.dirname(os.path.abspath(path))
-    os.makedirs(parent, exist_ok=True)
-    with zipfile.ZipFile(path, "w") as zf:
-        info = zipfile.ZipInfo("mimetype", date_time=(1980, 1, 1, 0, 0, 0))
-        zf.writestr(info, MIMETYPE, compress_type=zipfile.ZIP_STORED)
-        for name, text in files:
-            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
-            info.compress_type = zipfile.ZIP_DEFLATED
-            zf.writestr(info, text.encode("utf-8"))
+    write_zip_package(path, files, mimetype=MIMETYPE)
