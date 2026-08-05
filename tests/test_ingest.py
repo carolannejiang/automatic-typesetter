@@ -348,6 +348,22 @@ class UrlIngestTests(unittest.TestCase):
         self.assertNotIn("https://medium.com/@ana/the-story-0123abcd4567?source=rss",
                          fake.requested)
 
+    def test_lesswrong_429_imports_from_greaterwrong_mirror(self):
+        post = ("https://www.lesswrong.com/posts/abc123/"
+                "rubys-ultimate-guide-to-thoughtful-gifts")
+        mirror = ("https://www.greaterwrong.com/posts/abc123/"
+                  "rubys-ultimate-guide-to-thoughtful-gifts")
+        blocked = fetch.FetchError(
+            f"could not fetch {post}: HTTP Error 429: Too Many Requests")
+        page = (f"<html><head><title>Ruby's Guide</title></head>"
+                f"<body><article><h1>Ruby's Guide</h1><p>{PROSE}</p></article></body></html>")
+        fake = _FakeWeb({post: blocked, mirror: (page, "text/html")})
+        result = self._ingest(fake, post)
+        self.assertEqual([c.title for c in result.chapters], ["Ruby's Guide"])
+        # The canonical LessWrong URL stays the source, not the mirror.
+        self.assertEqual(result.chapters[0].source, post)
+        self.assertTrue(any("GreaterWrong" in w for w in result.warnings))
+
     # A multi-sentence excerpt (~250 chars) that is still well under
     # SUMMARY_LEN — pins the threshold above "a couple of sentences".
     TEASER = ("A teaser that says just enough about the essay to make you "

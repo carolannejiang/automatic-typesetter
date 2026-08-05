@@ -631,11 +631,45 @@ def _medium_ingest_from_feed(url: str, opts: IngestOptions,
     return True
 
 
+def _greaterwrong_url(url: str):
+    """The GreaterWrong mirror of a LessWrong URL, or None. GreaterWrong
+    serves LessWrong's posts at the same path and, unlike lesswrong.com,
+    does not rate-limit automated readers (HTTP 429)."""
+    parts = urlparse(url)
+    if (parts.hostname or "").lower() in ("lesswrong.com", "www.lesswrong.com"):
+        return parts._replace(netloc="www.greaterwrong.com").geturl()
+    return None
+
+
+def _greaterwrong_ingest(url: str, opts: IngestOptions,
+                         result: IngestResult) -> bool:
+    """LessWrong rate-limits its post pages (HTTP 429), but its GreaterWrong
+    mirror serves the same posts freely. Import the mirror's copy, keeping the
+    canonical LessWrong URL as the chapter source."""
+    mirror = _greaterwrong_url(url)
+    if not mirror:
+        return False
+    try:
+        text, _, final_url = fetch.fetch_text(mirror)
+    except fetch.FetchError:
+        return False
+    doc = extract.extract_article(text, base_url=final_url)
+    if _visible_len(doc.html) < NEAR_EMPTY_LEN:
+        return False
+    result.warn(f"{url}: LessWrong rate-limits automated readers; "
+                f"imported from its GreaterWrong mirror instead")
+    _ingest_page(url, doc, opts, result)
+    return True
+
+
 def _ingest_url(url: str, opts: IngestOptions, result: IngestResult) -> None:
     try:
         text, content_type, final_url = fetch.fetch_text(url)
     except fetch.FetchError as exc:
         if "HTTP Error 403" in str(exc) and _medium_ingest_from_feed(url, opts, result):
+            return
+        if (re.search(r"HTTP Error (403|406|429)", str(exc))
+                and _greaterwrong_ingest(url, opts, result)):
             return
         raise
     if feeds.looks_like_feed(text, content_type):
