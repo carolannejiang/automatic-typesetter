@@ -14,6 +14,8 @@ from string import Template
 from . import base
 
 NAME = "classical"
+LABEL = "Classical"
+BLURB = "small-cap heads, quiet openers"
 
 # Longest title (chars) the title page holds at full size, measured on
 # the calibration page (TITLE_FIT_TRIM / TITLE_FIT_SIZE, default 5x8 at

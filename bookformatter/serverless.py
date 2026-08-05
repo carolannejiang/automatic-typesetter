@@ -29,17 +29,6 @@ from .models import slugify
 
 MAX_BODY = 8 * 1024 * 1024  # Vercel caps request bodies at ~4.5 MB anyway
 
-_MEDIA_TYPES = {
-    ".epub": "application/epub+zip",
-    ".pdf": "application/pdf",
-    ".html": "text/html; charset=utf-8",
-    ".docx": "application/vnd.openxmlformats-officedocument"
-             ".wordprocessingml.document",
-    ".icml": "application/xml",
-    ".idml": "application/vnd.adobe.indesign-idml-package",
-    ".zip": "application/zip",
-}
-
 _FORMATS_BLOCK = re.compile(
     r"<label>Formats</label>\s*<div class=\"checks\">.*?</div>", re.S
 )
@@ -144,20 +133,11 @@ def _json(start_response, code: int, obj):
 
 
 def _build(environ, start_response):
-    try:
-        length = int(environ.get("CONTENT_LENGTH") or 0)
-    except ValueError:
-        length = 0
-    if length <= 0 or length > MAX_BODY:
-        return _json(start_response, 413 if length > MAX_BODY else 400,
-                     {"error": "bad request body"})
-    body = environ["wsgi.input"].read(length)
-    content_type = environ.get("CONTENT_TYPE") or ""
-    if content_type.startswith("multipart/form-data"):
-        params, uploads = _web._parse_multipart(content_type, body)
-    else:
-        params = urllib.parse.parse_qs(body.decode("utf-8", "replace"))
-        uploads = []
+    error, params, uploads = _web.read_form_body(
+        environ.get("CONTENT_LENGTH"), environ.get("CONTENT_TYPE"),
+        environ["wsgi.input"], MAX_BODY)
+    if error:
+        return _json(start_response, error, {"error": "bad request body"})
 
     workdir = tempfile.mkdtemp(prefix="bookformatter-fn-")
     try:
@@ -188,8 +168,8 @@ def _build(environ, start_response):
             "stats": result.stats,
             "warnings": result.warnings,
         }
-        media = _MEDIA_TYPES.get(os.path.splitext(filename)[1].lower(),
-                                 "application/octet-stream")
+        media = _web.MEDIA_TYPES.get(os.path.splitext(filename)[1].lower(),
+                                     "application/octet-stream")
         return _respond(start_response, 200, payload, media, {
             "Content-Disposition": f'attachment; filename="{filename}"',
             "X-Book-Meta": urllib.parse.quote(json.dumps(meta)),

@@ -10,12 +10,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         fonts-dejavu-core fonts-liberation fonts-texgyre fonts-urw-base35 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir weasyprint
-
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY bookformatter ./bookformatter
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir ".[pdf]"
 
 # Public-mode defaults: SSRF guard + rate limiting on. Set
 # BOOKFORMATTER_BASE_PATH=/book when proxying from a path, and

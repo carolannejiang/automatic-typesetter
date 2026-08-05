@@ -96,6 +96,8 @@ from string import Template
 from . import base
 
 NAME = "vsi"
+LABEL = "VSI"
+BLURB = "Oxford pocket style, gray sans openers"
 
 # Longest title (chars) the title page holds at full size, measured on
 # the calibration page (TITLE_FIT_TRIM / TITLE_FIT_SIZE, default 5x8 at

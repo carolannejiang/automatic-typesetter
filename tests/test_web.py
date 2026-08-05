@@ -263,6 +263,20 @@ class ThemeThumbnailTests(unittest.TestCase):
             self.assertIn(f'name="theme" value="{name}"', html)
 
 
+class ReadFormBodyTests(unittest.TestCase):
+    def test_error_codes_and_parsing(self):
+        from bookformatter.web import read_form_body
+        err, _, _ = read_form_body("nonsense", "", io.BytesIO(b""), 100)
+        self.assertEqual(err, 400)
+        err, _, _ = read_form_body("101", "", io.BytesIO(b"x" * 101), 100)
+        self.assertEqual(err, 413)
+        err, params, uploads = read_form_body(
+            "9", "application/x-www-form-urlencoded", io.BytesIO(b"title=hey"), 100)
+        self.assertIsNone(err)
+        self.assertEqual(params["title"], ["hey"])
+        self.assertEqual(uploads, [])
+
+
 class MaxItemsFieldTests(unittest.TestCase):
     def test_non_numeric_max_items_warns_instead_of_crashing(self):
         # max_items is a free-text input; a typo should degrade like the

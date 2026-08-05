@@ -284,6 +284,15 @@ class DefaultTypeTests(unittest.TestCase):
         self.assertEqual(themes.default_line_height("classicthesis"), "1.30")
 
 
+class ThemeLabelTests(unittest.TestCase):
+    def test_every_theme_declares_picker_label_and_blurb(self):
+        # The web picker is derived from the registry, so each theme module
+        # carries its own display name and one-line description.
+        for name in themes.THEME_NAMES:
+            self.assertTrue(themes.theme_label(name), name)
+            self.assertTrue(themes.theme_blurb(name), name)
+
+
 class WriterThemeDefaultTests(unittest.TestCase):
     def test_writers_resolve_their_theme_defaults(self):
         # A direct caller passing only a theme gets that theme's own page,

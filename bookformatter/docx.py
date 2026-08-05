@@ -169,52 +169,43 @@ def _renumber_ordered_lists(items) -> int:
 _JC = {"LeftJustified": "both", "FullyJustified": "both",
        "CenterAlign": "center", "RightAlign": "right", "LeftAlign": "left"}
 
-# Story-item paragraph style -> Word styleId.
-_SIDS = {
-    "Body": "BodyText", "Body First": "BodyFirst",
-    "Table Row": "TableCell",
-    "Chapter Number": "ChapterNumber", "Chapter Title": "Heading1",
-    "Heading 2": "Heading2", "Heading 3": "Heading3", "Heading 4": "Heading4",
-    "Block Quote": "Quote", "Code Block": "CodeBlock",
-    "Bullet List": "ListParagraph", "Numbered List": "ListParagraph",
-    "Figure": "Figure", "Caption": "Caption", "Section Break": "SceneBreak",
-    "Book Title": "Title", "Book Subtitle": "Subtitle",
-    "Book Author": "BookAuthor", "Book Publisher": "BookPublisher",
-    "Copyright": "CopyrightPage", "Footnote Text": "FootnoteText",
-    "Folio": "Footer",
+# Story-item paragraph style -> (Word styleId, w:name, Word extras).
+# Lowercase w:names are how OOXML spells Word built-ins; matching them is
+# what lights up native behavior (nav pane, TOC, notes). A None w:name
+# marks a hand-written style (list and table styles: their catalog geometry
+# would fight Word's own numbering indents) whose styleId is still needed
+# for pStyle references. Extras: outline level (nav pane / TOC), the style
+# Enter moves to, and whether the style shows in the quick-style gallery.
+_STYLES = {
+    "Body":           ("BodyText",      "Body Text",      {"q": True}),
+    "Body First":     ("BodyFirst",     "Body First",     {"q": True, "next": "BodyText"}),
+    "Table Row":      ("TableCell",     None,             {}),
+    "Chapter Number": ("ChapterNumber", "Chapter Number", {"next": "Heading1"}),
+    "Chapter Title":  ("Heading1",      "heading 1",      {"outline": 0, "next": "BodyFirst", "q": True}),
+    "Heading 2":      ("Heading2",      "heading 2",      {"outline": 1, "next": "BodyFirst", "q": True}),
+    "Heading 3":      ("Heading3",      "heading 3",      {"outline": 2, "next": "BodyFirst", "q": True}),
+    "Heading 4":      ("Heading4",      "heading 4",      {"outline": 3, "next": "BodyFirst", "q": True}),
+    "Block Quote":    ("Quote",         "Quote",          {"q": True}),
+    "Code Block":     ("CodeBlock",     "Code Block",     {}),
+    "Bullet List":    ("ListParagraph", None,             {}),
+    "Numbered List":  ("ListParagraph", None,             {}),
+    "Figure":         ("Figure",        "Figure",         {}),
+    "Caption":        ("Caption",       "caption",        {}),
+    "Section Break":  ("SceneBreak",    "Scene Break",    {}),
+    "Book Title":     ("Title",         "Title",          {"next": "Subtitle"}),
+    "Book Subtitle":  ("Subtitle",      "Subtitle",       {}),
+    "Book Author":    ("BookAuthor",    "Book Author",    {}),
+    "Book Publisher": ("BookPublisher", "Book Publisher", {}),
+    "Copyright":      ("CopyrightPage", "Copyright Page", {}),
+    "Footnote Text":  ("FootnoteText",  "footnote text",  {}),
+    "Folio":          ("Footer",        "footer",         {}),
 }
 
-# styleId -> w:name. Lowercase names are how OOXML spells Word built-ins;
-# matching them is what lights up native behavior (nav pane, TOC, notes).
-_NAMES = {
-    "BodyText": "Body Text", "BodyFirst": "Body First",
-    "TableCell": "Table Cell",
-    "ChapterNumber": "Chapter Number", "Heading1": "heading 1",
-    "Heading2": "heading 2", "Heading3": "heading 3", "Heading4": "heading 4",
-    "Quote": "Quote", "CodeBlock": "Code Block", "Figure": "Figure",
-    "Caption": "caption", "SceneBreak": "Scene Break", "Title": "Title",
-    "Subtitle": "Subtitle", "BookAuthor": "Book Author",
-    "BookPublisher": "Book Publisher", "CopyrightPage": "Copyright Page",
-    "FootnoteText": "footnote text", "Footer": "footer",
-}
-
-# Per-style Word extras: outline level (nav pane / TOC), the style Enter
-# moves to, and whether the style shows in the quick-style gallery.
-_EXTRA = {
-    "Body": {"q": True},
-    "Body First": {"q": True, "next": "BodyText"},
-    "Chapter Number": {"next": "Heading1"},
-    "Chapter Title": {"outline": 0, "next": "BodyFirst", "q": True},
-    "Heading 2": {"outline": 1, "next": "BodyFirst", "q": True},
-    "Heading 3": {"outline": 2, "next": "BodyFirst", "q": True},
-    "Heading 4": {"outline": 3, "next": "BodyFirst", "q": True},
-    "Block Quote": {"q": True},
-    "Book Title": {"next": "Subtitle"},
-}
-
-# List and table styles are hand-written (their catalog geometry would
-# fight Word's own numbering indents), and Folio maps onto Footer.
-_HANDLED_ELSEWHERE = {"Bullet List", "Numbered List", "Table Row"}
+_SIDS = {name: sid for name, (sid, _, _) in _STYLES.items()}
+_NAMES = {sid: wname for sid, wname, _ in _STYLES.values() if wname is not None}
+_EXTRA = {name: extra for name, (_, _, extra) in _STYLES.items() if extra}
+_HANDLED_ELSEWHERE = {name for name, (_, wname, _) in _STYLES.items()
+                      if wname is None}
 
 
 def _style_props(attrs, size_pt, leading):

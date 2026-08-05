@@ -191,6 +191,14 @@ def note_body_html(href: str, citations=None) -> str:
                    for item in _note_body(href, citations))
 
 
+def endnote_html(number: int, href: str, citations=None) -> str:
+    """One entry of the book-end Notes section: the L-labeled paragraph
+    that endnote mode's call (id lnref-N) links back to."""
+    return (f'<p class="endnote" id="ln-{number}">'
+            f'<a class="linknote-label" href="#lnref-{number}">{PREFIX}{number}</a> '
+            f'{note_body_html(href, citations)}</p>')
+
+
 def _classify(a: Node):
     """``"call"`` for a link to convert into an L note; ``"unfold"`` for
     one whose destination expands in place — a link already inside a note,
