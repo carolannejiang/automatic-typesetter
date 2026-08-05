@@ -28,15 +28,9 @@ import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import apacite
-from . import docx as docx_writer
-from . import epub as epub_writer
-from . import icml as icml_writer
-from . import idml as idml_writer
+from . import apacite, build, themes
 from . import ingest as ingester
-from . import printbook, themes
 from .fetch import sniff_image
-from .indesign import extract_link_assets
 from .linknotes import citable_urls
 from .models import Asset, Book, BookMeta, slugify
 
@@ -188,11 +182,17 @@ def run_build(params: dict, uploads: list, workdir: str,
         raise ValueError(f"Too many inputs ({len(inputs)}); the limit is {MAX_INPUTS} per build.")
 
     include_pictures = _first(params, "include_pictures") == "on"
+    try:  # free-text field: a typo should degrade, not abort the build
+        max_items = int(_first(params, "max_items", "0") or 0)
+    except ValueError:
+        out.warnings.append(
+            f"ignored max posts {_first(params, 'max_items')!r} (use a number)")
+        max_items = 0
     opts = ingester.IngestOptions(
         split=_first(params, "split", "auto"),
         images=_first(params, "images", "download") if include_pictures else "strip",
         order=_first(params, "order", "auto"),
-        max_items=int(_first(params, "max_items", "0") or 0),
+        max_items=max_items,
         fetch_full=True if _first(params, "fetch_full") == "on" else None,
         progress=progress,
     )
@@ -275,91 +275,14 @@ def run_build(params: dict, uploads: list, workdir: str,
                 progress=lambda done, total: progress(
                     f"Citing linked pages… {done}/{total}"))
 
-    if "epub" in formats:
-        progress("Writing EPUB…")
-        epub_path = os.path.join(out_dir, f"{name}.epub")
-        epub_writer.write_epub(book, epub_path, theme=theme, drop_caps=drop_caps,
-                               chapter_numbers=chapter_numbers,
-                               link_notes=link_notes != "off",
-                               link_citations=citations)
-        out.files[f"{name}.epub"] = epub_path
-
-    if "docx" in formats:
-        progress("Writing Word document…")
-        docx_path = os.path.join(out_dir, f"{name}.docx")
-        docx_writer.write_docx(book, docx_path, theme=theme, trim=trim,
-                               font_size=font_size, line_height=line_height,
-                               chapter_numbers=chapter_numbers,
-                               link_notes=link_notes != "off",
-                               link_citations=citations)
-        out.files[f"{name}.docx"] = docx_path
-
-    if "icml" in formats:
-        progress("Writing InDesign story…")
-        icml_path = os.path.join(out_dir, f"{name}.icml")
-        icml_writer.write_icml(book, icml_path, theme=theme, font_size=font_size,
-                               line_height=line_height, chapter_numbers=chapter_numbers,
-                               link_notes=link_notes != "off",
-                               link_citations=citations)
-        out.files[f"{name}.icml"] = icml_path
-
-    if "idml" in formats:
-        progress("Writing InDesign document…")
-        idml_path = os.path.join(out_dir, f"{name}.idml")
-        idml_writer.write_idml(book, idml_path, theme=theme, trim=trim,
-                               font_size=font_size, line_height=line_height,
-                               chapter_start=chapter_start, chapter_numbers=chapter_numbers,
-                               link_notes=link_notes != "off",
-                               link_citations=citations)
-        out.files[f"{name}.idml"] = idml_path
-
-    if ({"icml", "idml"} & formats) and book.assets:
-        for path in extract_link_assets(book, out_dir):
-            out.files[os.path.relpath(path, out_dir).replace(os.sep, "/")] = path
-        out.warnings.append(
-            "InDesign files link images rather than embed them — download the "
-            "images too and keep the images/ folder beside the .icml/.idml file "
-            "so InDesign can relink them."
-        )
-
-    if "pdf" in formats or "html" in formats:
-        progress("Typesetting pages…")
-        html_path = os.path.join(out_dir, f"{name}.html")
-        page = printbook.build_print_html(
-            book, theme=theme, trim=trim, font_size=font_size,
-            line_height=line_height, chapter_start=chapter_start,
-            toc=toc, drop_caps=drop_caps, chapter_numbers=chapter_numbers,
-            footnotes=footnotes, link_notes=link_notes, link_citations=citations,
-        )
-        with open(html_path, "w", encoding="utf-8") as fh:
-            fh.write(page)
-        if "html" in formats:
-            out.files[f"{name}.html"] = html_path
-
-        if "pdf" in formats and pdf_engine == "none":
-            out.files[f"{name}.html"] = html_path
-            out.warnings.append(
-                "PDF engine 'none': download the HTML and print it to PDF from your browser."
-            )
-        elif "pdf" in formats:
-            progress("Rendering PDF…")
-            pdf_path = os.path.join(out_dir, f"{name}.pdf")
-            try:
-                engine = printbook.write_pdf(html_path, pdf_path, engine=pdf_engine)
-                out.files[f"{name}.pdf"] = pdf_path
-                if engine == "chrome":
-                    out.warnings.append(
-                        "PDF rendered with Chrome: trim, margins, breaks and folios are "
-                        "correct, but running heads and TOC page numbers need WeasyPrint "
-                        "(pip install weasyprint)."
-                    )
-            except printbook.PdfError as exc:
-                out.files[f"{name}.html"] = html_path
-                out.warnings.append(
-                    f"Could not render a PDF ({exc}). Download the HTML and print it "
-                    "to PDF from your browser instead."
-                )
-
+    build.write_outputs(
+        book, formats, out_dir, name,
+        theme=theme, trim=trim, font_size=font_size, line_height=line_height,
+        chapter_start=chapter_start, toc=toc, drop_caps=drop_caps,
+        chapter_numbers=chapter_numbers, footnotes=footnotes,
+        link_notes=link_notes, link_citations=citations, pdf_engine=pdf_engine,
+        files=out.files, warnings=out.warnings, progress=progress,
+    )
     return out
 
 

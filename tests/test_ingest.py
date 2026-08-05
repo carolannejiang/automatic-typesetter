@@ -776,5 +776,16 @@ class UrlIngestTests(unittest.TestCase):
         self.assertTrue(any("RSS/Atom feed" in w for w in result.warnings))
 
 
+class FetchCacheTests(unittest.TestCase):
+    def test_ingest_starts_with_a_fresh_fetch_cache(self):
+        # Long-lived hosts (the web server) reuse the process across builds;
+        # a surviving cache would grow without bound and serve last build's
+        # feed content forever.
+        fetch._cache["https://stale.example/"] = (b"x", "text/html",
+                                                 "https://stale.example/")
+        ingest([])
+        self.assertEqual(fetch._cache, {})
+
+
 if __name__ == "__main__":
     unittest.main()

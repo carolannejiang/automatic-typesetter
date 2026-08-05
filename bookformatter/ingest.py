@@ -803,6 +803,7 @@ def process_images(result: IngestResult, opts: IngestOptions) -> None:
 def ingest(inputs: list, opts: Optional[IngestOptions] = None) -> IngestResult:
     opts = opts or IngestOptions()
     result = IngestResult()
+    fetch.clear_cache()  # each build starts fresh; dedup lives within a run
     for raw in inputs:
         if raw.startswith(("http://", "https://")):
             try:

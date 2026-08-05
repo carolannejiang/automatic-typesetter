@@ -105,5 +105,35 @@ class FeedTests(unittest.TestCase):
                                 "https://blog.example/atom.xml"])
 
 
+MIXED_DATES_RSS = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<channel>
+  <title>Mixed</title>
+  <link>https://mixed.example</link>
+  <item><title>Unknown zone</title>
+    <pubDate>Mon, 01 Jul 2024 10:00:00 -0000</pubDate></item>
+  <item><title>Zoned</title>
+    <pubDate>Tue, 02 Jul 2024 10:00:00 +0200</pubDate></item>
+  <item><title>Squarespace style</title>
+    <dc:date>2024-07-03T10:00:31-0400</dc:date></item>
+</channel>
+</rss>
+"""
+
+
+class FeedDateTests(unittest.TestCase):
+    def test_item_dates_are_aware_and_comparable(self):
+        # "-0000" RFC 2822 dates parse naive (unknown zone), and colon-less
+        # ISO offsets are rejected by fromisoformat before Python 3.11; both
+        # get UTC attached so ingest's feed sort never compares naive with
+        # aware datetimes (a TypeError that aborted the whole build).
+        items = parse_feed(MIXED_DATES_RSS).items
+        self.assertTrue(all(it.date is not None for it in items))
+        self.assertTrue(all(it.date.tzinfo is not None for it in items))
+        ordered = sorted(items, key=lambda it: (it.date is None, it.date))
+        self.assertEqual([it.title for it in ordered],
+                         ["Unknown zone", "Zoned", "Squarespace style"])
+
+
 if __name__ == "__main__":
     unittest.main()

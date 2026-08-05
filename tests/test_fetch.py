@@ -301,5 +301,16 @@ class DecodeBodyTests(unittest.TestCase):
                          "\x81abc")
 
 
+class CacheTests(unittest.TestCase):
+    def test_clear_cache_empties_the_run_cache(self):
+        fetch._cache["https://cache.example/"] = (b"x", "text/html",
+                                                 "https://cache.example/")
+        try:
+            fetch.clear_cache()
+            self.assertEqual(fetch._cache, {})
+        finally:
+            fetch._cache.pop("https://cache.example/", None)
+
+
 if __name__ == "__main__":
     unittest.main()

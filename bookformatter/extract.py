@@ -208,7 +208,7 @@ def _meta_content(root: Node, names: list) -> Optional[str]:
     return None
 
 
-def _parse_date(value: str) -> Optional[_dt.datetime]:
+def parse_date(value: str) -> Optional[_dt.datetime]:
     if not value:
         return None
     value = value.strip()
@@ -280,7 +280,7 @@ def _jsonld_article_meta(root: Node) -> dict:
             fields = (
                 ("title", _jsonld_name(obj.get("headline") or obj.get("name"))),
                 ("author", _jsonld_name(obj.get("author") or obj.get("creator"))),
-                ("date", _parse_date(str(obj.get("datePublished")
+                ("date", parse_date(str(obj.get("datePublished")
                                          or obj.get("dateCreated") or ""))),
             )
             for key, value in fields:
@@ -715,7 +715,7 @@ def extract_article(html_text: str, base_url: str = "") -> ExtractedDoc:
     if not title and title_tag is not None:
         title = htmldom.normalize_ws(title_tag.text_content())
     author = _meta_content(root, ["author", "article:author", "og:article:author", "dc.creator", "sailthru.author"])
-    date = _parse_date(
+    date = parse_date(
         _meta_content(root, ["article:published_time", "og:article:published_time",
                              "date", "dc.date", "sailthru.date", "article:modified_time"]) or ""
     )
@@ -732,7 +732,7 @@ def extract_article(html_text: str, base_url: str = "") -> ExtractedDoc:
     if date is None:
         time_tag = root.find("time")
         if time_tag is not None:
-            date = _parse_date(time_tag.get("datetime") or time_tag.text_content())
+            date = parse_date(time_tag.get("datetime") or time_tag.text_content())
 
     body = root.find("body") or root
     _resolve_noscripts(body)

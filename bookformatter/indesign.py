@@ -166,7 +166,10 @@ def build_styles(theme: str = "classic", font_size: str = "11pt",
     title_caps = ("SmallCaps" if "small-caps" in title_extra
                   else "AllCaps" if "uppercase" in title_extra else None)
     indent = round(_em_value(params["INDENT"]) * body_pt, 2)
-    drop = round(_em_value(params["CHAPTER_DROP"]) * body_pt, 2)
+    # CHAPTER_DROP is em-valued in most themes but a fixed measurement in
+    # classicthesis ("0.57in") — scale by the right unit.
+    drop_css = str(params["CHAPTER_DROP"] or "")
+    drop = round(_em_value(drop_css) * (72 if drop_css.endswith("in") else body_pt), 2)
 
     def em(x):
         return round(x * body_pt, 2)
@@ -350,9 +353,6 @@ _HEADINGS = {
     "h1": "Heading 2", "h2": "Heading 2", "h3": "Heading 3",
     "h4": "Heading 4", "h5": "Heading 4", "h6": "Heading 4",
 }
-
-_CONTAINERS = {"div", "section", "article", "header", "footer", "main",
-               "aside", "nav", "details"}
 
 _PARA_LIKE = {"p", "dt", "dd", "address"}
 
@@ -559,9 +559,8 @@ class _Converter:
         elif tag == "hr":
             self.paras.append(Para("Section Break", [TextRun("* * *")]))
             self.first_body = True
-        elif tag in _CONTAINERS:
-            self._blocks(node.children, quote_style)
         else:
+            # Containers (div, section, …) and unknown blocks alike: recurse.
             self._blocks(node.children, quote_style)
 
     def _paragraph(self, nodes, quote_style) -> None:
