@@ -19,9 +19,15 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import (
+    ThreadPoolExecutor, as_completed, TimeoutError as _FuturesTimeout)
 
 USER_AGENT = "bookformatter/0.1 (+https://github.com/carolannejiang/bookformatter)"
 MAX_BYTES = 20 * 1024 * 1024
+
+# Concurrent connections per host — most of a build hits one blog, and
+# eight parallel requests to a small site is impolite.
+PER_HOST = 4
 
 # When True (public web deployments), refuse to fetch private/internal
 # addresses so visitors can't use the server to probe its own network.
@@ -265,6 +271,60 @@ def fetch(url: str, timeout: float = 30.0):
             attempt += 1
     _cache[url] = result
     return result
+
+
+def host_key(url: str) -> str:
+    """A URL's host normalized for politeness gating and same-site checks:
+    lowercased, www-stripped, punycode-folded (IDN feeds mix Unicode and
+    punycode spellings of the same host)."""
+    try:
+        host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    except ValueError:  # e.g. unbalanced IPv6 brackets in a feed's link
+        return ""
+    if host.startswith("www."):
+        host = host[4:]
+    try:
+        host = host.encode("idna").decode("ascii")
+    except UnicodeError:
+        pass
+    return host
+
+
+def parallel(urls, fetch_one, progress=None, budget=None) -> dict:
+    """Run fetch_one over URLs concurrently: {url: fetch_one(url)}.
+
+    At most PER_HOST requests run against any one host at a time, and at
+    most 8 overall. fetch_one shapes its own errors — an exception it lets
+    escape aborts the run. progress, if given, is called as
+    progress(done, total) after each URL. budget, if given, caps the total
+    wall-clock seconds spent waiting: once it elapses, the results gathered
+    so far are returned and pending fetches are abandoned.
+    """
+    results: dict = {}
+    if not urls:
+        return results
+    gates: dict = {}
+    for u in urls:
+        gates.setdefault(host_key(u), threading.Semaphore(PER_HOST))
+
+    def polite(u):
+        with gates[host_key(u)]:
+            return fetch_one(u)
+
+    pool = ThreadPoolExecutor(max_workers=min(8, len(urls)))
+    futures = {pool.submit(polite, u): u for u in urls}
+    try:
+        for done, future in enumerate(as_completed(futures, timeout=budget), 1):
+            results[futures[future]] = future.result()
+            if progress is not None:
+                progress(done, len(urls))
+    except _FuturesTimeout:
+        pass  # budget spent — return what has arrived
+    finally:
+        for future in futures:
+            future.cancel()  # drop any not-yet-started fetches
+        pool.shutdown(wait=False)
+    return results
 
 
 _META_CHARSET = re.compile(

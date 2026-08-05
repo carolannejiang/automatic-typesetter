@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 
+from . import themes
 from .indesign import (ICML_MEASURE_PT, IdGen, book_to_story_items,
                        build_styles, esc, fmt, render_story_text)
 from .models import Book
@@ -76,9 +77,12 @@ def _paragraph_group(catalog, used) -> list:
 
 
 def write_icml(book: Book, path: str, theme: str = "classic",
-               font_size: str = "11pt", line_height: str = "1.45",
+               font_size: str = None, line_height: str = None,
                chapter_numbers: bool = True, link_notes: bool = True,
                link_citations: dict = None) -> None:
+    font_size = font_size if font_size is not None else themes.default_font_size(theme)
+    line_height = (line_height if line_height is not None
+                   else themes.default_line_height(theme))
     catalog = build_styles(theme, font_size, line_height)
     items = book_to_story_items(book, theme, chapter_numbers,
                                 link_notes=link_notes,

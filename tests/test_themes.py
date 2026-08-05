@@ -284,5 +284,14 @@ class DefaultTypeTests(unittest.TestCase):
         self.assertEqual(themes.default_line_height("classicthesis"), "1.30")
 
 
+class WriterThemeDefaultTests(unittest.TestCase):
+    def test_writers_resolve_their_theme_defaults(self):
+        # A direct caller passing only a theme gets that theme's own page,
+        # not classic's 6x9/11pt.
+        html = printbook.build_print_html(_book(), theme="vsi")
+        self.assertIn("size: 4.37in 6.85in", html)
+        self.assertIn("font-size: 8.5pt", html)
+
+
 if __name__ == "__main__":
     unittest.main()
