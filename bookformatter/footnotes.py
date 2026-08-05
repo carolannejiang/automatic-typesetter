@@ -86,7 +86,7 @@ def inline_footnotes(fragment: str) -> str:
         if not _has_content(span):
             continue
         # Inline the note at its first (typically only) citation.
-        _replace(_marker(calls[0]), span)
+        _marker(calls[0]).replace_with(span)
         # Further citations of the same note keep a plain superscript; there
         # is only one page-bottom note, and their link target is now gone.
         for extra in calls[1:]:
@@ -123,7 +123,7 @@ def _marker(a: Node) -> Node:
 def _demote_to_plain(marker: Node) -> None:
     sup = Node("sup")
     sup.append(Node(text=htmldom.normalize_ws(marker.text_content())))
-    _replace(marker, sup)
+    marker.replace_with(sup)
 
 
 # -- definition side --------------------------------------------------------
@@ -219,16 +219,6 @@ def _prune_empty_note_containers(root: Node) -> None:
 
 
 # -- small DOM helpers ------------------------------------------------------
-
-def _replace(node: Node, replacement: Node) -> None:
-    parent = node.parent
-    if parent is None:
-        return
-    idx = parent.children.index(node)
-    parent.children[idx] = replacement
-    replacement.parent = parent
-    node.parent = None
-
 
 def _prev_sibling(node: Node) -> Node:
     parent = node.parent

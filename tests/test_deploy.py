@@ -1,62 +1,7 @@
-import json
-import threading
-import time
 import unittest
-import urllib.error
-import urllib.parse
-import urllib.request
 
 from bookformatter import fetch
-from bookformatter.web import make_server
-
-
-class ServerFixture:
-    def start(self, **kwargs):
-        self.server = make_server(port=0, **kwargs)
-        self.base = f"http://127.0.0.1:{self.server.server_address[1]}"
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-        self.thread.start()
-        return self
-
-    def stop(self):
-        self.server.shutdown()
-        self.server.server_close()
-        fetch.PUBLIC_MODE = False  # make_server(public=...) sets the module flag
-
-    def get(self, path, redirects=True):
-        opener = urllib.request.build_opener() if redirects else urllib.request.build_opener(_NoRedirect)
-        try:
-            with opener.open(self.base + path) as resp:
-                return resp.status, resp.read(), dict(resp.headers)
-        except urllib.error.HTTPError as err:
-            return err.code, err.read(), dict(err.headers)
-
-    def post(self, path, fields):
-        data = urllib.parse.urlencode(fields, doseq=True).encode()
-        req = urllib.request.Request(
-            self.base + path, data=data,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
-        try:
-            with urllib.request.urlopen(req) as resp:
-                return resp.status, json.loads(resp.read())
-        except urllib.error.HTTPError as err:
-            return err.code, json.loads(err.read())
-
-    def wait(self, path_prefix, job_id, timeout=30.0):
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            _, body, _ = self.get(f"{path_prefix}/status?id={job_id}")
-            status = json.loads(body)
-            if status["status"] in ("done", "error"):
-                return status
-            time.sleep(0.15)
-        raise AssertionError("build did not finish")
-
-
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, *args, **kwargs):
-        return None
+from tests.support import ServerFixture
 
 
 class BasePathTests(unittest.TestCase):
@@ -85,7 +30,7 @@ class BasePathTests(unittest.TestCase):
     def test_full_build_flow_under_prefix(self):
         code, resp = self.fx.post("/book/build", {"pasted": "One paragraph.", "formats": "epub"})
         self.assertEqual(code, 200)
-        status = self.fx.wait("/book", resp["id"])
+        status = self.fx.wait(resp["id"], path_prefix="/book")
         self.assertEqual(status["status"], "done", status["message"])
         name = status["files"][0]["name"]
         code, body, _ = self.fx.get(f"/book/download?id={resp['id']}&file={name}")

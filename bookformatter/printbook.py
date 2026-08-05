@@ -19,7 +19,7 @@ import shutil
 import subprocess
 import tempfile
 
-from . import htmldom, themes
+from . import frontmatter, htmldom, themes
 from .footnotes import inline_footnotes
 from .linknotes import annotate_links, note_body_html
 from .models import Book
@@ -95,19 +95,15 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = "6x9",
             content, next_link_note = annotate_links(
                 content, start=next_link_note, citations=link_citations)
         chapter_parts.append(f'<section class="chapter" id="chapter-{i}">')
-        chapter_parts.append('<header class="chapter-head">')
-        if chapter_numbers:
-            chapter_parts.append(f'<span class="chapter-number">{themes.chapter_label(theme, i)}</span>')
-        chapter_parts.append(f'<h1 class="chapter-title">{_esc(chapter.title)}</h1>')
-        chapter_parts.append("</header>")
+        chapter_parts.append(
+            frontmatter.chapter_head_html(theme, i, chapter.title, chapter_numbers))
         chapter_parts.append(content)
         chapter_parts.append("</section>")
 
     if endnotes:
         chapter_parts.append('<section class="endnotes" id="endnotes">')
-        chapter_parts.append('<header class="chapter-head">')
-        chapter_parts.append('<h1 class="chapter-title">Notes</h1>')
-        chapter_parts.append("</header>")
+        chapter_parts.append(
+            frontmatter.chapter_head_html(theme, 0, "Notes", False))
         for number, href in endnotes:
             chapter_parts.append(
                 f'<p class="endnote" id="ln-{number}">'
@@ -118,24 +114,11 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = "6x9",
     parts: list = []
 
     parts.append('<section class="titlepage frontmatter">')
-    parts.append(f'<div class="book-title">{_esc(meta.title)}</div>')
-    if meta.description:
-        parts.append(f'<div class="book-subtitle">{_esc(meta.description)}</div>')
-    if meta.author:
-        parts.append(f'<div class="book-author">{_esc(meta.author)}</div>')
-    if meta.publisher:
-        parts.append(f'<div class="book-publisher">{_esc(meta.publisher)}</div>')
+    parts.append(frontmatter.titlepage_divs(meta))
     parts.append("</section>")
 
-    year = (meta.date or "")[:4]
     parts.append('<section class="copyrightpage frontmatter">')
-    if meta.author:
-        parts.append(f"<p>Copyright &#169; {year or ''} {_esc(meta.author)}. All rights reserved.</p>")
-    if meta.rights:
-        parts.append(f"<p>{_esc(meta.rights)}</p>")
-    if meta.source_url:
-        parts.append(f"<p>Originally published at {_esc(meta.source_url)}.</p>")
-    parts.append("<p>Produced with bookformatter.</p>")
+    parts.append(frontmatter.copyright_paras(book))
     parts.append("</section>")
 
     if toc and book.chapters:

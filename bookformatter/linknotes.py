@@ -121,7 +121,7 @@ def annotate_links(fragment: str, start: int = 1, mode: str = "inline",
             trailing = _split_trailing(a)
             if trailing:
                 items.append(Node(text=trailing))
-            _insert_after(a, items)
+            a.insert_after(*items)
             number += 1
             continue
         nodes, trailing = _unwrapped_content(a)
@@ -159,7 +159,7 @@ def annotate_links(fragment: str, start: int = 1, mode: str = "inline",
             nodes.extend([call, note])
         if trailing:
             nodes.append(Node(text=trailing))
-        _replace_with(a, nodes)
+        a.replace_with(*nodes)
         number += 1
     for aside in asides:
         root.append(aside)
@@ -234,7 +234,7 @@ def _unfold(a: Node) -> None:
                       Node(text=")")])
     if trailing:
         nodes.append(Node(text=trailing))
-    _replace_with(a, nodes)
+    a.replace_with(*nodes)
 
 
 def _display_target(href: str) -> str:
@@ -271,14 +271,6 @@ def _split_trailing(a: Node) -> str:
     return text[len(stripped):]
 
 
-def _insert_after(node: Node, items: list) -> None:
-    parent = node.parent
-    idx = parent.children.index(node)
-    for i, item in enumerate(items, 1):
-        item.parent = parent
-        parent.children.insert(idx + i, item)
-
-
 def _unwrapped_content(a: Node):
     """The anchor's children, with any trailing whitespace split off so the
     call can sit tight against the linked text."""
@@ -304,14 +296,3 @@ def _aside(number: int, label: str, href: str, citations=None) -> Node:
         p.append(item)
     aside.append(p)
     return aside
-
-
-def _replace_with(node: Node, replacements: list) -> None:
-    parent = node.parent
-    idx = parent.children.index(node)
-    parent.children.pop(idx)
-    node.parent = None
-    node.children = []
-    for i, item in enumerate(replacements):
-        item.parent = parent
-        parent.children.insert(idx + i, item)

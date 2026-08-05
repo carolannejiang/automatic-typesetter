@@ -58,6 +58,21 @@ class HtmlDomTests(unittest.TestCase):
         root.find("span").replace_with_children()
         self.assertEqual(htmldom.inner_html(root), "<div>a</div>")
 
+    def test_replace_with(self):
+        root = htmldom.parse("<div>x<span>a</span>y</div>")
+        root.find("span").replace_with(htmldom.Node("em"), htmldom.Node(text="b"))
+        self.assertEqual(htmldom.inner_html(root), "<div>x<em></em>by</div>")
+        # A detached node is silently left alone.
+        htmldom.Node("i").replace_with(htmldom.Node("b"))
+
+    def test_insert_after(self):
+        root = htmldom.parse("<div><span>a</span>y</div>")
+        span = root.find("span")
+        span.insert_after(htmldom.Node(text="1"), htmldom.Node("em"))
+        self.assertEqual(htmldom.inner_html(root), "<div><span>a</span>1<em></em>y</div>")
+        # A detached node is silently left alone.
+        htmldom.Node("i").insert_after(htmldom.Node("b"))
+
     def test_comments_dropped(self):
         out = htmldom.normalize_fragment("<p>a</p><!-- hidden --><p>b</p>")
         self.assertNotIn("hidden", out)

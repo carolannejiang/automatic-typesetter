@@ -1,18 +1,10 @@
-import base64
 import io
-import json
-import threading
-import time
 import unittest
 import urllib.parse
 import urllib.request
 import zipfile
 
-from bookformatter.web import make_server
-
-PNG_1PX = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
-)
+from tests.support import PNG_1PX, ServerFixture
 
 PASTED = """# First Light
 
@@ -27,44 +19,25 @@ By the second evening we no longer noticed the hum at all.
 class WebTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.server = make_server(port=0)
-        cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
-        cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
-        cls.thread.start()
+        cls.fx = ServerFixture().start()
+        cls.base = cls.fx.base
 
     @classmethod
     def tearDownClass(cls):
-        cls.server.shutdown()
-        cls.server.server_close()
+        cls.fx.stop()
 
     # -- helpers -----------------------------------------------------------
 
     def _get(self, path):
-        try:
-            with urllib.request.urlopen(self.base + path) as resp:
-                return resp.status, resp.read()
-        except urllib.error.HTTPError as err:
-            return err.code, err.read()
+        code, body, _ = self.fx.get(path)
+        return code, body
 
     def _post(self, path, data, content_type):
-        req = urllib.request.Request(
-            self.base + path, data=data, headers={"Content-Type": content_type}
-        )
-        try:
-            with urllib.request.urlopen(req) as resp:
-                return resp.status, resp.read()
-        except urllib.error.HTTPError as err:
-            return err.code, err.read()
+        """Returns (status, parsed JSON response)."""
+        return self.fx.post(path, data=data, content_type=content_type)
 
     def _wait_for_job(self, job_id, timeout=30.0):
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            _, body = self._get(f"/status?id={job_id}")
-            status = json.loads(body)
-            if status["status"] in ("done", "error"):
-                return status
-            time.sleep(0.15)
-        self.fail("build did not finish in time")
+        return self.fx.wait(job_id, timeout)
 
     # -- tests ---------------------------------------------------------------
 
@@ -75,22 +48,15 @@ class WebTests(unittest.TestCase):
             self.assertIn("text/html", resp.headers.get("Content-Type", ""))
 
     def test_public_homepage_is_cacheable(self):
-        from bookformatter import fetch
         # The local (shared) server does not cache — dev edits show at once.
         with urllib.request.urlopen(self.base + "/") as resp:
             self.assertIsNone(resp.headers.get("Cache-Control"))
-        was_public = fetch.PUBLIC_MODE
-        pub = make_server(port=0, public=True)
-        base = f"http://127.0.0.1:{pub.server_address[1]}"
-        thread = threading.Thread(target=pub.serve_forever, daemon=True)
-        thread.start()
+        pub = ServerFixture().start(public=True)
         try:
-            with urllib.request.urlopen(base + "/") as resp:
-                self.assertIn("max-age=600", resp.headers.get("Cache-Control", ""))
+            _, _, headers = pub.get("/")
+            self.assertIn("max-age=600", headers.get("Cache-Control", ""))
         finally:
-            pub.shutdown()
-            pub.server_close()
-            fetch.PUBLIC_MODE = was_public  # make_server flips this global
+            pub.stop()  # also restores fetch.PUBLIC_MODE
 
     def test_index_serves_form_with_all_knobs(self):
         code, body = self._get("/")
@@ -116,7 +82,7 @@ class WebTests(unittest.TestCase):
         ).encode()
         code, body = self._post("/build", form, "application/x-www-form-urlencoded")
         self.assertEqual(code, 200)
-        job_id = json.loads(body)["id"]
+        job_id = body["id"]
         status = self._wait_for_job(job_id)
         self.assertEqual(status["status"], "done", status["message"])
         code, page = self._get(f"/download?id={job_id}&file=noted.html")
@@ -159,7 +125,7 @@ class WebTests(unittest.TestCase):
         ).encode()
         code, body = self._post("/build", form, "application/x-www-form-urlencoded")
         self.assertEqual(code, 200)
-        job_id = json.loads(body)["id"]
+        job_id = body["id"]
         status = self._wait_for_job(job_id)
         self.assertEqual(status["status"], "done", status["message"])
         self.assertEqual(status["book_title"], "Lamp Book")
@@ -188,7 +154,7 @@ class WebTests(unittest.TestCase):
         ).encode()
         code, body = self._post("/build", form, "application/x-www-form-urlencoded")
         self.assertEqual(code, 200)
-        job_id = json.loads(body)["id"]
+        job_id = body["id"]
         status = self._wait_for_job(job_id)
         self.assertEqual(status["status"], "done", status["message"])
         name = status["files"][0]["name"]
@@ -204,7 +170,7 @@ class WebTests(unittest.TestCase):
         ).encode()
         code, body = self._post("/build", form, "application/x-www-form-urlencoded")
         self.assertEqual(code, 200)
-        job_id = json.loads(body)["id"]
+        job_id = body["id"]
         status = self._wait_for_job(job_id)
         self.assertEqual(status["status"], "done", status["message"])
         name = status["files"][0]["name"]
@@ -241,7 +207,7 @@ class WebTests(unittest.TestCase):
         )
         code, resp = self._post("/build", body, f"multipart/form-data; boundary={boundary}")
         self.assertEqual(code, 200)
-        job_id = json.loads(resp)["id"]
+        job_id = resp["id"]
         status = self._wait_for_job(job_id)
         self.assertEqual(status["status"], "done", status["message"])
 
@@ -258,12 +224,12 @@ class WebTests(unittest.TestCase):
         form = urllib.parse.urlencode({"title": "Empty"}).encode()
         code, body = self._post("/build", form, "application/x-www-form-urlencoded")
         self.assertEqual(code, 400)
-        self.assertIn("No input", json.loads(body)["error"])
+        self.assertIn("No input", body["error"])
 
     def test_download_is_registry_only(self):
         form = urllib.parse.urlencode({"pasted": "One paragraph.", "formats": "epub"}).encode()
         _, body = self._post("/build", form, "application/x-www-form-urlencoded")
-        job_id = json.loads(body)["id"]
+        job_id = body["id"]
         self._wait_for_job(job_id)
         for evil in ("../../../etc/passwd", "..%2F..%2Fetc%2Fpasswd", "/etc/passwd"):
             code, _ = self._get(f"/download?id={job_id}&file={urllib.parse.quote(evil)}")
