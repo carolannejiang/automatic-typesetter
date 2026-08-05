@@ -10,6 +10,8 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from typing import Optional
 
+from . import extract
+
 
 @dataclass
 class FeedItem:
@@ -54,18 +56,24 @@ def _title_text(elem) -> str:
     return html.unescape(_text(elem))
 
 
+def _aware(parsed: Optional[_dt.datetime]) -> Optional[_dt.datetime]:
+    """Item dates get sorted together, and naive and aware datetimes do not
+    compare — treat a missing offset ("-0000" pubDates, bare ISO stamps) as
+    UTC so every FeedItem.date is comparable."""
+    if parsed is not None and parsed.tzinfo is None:
+        return parsed.replace(tzinfo=_dt.timezone.utc)
+    return parsed
+
+
 def _parse_rfc822(value: str) -> Optional[_dt.datetime]:
     try:
-        return email.utils.parsedate_to_datetime(value)
+        return _aware(email.utils.parsedate_to_datetime(value))
     except (TypeError, ValueError):
         return None
 
 
 def _parse_iso(value: str) -> Optional[_dt.datetime]:
-    try:
-        return _dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except (TypeError, ValueError):
-        return None
+    return _aware(extract.parse_date(value))
 
 
 # Where blogs keep their feed when the page doesn't advertise it, in rough

@@ -549,5 +549,15 @@ class InDesignWebTests(unittest.TestCase):
             self.assertTrue(image_names, "linked images not registered for download")
 
 
+class ChapterDropUnitsTests(unittest.TestCase):
+    def test_inch_valued_chapter_drop_scales_by_points_per_inch(self):
+        from bookformatter.indesign import build_styles
+        # classicthesis sets CHAPTER_DROP as a fixed measurement ("0.57in"):
+        # 0.57 * 72 = 41.04pt regardless of body size, not 0.57em.
+        catalog = build_styles(theme="classicthesis", font_size="10pt")
+        drop = float(catalog.paragraph["Chapter Number"].attrs["SpaceBefore"])
+        self.assertEqual(drop, 41.04)
+
+
 if __name__ == "__main__":
     unittest.main()

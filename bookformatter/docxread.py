@@ -280,7 +280,7 @@ class _Reader:
             tags.append("code")
         return tags
 
-    def _run_html(self, run, rels, part: str) -> str:
+    def _run_html(self, run, rels) -> str:
         ref = run.find(f"{_W}footnoteReference")
         if ref is not None and ref.get(f"{_W}customMarkFollows") in ("1", "true"):
             mark = "".join(t.text or "" for t in run.findall(f"{_W}t"))
@@ -315,14 +315,14 @@ class _Reader:
             body = f"<{tag}>{body}</{tag}>"
         return body
 
-    def _inline_html(self, node, rels, part: str) -> str:
+    def _inline_html(self, node, rels) -> str:
         parts = []
         for child in node:
             tag = child.tag
             if tag == f"{_W}r":
-                parts.append(self._run_html(child, rels, part))
+                parts.append(self._run_html(child, rels))
             elif tag == f"{_W}hyperlink":
-                inner = self._inline_html(child, rels, part)
+                inner = self._inline_html(child, rels)
                 rid = child.get(_R_ID)
                 target, mode = rels.get(rid, ("", "")) if rid else ("", "")
                 if inner and target and mode == "External":
@@ -335,13 +335,13 @@ class _Reader:
             elif tag == f"{_W}sdt":
                 content = child.find(f"{_W}sdtContent")
                 if content is not None:
-                    parts.append(self._inline_html(content, rels, part))
+                    parts.append(self._inline_html(content, rels))
             elif tag in (f"{_W}ins", f"{_W}moveTo", f"{_W}smartTag"):
-                parts.append(self._inline_html(child, rels, part))
+                parts.append(self._inline_html(child, rels))
         return "".join(parts)
 
-    def _para_inline(self, p, rels, part: str = "document") -> str:
-        return self._inline_html(p, rels, part).strip()
+    def _para_inline(self, p, rels) -> str:
+        return self._inline_html(p, rels).strip()
 
     def _para_text(self, p) -> str:
         """Code-block text: raw characters with real line breaks."""
@@ -383,7 +383,7 @@ class _Reader:
         if not paras:
             return ""
         rels = self.note_rels[part]
-        bodies = [self._para_inline(p, rels, part) for p in paras]
+        bodies = [self._para_inline(p, rels) for p in paras]
         bodies = [b for b in bodies if b]
         if not bodies:
             return ""

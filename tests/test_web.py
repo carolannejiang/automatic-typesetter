@@ -297,5 +297,23 @@ class ThemeThumbnailTests(unittest.TestCase):
             self.assertIn(f'name="theme" value="{name}"', html)
 
 
+class MaxItemsFieldTests(unittest.TestCase):
+    def test_non_numeric_max_items_warns_instead_of_crashing(self):
+        # max_items is a free-text input; a typo should degrade like the
+        # other lenient fields (pub_date), not abort with a ValueError.
+        import shutil
+        import tempfile
+        from bookformatter.web import run_build
+        workdir = tempfile.mkdtemp(prefix="bookformatter-test-")
+        self.addCleanup(shutil.rmtree, workdir, ignore_errors=True)
+        result = run_build(
+            {"pasted": ["# One\n\nHello world."], "max_items": ["all"],
+             "formats": ["html"]}, [], workdir)
+        self.assertTrue(any("max posts" in w for w in result.warnings),
+                        result.warnings)
+        self.assertTrue(any(n.endswith(".html") for n in result.files),
+                        result.files)
+
+
 if __name__ == "__main__":
     unittest.main()

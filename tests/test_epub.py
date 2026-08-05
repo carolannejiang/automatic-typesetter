@@ -118,6 +118,12 @@ class EpubTests(unittest.TestCase):
         get_id = lambda s: s.split("<dc:identifier", 1)[1].split("</dc:identifier>")[0]
         self.assertEqual(get_id(opf1), get_id(opf2))
 
+    def test_zip_entries_carry_fixed_dates(self):
+        # Wall-clock member dates would break the byte-determinism the
+        # module docstring promises.
+        for info in self.zf.infolist():
+            self.assertEqual(info.date_time, (1980, 1, 1, 0, 0, 0), info.filename)
+
 
 if __name__ == "__main__":
     unittest.main()

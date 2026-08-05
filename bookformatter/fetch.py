@@ -43,6 +43,13 @@ _HEADERS = {
 _cache: dict = {}
 
 
+def clear_cache() -> None:
+    """Forget cached responses. The cache dedups fetches within one build;
+    long-lived hosts (the web server) call this per build so memory stays
+    bounded and a rebuild sees fresh content."""
+    _cache.clear()
+
+
 class FetchError(Exception):
     def __init__(self, message: str, transient: bool = False, retry_after=None):
         super().__init__(message)
@@ -237,8 +244,9 @@ def fetch(url: str, timeout: float = 30.0):
         url = _requote_url(url)
     except ValueError as exc:
         raise FetchError(f"could not fetch {url}: {exc}") from exc
-    if url in _cache:
-        return _cache[url]
+    cached = _cache.get(url)  # single read: clear_cache() may run mid-build
+    if cached is not None:
+        return cached
     if PUBLIC_MODE:
         validate_public_url(url)
     get = _proxy_fetch if urllib.request.getproxies() else _direct_fetch

@@ -271,7 +271,10 @@ def write_epub(book: Book, path: str, theme: str = "classic",
     with zipfile.ZipFile(path, "w") as zf:
         info = zipfile.ZipInfo("mimetype", date_time=(1980, 1, 1, 0, 0, 0))
         zf.writestr(info, "application/epub+zip", compress_type=zipfile.ZIP_STORED)
-        zf.writestr("META-INF/container.xml", _CONTAINER_XML, compress_type=zipfile.ZIP_DEFLATED)
-        for zip_path, payload in files:
+        # Fixed dates on every member (as in idml.py) keep the archive
+        # byte-deterministic, as the module docstring promises.
+        for zip_path, payload in [("META-INF/container.xml", _CONTAINER_XML)] + files:
             data = payload.encode("utf-8") if isinstance(payload, str) else payload
-            zf.writestr(zip_path, data, compress_type=zipfile.ZIP_DEFLATED)
+            info = zipfile.ZipInfo(zip_path, date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            zf.writestr(info, data)
