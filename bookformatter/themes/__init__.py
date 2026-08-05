@@ -19,6 +19,8 @@ module supplies:
     DEFAULT_FONT_SIZE, DEFAULT_LINE_HEIGHT  optional: the body type the
                    design is drawn for; pickers default to them when no
                    size is chosen (else 11pt / 1.45)
+    LABEL, BLURB   optional: the picker display name (else the CLI name,
+                   title-cased) and its one-line description (else "")
     PRINT_SPECS    optional: selected-theme print guidance shown by the
                    web interface (title, items, and an optional note)
 
@@ -68,6 +70,17 @@ def default_font_size(theme: str) -> str:
 def default_line_height(theme: str) -> str:
     """The leading a theme is designed around ("1.45" unless it declares one)."""
     return getattr(_theme(theme), "DEFAULT_LINE_HEIGHT", "1.45")
+
+
+def theme_label(theme: str) -> str:
+    """The theme's picker display name (its CLI name, title-cased, unless
+    it declares one)."""
+    return getattr(_theme(theme), "LABEL", theme.title())
+
+
+def theme_blurb(theme: str) -> str:
+    """The theme's one-line picker description ("" unless it declares one)."""
+    return getattr(_theme(theme), "BLURB", "")
 
 
 def print_specs(theme: str):

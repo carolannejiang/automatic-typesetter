@@ -21,7 +21,7 @@ import tempfile
 
 from . import frontmatter, htmldom, themes
 from .footnotes import inline_footnotes
-from .linknotes import annotate_links, note_body_html
+from .linknotes import annotate_links, endnote_html
 from .models import Book
 
 _CHROME_CANDIDATES = [
@@ -109,10 +109,7 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
         chapter_parts.append(
             frontmatter.chapter_head_html(theme, 0, "Notes", False))
         for number, href in endnotes:
-            chapter_parts.append(
-                f'<p class="endnote" id="ln-{number}">'
-                f'<a class="linknote-label" href="#lnref-{number}">L{number}</a> '
-                f'{note_body_html(href, link_citations)}</p>')
+            chapter_parts.append(endnote_html(number, href, link_citations))
         chapter_parts.append("</section>")
 
     parts: list = []

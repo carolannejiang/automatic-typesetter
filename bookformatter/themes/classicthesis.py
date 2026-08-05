@@ -16,6 +16,8 @@ from string import Template
 from . import base
 
 NAME = "classicthesis"
+LABEL = "ClassicThesis"
+BLURB = "Palatino, spaced small caps"
 
 # Native settings in ClassicThesis.tex / classicthesis.sty v4.2.  The
 # stylesheet uses scrreprt with paper=a4, fontsize=11pt; mathpazo applies

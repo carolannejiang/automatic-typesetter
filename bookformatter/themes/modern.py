@@ -10,6 +10,8 @@ from __future__ import annotations
 from . import base
 
 NAME = "modern"
+LABEL = "Modern"
+BLURB = "sans heads, spaced paragraphs"
 
 # Longest title (chars) the title page holds at full size, measured on
 # the calibration page (TITLE_FIT_TRIM / TITLE_FIT_SIZE, default 5x8 at

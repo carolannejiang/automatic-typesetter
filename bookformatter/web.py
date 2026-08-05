@@ -36,6 +36,19 @@ from .models import Asset, Book, BookMeta, slugify
 
 MAX_BODY = 100 * 1024 * 1024  # 100 MB upload cap
 ALLOWED_UPLOAD_EXTS = ingester.ALL_EXTS
+
+# Download media types by extension (shared with the serverless adapter,
+# whose multi-format response is a .zip).
+MEDIA_TYPES = {
+    ".epub": "application/epub+zip",
+    ".pdf": "application/pdf",
+    ".html": "text/html; charset=utf-8",
+    ".docx": "application/vnd.openxmlformats-officedocument"
+             ".wordprocessingml.document",
+    ".icml": "application/xml",
+    ".idml": "application/vnd.adobe.indesign-idml-package",
+    ".zip": "application/zip",
+}
 MAX_JOBS = 20
 MAX_INPUTS = 100          # links + files per build
 CONCURRENT_BUILDS = 2     # simultaneous presses; others wait their turn
@@ -52,11 +65,8 @@ class Job:
         self.id = uuid.uuid4().hex[:12]
         self.status = "queued"  # queued | running | done | error
         self.message = "Queued"
-        self.warnings: list = []
-        self.files: dict = {}  # display name -> absolute path
-        self.book_title = ""
-        self.stats = ""
-        self.created = _dt.datetime.now(_dt.timezone.utc)
+        self.result = BuildResult()  # filled in place by run_build, so
+        self.created = _dt.datetime.now(_dt.timezone.utc)  # polls see it live
         self.workdir = tempfile.mkdtemp(prefix="bookformatter-web-")
 
     def to_json(self) -> dict:
@@ -64,14 +74,14 @@ class Job:
             "id": self.id,
             "status": self.status,
             "message": self.message,
-            "warnings": self.warnings,
+            "warnings": self.result.warnings,
             "files": [
                 {"name": name, "size": os.path.getsize(path)}
-                for name, path in self.files.items()
+                for name, path in self.result.files.items()
                 if os.path.exists(path)
             ],
-            "book_title": self.book_title,
-            "stats": self.stats,
+            "book_title": self.result.book_title,
+            "stats": self.result.stats,
         }
 
 
@@ -291,16 +301,11 @@ def _run_build(job: Job, params: dict, uploads: list) -> None:
     _build_slots.acquire()
     try:
         job.status = "running"
-        live = BuildResult()
-        live.files = job.files        # shared references so the polled job
-        live.warnings = job.warnings  # shows files/warnings as they land
 
         def progress(message):
             job.message = message
 
-        result = run_build(params, uploads, job.workdir, progress=progress, out=live)
-        job.book_title = result.book_title
-        job.stats = result.stats
+        run_build(params, uploads, job.workdir, progress=progress, out=job.result)
         job.message = "Done"
         job.status = "done"
     except Exception as exc:  # surfaced to the UI
@@ -308,6 +313,27 @@ def _run_build(job: Job, params: dict, uploads: list) -> None:
         job.message = str(exc) or exc.__class__.__name__
     finally:
         _build_slots.release()
+
+
+def read_form_body(length_header, content_type, stream, max_body):
+    """Read and parse a POST form body (urlencoded or multipart), shared
+    with the serverless adapter. Returns (error_code, params, uploads):
+    error_code is 400 or 413 for a bad or oversize body (params and
+    uploads None), else None."""
+    try:
+        length = int(length_header or 0)
+    except ValueError:
+        length = 0
+    if length <= 0 or length > max_body:
+        return (413 if length > max_body else 400), None, None
+    body = stream.read(length)
+    content_type = content_type or ""
+    if content_type.startswith("multipart/form-data"):
+        params, uploads = _parse_multipart(content_type, body)
+    else:
+        params = urllib.parse.parse_qs(body.decode("utf-8", "replace"))
+        uploads = []
+    return None, params, uploads
 
 
 def _parse_multipart(content_type: str, body: bytes):
@@ -434,19 +460,12 @@ class Handler(BaseHTTPRequestHandler):
             query = urllib.parse.parse_qs(parsed.query)
             job = _jobs.get(_first(query, "id"))
             wanted = _first(query, "file")
-            path = job.files.get(wanted) if job else None
+            path = job.result.files.get(wanted) if job else None
             if not path or not os.path.exists(path):
                 self._json(404, {"error": "unknown file"})
                 return
-            media = {
-                ".epub": "application/epub+zip",
-                ".pdf": "application/pdf",
-                ".html": "text/html; charset=utf-8",
-                ".docx": "application/vnd.openxmlformats-officedocument"
-                         ".wordprocessingml.document",
-                ".icml": "application/xml",
-                ".idml": "application/vnd.adobe.indesign-idml-package",
-            }.get(os.path.splitext(wanted)[1].lower(), "application/octet-stream")
+            media = MEDIA_TYPES.get(os.path.splitext(wanted)[1].lower(),
+                                    "application/octet-stream")
             with open(path, "rb") as fh:
                 data = fh.read()
             self._send(200, data, media, {
@@ -466,20 +485,12 @@ class Handler(BaseHTTPRequestHandler):
         if self._rate_limited():
             self._json(429, {"error": "Too many builds from this address — try again in a few minutes."})
             return
-        try:
-            length = int(self.headers.get("Content-Length") or 0)
-        except ValueError:
-            length = 0
-        if length <= 0 or length > MAX_BODY:
-            self._json(413 if length > MAX_BODY else 400, {"error": "bad request body"})
+        error, params, uploads = read_form_body(
+            self.headers.get("Content-Length"), self.headers.get("Content-Type"),
+            self.rfile, MAX_BODY)
+        if error:
+            self._json(error, {"error": "bad request body"})
             return
-        body = self.rfile.read(length)
-        content_type = self.headers.get("Content-Type") or ""
-        if content_type.startswith("multipart/form-data"):
-            params, uploads = _parse_multipart(content_type, body)
-        else:
-            params = urllib.parse.parse_qs(body.decode("utf-8", "replace"))
-            uploads = []
 
         has_content = (
             _first(params, "urls")
@@ -969,14 +980,9 @@ def _theme_picker_html() -> str:
     a data URI — the page stays a single self-contained document on every
     host (local server and serverless alike)."""
     cards = []
-    for value, label, blurb in (
-        ("classic", "Classic", "serif, indents, centered heads"),
-        ("modern", "Modern", "sans heads, spaced paragraphs"),
-        ("classical", "Classical", "small-cap heads, quiet openers"),
-        ("vsi", "VSI", "Oxford pocket style, gray sans openers"),
-        ("classicthesis", "ClassicThesis", "Palatino, spaced small caps"),
-        ("short intro", "Short Intro", "Miller Text, ragged right, pocket page"),
-    ):
+    for value in themes.THEME_NAMES:
+        label = themes.theme_label(value)
+        blurb = themes.theme_blurb(value)
         trim = themes.default_trim(value)  # the page the theme is drawn for
         path = os.path.join(os.path.dirname(__file__), "thumbs",
                             value.replace(" ", "-") + ".webp")

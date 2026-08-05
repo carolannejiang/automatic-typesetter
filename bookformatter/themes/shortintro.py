@@ -30,6 +30,8 @@ from . import base
 from .vsi import SERIF_STACK
 
 NAME = "short intro"
+LABEL = "Short Intro"
+BLURB = "Miller Text, ragged right, pocket page"
 
 # Longest title (chars) the title page holds at full size, measured on
 # the calibration page (TITLE_FIT_TRIM / TITLE_FIT_SIZE, default 5x8 at
