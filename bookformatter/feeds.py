@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from . import extract
+from .xmlutil import safe_fromstring
 
 
 @dataclass
@@ -168,7 +169,7 @@ def _atom_link(elem) -> str:
 def parse_feed(text: str) -> Feed:
     """Parse RSS 2.0, RSS 1.0 (RDF), or Atom. Raises ValueError on failure."""
     try:
-        root = ET.fromstring(text)
+        root = safe_fromstring(text)
     except ET.ParseError as exc:
         raise ValueError(f"feed XML did not parse: {exc}") from exc
 

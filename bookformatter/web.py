@@ -15,6 +15,7 @@ import base64
 import datetime as _dt
 import email.parser
 import email.policy
+import hmac
 import html
 import json
 import os
@@ -28,7 +29,7 @@ import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import apacite, build, themes
+from . import apacite, build, fetch, themes
 from . import ingest as ingester
 from .fetch import sniff_image
 from .linknotes import citable_urls
@@ -312,6 +313,9 @@ def _run_build(job: Job, params: dict, uploads: list) -> None:
         job.status = "error"
         job.message = str(exc) or exc.__class__.__name__
     finally:
+        # Free the fetched page/image bodies now, not just at the next
+        # build — this server is long-lived (see fetch.clear_cache).
+        fetch.clear_cache()
         _build_slots.release()
 
 
@@ -334,6 +338,24 @@ def read_form_body(length_header, content_type, stream, max_body):
         params = urllib.parse.parse_qs(body.decode("utf-8", "replace"))
         uploads = []
     return None, params, uploads
+
+
+def check_basic_auth(auth_header, passcode: str) -> bool:
+    """True if an HTTP Basic auth header carries the passcode (accepted as
+    either the username or the password field, so any browser prompt works)."""
+    if not (auth_header or "").startswith("Basic "):
+        return False
+    try:
+        decoded = base64.b64decode(auth_header[6:]).decode("utf-8", "replace")
+    except ValueError:
+        return False
+    user, _, pw = decoded.partition(":")
+    # Compare on bytes: hmac.compare_digest rejects non-ASCII str operands
+    # with a TypeError, which a crafted header (or a non-ASCII passcode)
+    # would otherwise turn into a 500 instead of a clean 401.
+    target = passcode.encode("utf-8")
+    return (hmac.compare_digest(pw.encode("utf-8"), target)
+            or hmac.compare_digest(user.encode("utf-8"), target))
 
 
 def _parse_multipart(content_type: str, body: bytes):
@@ -401,10 +423,29 @@ class Handler(BaseHTTPRequestHandler):
         self._json(404, {"error": "not found"})
         return None
 
+    def _passcode_ok(self) -> bool:
+        """When BOOKFORMATTER_PASSCODE is configured, require it via HTTP
+        Basic auth on every route; sends a 401 challenge otherwise. A no-op
+        when no passcode is set."""
+        passcode = getattr(self.server, "passcode", "")
+        if not passcode or check_basic_auth(self.headers.get("Authorization"), passcode):
+            return True
+        self._send(401, b"Authentication required.\n", "text/plain",
+                   {"WWW-Authenticate": 'Basic realm="bookformatter"'})
+        return False
+
     def _client_ip(self) -> str:
+        # Behind a reverse proxy (the public deployments), the trustworthy
+        # client address is the platform's own header or the *rightmost*
+        # X-Forwarded-For hop — the one our immediate proxy appended.
+        # Earlier XFF entries are supplied by the client, so trusting the
+        # leftmost let an attacker rotate it to dodge the rate limit.
+        platform = self.headers.get("Fly-Client-IP", "")
+        if platform:
+            return platform.strip()
         forwarded = self.headers.get("X-Forwarded-For", "")
         if forwarded:
-            return forwarded.split(",")[0].strip()
+            return forwarded.split(",")[-1].strip()
         return self.client_address[0]
 
     def _rate_limited(self) -> bool:
@@ -427,6 +468,8 @@ class Handler(BaseHTTPRequestHandler):
     # -- routes ------------------------------------------------------------
 
     def do_HEAD(self):
+        if not self._passcode_ok():
+            return
         parsed = urllib.parse.urlparse(self.path)
         path = self._route(parsed.path)
         if path is None:
@@ -437,6 +480,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, b"", "application/json")
 
     def do_GET(self):
+        if not self._passcode_ok():
+            return
         parsed = urllib.parse.urlparse(self.path)
         path = self._route(parsed.path)
         if path is None:
@@ -466,15 +511,25 @@ class Handler(BaseHTTPRequestHandler):
                 return
             media = MEDIA_TYPES.get(os.path.splitext(wanted)[1].lower(),
                                     "application/octet-stream")
+            # Stream in chunks: an image-heavy book's HTML/PDF can be
+            # hundreds of MB, and buffering the whole file per connection
+            # would multiply on the small public host.
+            self.send_response(200)
+            self.send_header("Content-Type", media)
+            self.send_header("Content-Length", str(os.path.getsize(path)))
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header(
+                "Content-Disposition",
+                f'attachment; filename="{os.path.basename(wanted)}"')
+            self.end_headers()
             with open(path, "rb") as fh:
-                data = fh.read()
-            self._send(200, data, media, {
-                "Content-Disposition": f'attachment; filename="{os.path.basename(wanted)}"',
-            })
+                shutil.copyfileobj(fh, self.wfile, 64 * 1024)
         else:
             self._json(404, {"error": "not found"})
 
     def do_POST(self):
+        if not self._passcode_ok():
+            return
         parsed = urllib.parse.urlparse(self.path)
         path = self._route(parsed.path)
         if path is None:
@@ -527,6 +582,7 @@ def make_server(host: str = "127.0.0.1", port: int = 8000, base_path: str = "",
     server.daemon_threads = True
     server.base_path = _normalize_base_path(base_path)
     server.public = public
+    server.passcode = (os.environ.get("BOOKFORMATTER_PASSCODE") or "").strip()
     server.rate_limit = rate_limit
     server.rate_buckets = {}
     server.rate_lock = threading.Lock()
@@ -547,7 +603,8 @@ def main(argv=None) -> int:
         description="Run the bookformatter web interface.",
         epilog=(
             "Environment variables (used as defaults): PORT, "
-            "BOOKFORMATTER_BASE_PATH, BOOKFORMATTER_PUBLIC."
+            "BOOKFORMATTER_BASE_PATH, BOOKFORMATTER_PUBLIC, "
+            "BOOKFORMATTER_PASSCODE (require an access passcode when set)."
         ),
     )
     parser.add_argument("--host", default="127.0.0.1",

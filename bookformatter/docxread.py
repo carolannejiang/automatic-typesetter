@@ -44,6 +44,11 @@ from typing import Optional
 from xml.etree import ElementTree as ET
 
 from .fetch import sniff_image
+from .xmlutil import safe_fromstring
+
+# Refuse a .docx whose parts inflate past this in total — a compressed
+# upload cap alone (web/serverless) doesn't bound a zip bomb's expansion.
+MAX_UNCOMPRESSED = 300 * 1024 * 1024
 
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 _A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
@@ -125,7 +130,7 @@ class _Reader:
         if "word/document.xml" not in self.names:
             raise DocxError("no word/document.xml inside — not a Word document")
         try:
-            self.doc = ET.fromstring(zf.read("word/document.xml"))
+            self.doc = safe_fromstring(zf.read("word/document.xml"))
         except ET.ParseError as exc:
             raise DocxError(f"malformed document.xml ({exc})")
         self.para_kinds, self.char_kinds = self._load_styles()
@@ -154,7 +159,7 @@ class _Reader:
         if name not in self.names:
             return None
         try:
-            return ET.fromstring(self.zf.read(name))
+            return safe_fromstring(self.zf.read(name))
         except ET.ParseError:
             return None
 
@@ -603,4 +608,7 @@ def read_docx(path: str) -> DocxDocument:
     except (zipfile.BadZipFile, OSError) as exc:
         raise DocxError(f"not a .docx package ({exc})")
     with zf:
+        total = sum(info.file_size for info in zf.infolist())  # no decompression
+        if total > MAX_UNCOMPRESSED:
+            raise DocxError("document is too large (possible zip bomb)")
         return _Reader(zf).read()

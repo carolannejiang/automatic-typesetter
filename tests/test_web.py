@@ -263,6 +263,47 @@ class ThemeThumbnailTests(unittest.TestCase):
             self.assertIn(f'name="theme" value="{name}"', html)
 
 
+class BasicAuthTests(unittest.TestCase):
+    def test_accepts_passcode_as_password_or_user(self):
+        import base64
+        from bookformatter.web import check_basic_auth
+        pw = "Basic " + base64.b64encode(b"user:secret").decode()
+        user = "Basic " + base64.b64encode(b"secret:").decode()
+        self.assertTrue(check_basic_auth(pw, "secret"))
+        self.assertTrue(check_basic_auth(user, "secret"))
+        self.assertFalse(check_basic_auth(pw, "wrong"))
+        self.assertFalse(check_basic_auth(None, "secret"))
+        self.assertFalse(check_basic_auth("Bearer x", "secret"))
+
+    def test_non_ascii_credentials_do_not_crash(self):
+        import base64
+        from bookformatter.web import check_basic_auth
+        # A crafted non-ASCII credential must fail closed, not raise
+        # (hmac.compare_digest rejects non-ASCII str operands).
+        bad = "Basic " + base64.b64encode(b"x:\xff").decode()
+        self.assertFalse(check_basic_auth(bad, "secret"))
+        # A non-ASCII passcode must still authenticate.
+        good = "Basic " + base64.b64encode("u:café".encode()).decode()
+        self.assertTrue(check_basic_auth(good, "café"))
+
+
+class ClientIpTests(unittest.TestCase):
+    def _ip(self, headers, addr="9.9.9.9"):
+        from bookformatter.web import Handler
+        stub = Handler.__new__(Handler)
+        stub.headers = headers
+        stub.client_address = (addr, 0)
+        return stub._client_ip()
+
+    def test_ignores_attacker_controlled_left_xff_entries(self):
+        # The proxy appends the real client on the right; a spoofed left
+        # entry must not open a fresh rate-limit bucket.
+        self.assertEqual(self._ip({"X-Forwarded-For": "1.1.1.1, 2.2.2.2"}), "2.2.2.2")
+        self.assertEqual(self._ip({"Fly-Client-IP": "3.3.3.3",
+                                   "X-Forwarded-For": "1.1.1.1"}), "3.3.3.3")
+        self.assertEqual(self._ip({}), "9.9.9.9")
+
+
 class ReadFormBodyTests(unittest.TestCase):
     def test_error_codes_and_parsing(self):
         from bookformatter.web import read_form_body
