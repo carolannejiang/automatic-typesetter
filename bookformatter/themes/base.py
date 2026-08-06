@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from string import Template
 
-# (width_in, height_in) — common trade trim sizes plus ISO A5 and the
+# (width_in, height_in) — common trade trim sizes plus ISO A5 / B5 and the
 # Oxford Very Short Introduction pocket format (111 × 174 mm).
 TRIM_SIZES = {
     "5x8": (5.0, 8.0),
@@ -27,6 +27,8 @@ TRIM_SIZES = {
     # v4.2 is designed on this page rather than a US trade-book trim.
     "a4": (210 / 25.4, 297 / 25.4),
     "a5": (5.83, 8.27),
+    # Exact ISO B5, 176 x 250 mm — a common trade size for academic books.
+    "b5": (176 / 25.4, 250 / 25.4),
     "vsi": (4.37, 6.85),
 }
 
@@ -133,6 +135,8 @@ th, td { border-bottom: 0.5pt solid #999; padding: 0.35em 0.7em; text-align: lef
 thead th { border-bottom: 1pt solid #333; }
 
 a { color: #555; text-decoration: none; }
+/* A link note's retained words and its L call read as one quiet grey hyperlink. */
+span.linknote-text, sub.linknote-call { color: #555; }
 sup, sub { line-height: 0; font-size: 0.75em; }
 
 /* front matter */

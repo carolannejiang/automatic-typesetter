@@ -778,7 +778,8 @@ def _document_rels_xml(parts: _Parts) -> str:
 def write_docx(book: Book, path: str, theme: str = "classic",
                trim: str = None, font_size: str = None,
                line_height: str = None, chapter_numbers: bool = True,
-               link_notes: bool = True, link_citations: dict = None,
+               link_notes: bool = True, link_marker: str = "letter",
+               link_citations: dict = None,
                references: bool = False) -> None:
     trim = trim if trim is not None else themes.default_trim(theme)
     font_size = font_size if font_size is not None else themes.default_font_size(theme)
@@ -788,6 +789,7 @@ def write_docx(book: Book, path: str, theme: str = "classic",
     items = book_to_story_items(book, theme, chapter_numbers,
                                 converter_cls=_WordConverter,
                                 link_notes=link_notes, link_note_mode="word",
+                                link_marker=link_marker,
                                 link_citations=link_citations,
                                 references=references)
     ordered_lists = _renumber_ordered_lists(items)

@@ -202,7 +202,10 @@ Paged Media:
   the text (`write to Jane (jane@x.com)`), an address being short enough
   to read in line. `--link-notes end` gathers the notes in a Notes
   section at the end of the book instead (listed in the contents, each
-  note cross-linked with its call); `--no-link-notes` turns the rule off
+  note cross-linked with its call), where a URL cited more than once
+  reuses its first note rather than repeating; `--link-marker bracket`
+  swaps the `L1`, `L2` calls for IEEE-style `[1]`, `[2]`;
+  `--no-link-notes` turns the rule off
 - link notes cite, not just point: each linked page is fetched once and its
   note set as an APA-style citation — `Doe, J. (2024, June 3).
   *Article title.* Site Name. https://…` — built from the page's own
