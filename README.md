@@ -40,9 +40,15 @@ python3 -m bookformatter chapters/ -t "Essays" --theme classical
 # numbers, letterspaced small-cap heads, and dot-leaderless contents
 python3 -m bookformatter chapters/ -t "Essays" --theme classicthesis
 
-# Have TeX itself typeset that theme (the genuine classicthesis.sty, not
-# the CSS transcription) — or any theme as a standard LaTeX book; needs a
-# TeX installation (MacTeX/TeX Live). -f tex keeps the .tex source too.
+# Or a 6x9 memoir-class novel page: 12pt EB Garamond, centered small-cap
+# chapter openers, italic running heads with folios in the top outer
+# corners, and a leaderless contents page
+python3 -m bookformatter chapters/ -t "Essays" --theme memoir
+
+# Have TeX itself typeset those themes (the genuine classicthesis.sty or
+# memoir class, not the CSS transcription) — or any theme as a standard
+# LaTeX book; needs a TeX installation (MacTeX/TeX Live). -f tex keeps
+# the .tex source too.
 python3 -m bookformatter chapters/ -t "Essays" --theme classicthesis \
     -f tex,pdf --pdf-engine latex
 
@@ -237,6 +243,11 @@ compiles on its own; keep the `images/` folder beside it).
   ClassicThesis.pdf was. pdflatex covers Latin-script text; a chapter
   with e.g. Greek or CJK characters fails with a warning naming the
   character (the `.tex` is kept to fix or compile by hand).
+- `--theme memoir` likewise emits the genuine article: the `memoir`
+  class set up as the reference 6×9 novel template — 12pt EB Garamond,
+  titlesec's centered small-caps chapters, fancyhdr italic running
+  heads, per-page symbol footnotes — compiled with pdflatex like the
+  template itself.
 - every other theme becomes a standard LaTeX `book` matched to the
   theme's trim, margins, body size, leading, and nearest TeX Gyre face,
   compiled with LuaLaTeX (full Unicode). Heading dress beyond the book

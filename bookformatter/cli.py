@@ -56,6 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help="PDF renderer (default: auto = weasyprint, then headless "
                              "Chrome); latex typesets a .tex source with latexmk — "
                              "genuine classicthesis.sty for --theme classicthesis, "
+                             "the genuine memoir class for --theme memoir, "
                              "a standard LaTeX book otherwise")
 
     design = parser.add_argument_group("design")
@@ -64,18 +65,20 @@ def build_parser() -> argparse.ArgumentParser:
                         help="typography theme; classical sets the page after "
                              "WeasyPrint's book-classical sample, vsi after Oxford's "
                              "Very Short Introduction series, classicthesis after "
-                             "Miede's ClassicThesis LaTeX style (default: classic)")
+                             "Miede's ClassicThesis LaTeX style, memoir after a "
+                             "6x9 memoir-class novel template (default: classic)")
     design.add_argument("--trim", default=None, choices=sorted(themes.TRIM_SIZES),
                         help="print trim size in inches (default: the theme's own "
                              "page — A4 for classicthesis, 4.37x6.85 for vsi, "
                              "6x9 otherwise)")
     design.add_argument("--font-size", default=None,
                         help="print body size (default: the theme's design size — "
-                             "8.5pt for vsi and short intro, 11pt otherwise)")
+                             "8.5pt for vsi and short intro, 12pt for memoir, "
+                             "11pt otherwise)")
     design.add_argument("--line-height", default=None,
                         help="body leading (default: the theme's design leading — "
-                             "1.30 for classicthesis, 1.41 for vsi and short intro, "
-                             "1.45 otherwise)")
+                             "1.30 for classicthesis, 1.36 for memoir, "
+                             "1.41 for vsi and short intro, 1.45 otherwise)")
     design.add_argument("--chapter-start", default="right", choices=["right", "any"],
                         help="print: chapters open on a recto page or any page (default: right)")
     design.add_argument("--drop-caps", action="store_true", help="drop cap on each chapter's first paragraph")
