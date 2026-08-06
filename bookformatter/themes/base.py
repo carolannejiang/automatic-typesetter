@@ -30,6 +30,9 @@ TRIM_SIZES = {
     # Exact ISO B5, 176 x 250 mm — a common trade size for academic books.
     "b5": (176 / 25.4, 250 / 25.4),
     "vsi": (4.37, 6.85),
+    # 156 x 234 mm — the mydiss dissertation class's page (a Royal-octavo
+    # trim), converted from millimetres.
+    "mydiss": (156 / 25.4, 234 / 25.4),
 }
 
 SERIF_STACK = '"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif'

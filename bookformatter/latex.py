@@ -18,6 +18,12 @@ rather than imitated. Two document shapes:
   lettrine drop caps opening every chapter, the template's flyleaf and
   half-title front matter, and the unstarred \\tableofcontents that
   lists itself, exactly as the reference PDF shows.
+* theme "mydiss" transcribes Michael Ummels's mydiss dissertation class
+  (an extbook derivative not on CTAN) into a self-contained preamble: 9pt
+  Latin Modern on extbook at a 1.25 spread, the class's titlesec display
+  chapter (a 96pt halfgray numeral over a bold title, both ragged right),
+  titleps italic outer running heads, and a titletoc bullet-leader
+  contents, compiled with pdflatex as the class is.
 * every other theme emits a standard book-class document matched to the
   theme's page geometry, body size, leading, and nearest TeX Gyre face,
   compiled with lualatex so arbitrary web-ingested Unicode survives.
@@ -531,6 +537,105 @@ def _memoir_preamble(theme, trim, font_size, line_height, chapter_start,
     return lines
 
 
+def _mydiss_preamble(theme, trim, font_size, line_height, chapter_start,
+                     chapter_numbers, language) -> list:
+    """Michael Ummels's mydiss dissertation class, transcribed as a
+    self-contained preamble (the .cls is not on CTAN and pulls in a great
+    deal of dissertation-only machinery). extbook at the class's body size
+    and 1.25 spread, its titlesec display chapter (a 96pt halfgray numeral
+    ragged right over a 24pt bold title), \\Large upright section heads,
+    titleps running heads (chapter verso / section recto in small italics,
+    outer folios), and a titletoc bullet-leader contents. The class's
+    Fedra option, theorem/index/complexity apparatus, and marginpar column
+    are not part of the book output."""
+    width, height = TRIM_SIZES.get(trim, TRIM_SIZES["mydiss"])
+    margins = themes.theme_margins(theme, width, height)
+    body_pt = _pt_size(font_size, 9.0)
+    class_pt = min((8, 9, 10, 11, 12, 14, 17, 20),
+                   key=lambda opt: abs(opt - body_pt))
+    lines = [
+        "% !TEX program = pdflatex",
+        "\\documentclass[%dpt,twoside,%s]{extbook}"
+        % (class_pt, "openright" if chapter_start == "right" else "openany"),
+        "\\usepackage[T1]{fontenc}",
+        "\\usepackage[utf8]{inputenc}",
+        "\\usepackage{lmodern}",
+        "\\usepackage{textcomp}",
+    ]
+    babel = _babel_line(language)
+    if babel:
+        lines.append(babel)
+    lines.extend([
+        "\\usepackage[paperwidth=%gin,paperheight=%gin,twoside,top=%sin,"
+        "bottom=%sin,inner=%sin,outer=%sin]{geometry}"
+        % (width, height, margins["M_TOP"], margins["M_BOTTOM"],
+           margins["M_IN"], margins["M_OUT"]),
+        "\\usepackage{setspace}",
+        "\\usepackage{xcolor}",
+        "\\usepackage[clearempty,pagestyles,newlinetospace]{titlesec}",
+        "\\usepackage{titletoc}",
+        "\\usepackage{booktabs}",
+        "\\usepackage{graphicx}",
+        "\\usepackage[normalem]{ulem}",
+        "\\usepackage[final]{microtype}",
+        "\\usepackage[hidelinks]{hyperref}",
+        "\\urlstyle{same}",
+        _MAXWIDTH,
+    ])
+    # Leading: the class's \setstretch{1.25} on extbook's 11pt baseline; a
+    # non-default line-height maps back to the stretch it implies.
+    if line_height == themes.default_line_height(theme):
+        lines.append("\\setstretch{1.25}")
+    else:
+        try:
+            lines.append("\\setstretch{%.4g}" % (float(line_height) / 1.2222))
+        except (TypeError, ValueError):
+            lines.append("\\setstretch{1.25}")
+    lines.extend([
+        "\\setlength{\\parindent}{1.5em}",
+        # Chapter opener (\titleformat name=\chapter [display]): a 96pt
+        # halfgray bold numeral ragged right over a 24pt bold title.
+        "\\definecolor{chaptergrey}{rgb}{0.7,0.7,0.7}",
+        "\\newcommand{\\periodafter}[1]{#1.}",
+        "\\titleformat{name=\\chapter}[display]{\\normalfont\\hfuzz=\\maxdimen}"
+        "{\\color{chaptergrey}\\raggedleft\\fontseries{bx}"
+        "\\fontsize{96}{96}\\selectfont\\thechapter}{-1.5pc}"
+        "{\\raggedleft\\fontseries{bx}\\fontsize{24}{24}\\selectfont}",
+        "\\titleformat{name=\\chapter,numberless}[display]"
+        "{\\normalfont\\hfuzz=\\maxdimen}{}{-1pc}"
+        "{\\raggedleft\\fontseries{bx}\\fontsize{24}{24}\\selectfont}",
+        "\\titlespacing*{\\chapter}{0pt}{*7}{*9}",
+        "\\titleformat{\\section}[hang]{\\normalfont\\Large}{\\thesection}{.5em}{}",
+        "\\titleformat{\\subsection}[hang]{\\normalfont\\itshape}"
+        "{\\thesubsection}{.5em}{}",
+        "\\titleformat{\\subsubsection}[runin]{\\normalfont\\itshape}"
+        "{\\thesubsubsection}{.5em}{\\periodafter}",
+        "\\setcounter{secnumdepth}{1}",
+        # Running heads (titleps): chapter title verso, section title recto,
+        # both small italic; folio at the outer edge. Openers use plain.
+        "\\newcommand{\\dissbullet}{\\textbullet}",
+        "\\newpagestyle{main}{"
+        "\\sethead[\\small\\itshape\\ifthechapter{\\thechapter\\enspace}{}"
+        "\\chaptertitle][][]{}{}{\\small\\itshape\\ifthesection"
+        "{\\thesection\\enspace}{}\\sectiontitle}\\setfoot*{}{}{\\thepage}}",
+        "\\renewpagestyle{plain}{\\setfoot*{}{}{\\thepage}}",
+        "\\pagestyle{main}",
+        # Contents: \Large chapter lines with a bullet leader, no dots.
+        "\\titlecontents{chapter}[1pc]{\\addvspace{2ex}\\Large\\filright}"
+        "{\\contentslabel{1pc}}{\\hspace*{-1pc}}"
+        "{\\nolinebreak\\enskip\\nolinebreak\\dissbullet\\nolinebreak"
+        "\\enspace\\nolinebreak\\thecontentspage}[]",
+        "\\titlecontents{section}[2.4pc]{\\filright}"
+        "{\\contentslabel{1.4pc}}{\\hspace*{-1.4pc}}"
+        "{\\nolinebreak\\enskip\\nolinebreak\\dissbullet\\nolinebreak"
+        "\\enspace\\nolinebreak\\thecontentspage}[]",
+        "\\setcounter{tocdepth}{1}",
+    ])
+    if not chapter_numbers:
+        lines.append("\\setcounter{secnumdepth}{-1}")
+    return lines
+
+
 def _memoir_verso_head(meta) -> str:
     """The verso running head, "\\booktitle : \\subtitle" as the template
     composes it (the subtitle only when there is one)."""
@@ -681,6 +786,9 @@ def write_latex(book: Book, path: str, theme: str = "classic",
         lines = _memoir_preamble(theme, trim, font_size, line_height,
                                  chapter_start, chapter_numbers, language,
                                  book.meta)
+    elif theme == "mydiss":
+        lines = _mydiss_preamble(theme, trim, font_size, line_height,
+                                 chapter_start, chapter_numbers, language)
     else:
         lines = _book_preamble(theme, trim, font_size, line_height,
                                chapter_start, chapter_numbers, language)

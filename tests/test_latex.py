@@ -218,6 +218,35 @@ class WriteLatexTests(unittest.TestCase):
         self.assertNotIn("\\lettrine{", tex)
         self.assertIn("I remember the day it began.", tex)
 
+    def test_mydiss_uses_extbook_and_transcribes_the_class(self):
+        tex = render(theme="mydiss")
+        self.assertTrue(tex.startswith("% !TEX program = pdflatex"))
+        self.assertIn("\\documentclass[9pt,twoside,openright]{extbook}", tex)
+        self.assertIn("\\usepackage{lmodern}", tex)
+        # The class's page and 1.25 spread.
+        self.assertIn("paperwidth=6.14173in,paperheight=9.2126in", tex)
+        self.assertIn("\\setstretch{1.25}", tex)
+        self.assertIn("\\setlength{\\parindent}{1.5em}", tex)
+        # The signature display chapter: a 96pt halfgray numeral ragged
+        # right over a 24pt bold title.
+        self.assertIn("\\definecolor{chaptergrey}{rgb}{0.7,0.7,0.7}", tex)
+        self.assertIn("\\color{chaptergrey}\\raggedleft\\fontseries{bx}"
+                      "\\fontsize{96}{96}\\selectfont\\thechapter", tex)
+        self.assertIn("\\fontsize{24}{24}\\selectfont", tex)
+        # \Large upright section heads and titleps outer running heads.
+        self.assertIn("\\titleformat{\\section}[hang]{\\normalfont\\Large}", tex)
+        self.assertIn("\\newpagestyle{main}{", tex)
+        self.assertIn("\\chaptertitle][][]{}{}{\\small\\itshape", tex)
+        # A titletoc bullet-leader contents, and the generic title page.
+        self.assertIn("\\nolinebreak\\dissbullet\\nolinebreak", tex)
+        self.assertIn("\\frontmatter", tex)
+        self.assertIn("{\\Huge Test \\& Book\\par}", tex)
+
+    def test_mydiss_off_default_leading_computes_setstretch(self):
+        tex = render(theme="mydiss", line_height="1.5")
+        self.assertIn("\\setstretch{1.227}", tex)
+        self.assertNotIn("\\setstretch{1.25}", tex)
+
     def test_no_chapter_numbers(self):
         tex = render(chapter_numbers=False)
         self.assertIn("\\setcounter{secnumdepth}{-1}", tex)
@@ -320,6 +349,9 @@ class CompileTests(unittest.TestCase):
 
     def test_memoir2_compiles(self):
         self._compile(theme="memoir2")
+
+    def test_mydiss_compiles(self):
+        self._compile(theme="mydiss")
 
     def test_error_reports_first_tex_error(self):
         with tempfile.TemporaryDirectory() as tmp:
