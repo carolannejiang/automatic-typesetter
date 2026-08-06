@@ -96,6 +96,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="synonym for --link-notes off: keep hyperlinks as-is "
                              "instead of presenting each as an L-numbered note "
                              "carrying its URL")
+    design.add_argument("--link-marker", default="letter",
+                        choices=["letter", "bracket"],
+                        help="style of the link-note marker: letter sets L1, L2…; "
+                             "bracket sets [1], [2] (default: letter)")
     design.add_argument("--no-link-citations", action="store_true",
                         help="set link notes as bare URLs instead of fetching each "
                              "linked page to expand its note into an APA-style citation")
@@ -202,6 +206,7 @@ def main(argv=None) -> int:
         toc=not args.no_toc, drop_caps=args.drop_caps,
         chapter_numbers=not args.no_chapter_numbers,
         footnotes=not args.no_footnotes, link_notes=link_notes,
+        link_marker=args.link_marker,
         link_citations=citations, references=args.references,
         pdf_engine=args.pdf_engine,
         warnings=warnings, progress=lambda message: print(message, file=sys.stderr),

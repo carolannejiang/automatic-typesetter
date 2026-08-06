@@ -20,7 +20,7 @@ import subprocess
 import tempfile
 
 from . import apacite, frontmatter, htmldom, themes
-from .footnotes import inline_footnotes, number_sidenote_calls
+from .footnotes import hoist_margin_notes, inline_footnotes, number_sidenote_calls
 from .linknotes import annotate_links, endnote_html
 from .models import Book
 
@@ -60,12 +60,14 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
                      chapter_start: str = "right", toc: bool = True,
                      drop_caps: bool = False, chapter_numbers: bool = True,
                      footnotes: bool = True, link_notes="foot",
+                     link_marker: str = "letter",
                      link_citations: dict = None, references: bool = False,
                      link_note_color: str = "#555") -> str:
     """link_notes places the hyperlink URL notes (L1, L2, ...): "foot" sets
     each at the foot of its citing page, "end" gathers them in a Notes
     section at the end of the book, "off" keeps hyperlinks as-is. True and
-    False are accepted as "foot" and "off" for older callers."""
+    False are accepted as "foot" and "off" for older callers. link_marker
+    picks the marker style: "letter" (L1) or "bracket" ([1])."""
     if link_notes is True:
         link_notes = "foot"
     elif not link_notes:
@@ -87,6 +89,7 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
     # list the Notes section when book-end link notes produce one.
     next_link_note = 1
     endnotes: list = []  # (number, url) when link_notes == "end"
+    seen_endnotes: dict = {}  # url -> L number, to dedupe repeats book-wide
     chapter_parts: list = []
     for i, chapter in enumerate(book.chapters, 1):
         content = htmldom.normalize_fragment(chapter.html)
@@ -98,10 +101,16 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
         if link_notes == "end":
             content, next_link_note = annotate_links(
                 content, start=next_link_note, mode="endnote",
-                citations=link_citations, notes=endnotes)
+                citations=link_citations, notes=endnotes, seen=seen_endnotes,
+                marker=link_marker)
         elif link_notes != "off":
             content, next_link_note = annotate_links(
-                content, start=next_link_note, citations=link_citations)
+                content, start=next_link_note, citations=link_citations,
+                marker=link_marker)
+        # Margin-note themes (Tufte) float notes into the side column; lift them
+        # to block level so WeasyPrint's clear stacks them without overlapping.
+        if themes.sidenote_calls(theme):
+            content = hoist_margin_notes(content)
         chapter_parts.append(f'<section class="chapter" id="chapter-{i}">')
         chapter_parts.append(
             frontmatter.chapter_head_html(theme, i, chapter.title, chapter_numbers))
@@ -113,7 +122,8 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
         chapter_parts.append(
             frontmatter.chapter_head_html(theme, 0, "Notes", False))
         for number, href in endnotes:
-            chapter_parts.append(endnote_html(number, href, link_citations))
+            chapter_parts.append(
+                endnote_html(number, href, link_citations, marker=link_marker))
         chapter_parts.append("</section>")
 
     ref_entries = apacite.reference_entries(link_citations) if references else []

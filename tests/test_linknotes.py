@@ -214,6 +214,37 @@ class AnnotateLinksModesTests(unittest.TestCase):
         self.assertNotIn("linknote-url", out)
         self.assertNotIn("https://example.com/a", out)
 
+    def test_endnote_dedupe_reuses_number_within_a_fragment(self):
+        html = ('<p>See <a href="https://example.com/a">first</a> and '
+                '<a href="https://example.com/a">again</a>.</p>')
+        notes, seen = [], {}
+        out, nxt = annotate_links(html, mode="endnote", notes=notes, seen=seen)
+        # One entry for the URL, and the counter only advanced once.
+        self.assertEqual(notes, [(1, "https://example.com/a")])
+        self.assertEqual(nxt, 2)
+        # First call owns the back-target id; the repeat points at the same
+        # note without a duplicate id, and both read L1.
+        self.assertIn('<span class="linknote-text">first</span>'
+                      '<sub class="linknote-call" id="lnref-1">'
+                      '<a href="#ln-1">L1</a></sub>', out)
+        self.assertIn('<span class="linknote-text">again</span>'
+                      '<sub class="linknote-call">'
+                      '<a href="#ln-1">L1</a></sub>', out)
+        self.assertEqual(out.count('id="lnref-1"'), 1)
+
+    def test_endnote_dedupe_spans_chapters_via_seen_map(self):
+        seen, notes = {}, []
+        one, nxt = annotate_links(
+            '<p><a href="https://a.example">a</a></p>',
+            mode="endnote", notes=notes, seen=seen)
+        two, nxt2 = annotate_links(
+            '<p><a href="https://a.example">a again</a></p>',
+            start=nxt, mode="endnote", notes=notes, seen=seen)
+        # The second chapter's repeat reuses L1 and adds no entry.
+        self.assertEqual(notes, [(1, "https://a.example")])
+        self.assertEqual(nxt2, 2)
+        self.assertIn('<a href="#ln-1">L1</a>', two)
+
     def test_endnote_mode_reruns_cleanly(self):
         html = '<p><a href="https://x.example">text </a>rest</p>'
         once, nxt = annotate_links(html, mode="endnote", notes=[])
@@ -279,6 +310,25 @@ class PrintIntegrationTests(unittest.TestCase):
         self.assertIn('id="ln-2"', notes)  # the series spans chapters
         self.assertIn('href="https://b.example"', notes)
         self.assertIn('<li><a href="#endnotes">Notes</a></li>', body)
+
+    def test_end_of_book_notes_dedupe_a_url_cited_across_chapters(self):
+        book = make_book([
+            Chapter(title="One", html='<p><a href="https://a.example">a</a></p>'),
+            Chapter(title="Two",
+                    html='<p><a href="https://a.example">a again</a> and '
+                         '<a href="https://b.example">b</a></p>'),
+        ])
+        page = build_print_html(book, link_notes="end")
+        body = page.split("</style>")[1]
+        # The shared URL keeps L1 in both chapters; the fresh URL is L2.
+        self.assertEqual(body.count('<a href="#ln-1">L1</a>'), 2)
+        self.assertIn('<a href="#ln-2">L2</a>', body)
+        self.assertEqual(body.count('id="lnref-1"'), 1)  # one back-target
+        notes = body.split('<section class="endnotes" id="endnotes">')[1]
+        # One note per distinct URL — no L1 repeat in the Notes section.
+        self.assertEqual(notes.count('id="ln-1"'), 1)
+        self.assertIn('id="ln-2"', notes)
+        self.assertNotIn('id="ln-3"', notes)
 
     def test_end_of_book_notes_absent_without_links(self):
         book = make_book([Chapter(title="One", html="<p>plain prose</p>")])
@@ -398,6 +448,74 @@ class WordIntegrationTests(unittest.TestCase):
         self.assertNotIn("https://a.example/p", notes)
 
 
+class MarkerStyleTests(unittest.TestCase):
+    def test_inline_bracket_marker(self):
+        html = '<p>See <a href="https://a.example">a</a>.</p>'
+        out, _ = annotate_links(html, marker="bracket")
+        self.assertIn('<sub class="linknote-call">[1]</sub>', out)
+        self.assertIn('<span class="linknote-label">[1]</span>', out)
+        self.assertNotIn("L1", out)
+
+    def test_inline_bracket_marker_holds_across_multiple_links(self):
+        # The inline branch builds a local label span; its name must not
+        # shadow the marker parameter, or the 2nd link falls back to "L2".
+        html = ('<p><a href="https://a.example">a</a> and '
+                '<a href="https://b.example">b</a></p>')
+        out, _ = annotate_links(html, marker="bracket")
+        self.assertIn('class="linknote-call">[1]</sub>', out)
+        self.assertIn('class="linknote-call">[2]</sub>', out)
+        self.assertNotIn("L2", out)
+
+    def test_letter_marker_is_the_default(self):
+        html = '<p>See <a href="https://a.example">a</a>.</p>'
+        self.assertEqual(annotate_links(html),
+                         annotate_links(html, marker="letter"))
+
+    def test_endnote_bracket_marker_call_and_note(self):
+        book = make_book([
+            Chapter(title="One", html='<p><a href="https://a.example">a</a></p>'),
+        ])
+        body = build_print_html(book, link_notes="end",
+                                link_marker="bracket").split("</style>")[1]
+        self.assertIn('<a href="#ln-1">[1]</a>', body)
+        notes = body.split('<section class="endnotes" id="endnotes">')[1]
+        self.assertIn('<a class="linknote-label" href="#lnref-1">[1]</a>', notes)
+        self.assertNotIn(">L1</a>", body)
+
+    def test_print_foot_bracket_marker(self):
+        book = make_book([
+            Chapter(title="One", html='<p><a href="https://a.example">a</a></p>'),
+        ])
+        page = build_print_html(book, link_marker="bracket")
+        self.assertIn('class="linknote-call">[1]</sub>', page)
+
+    def test_epub_bracket_marker(self):
+        book = make_book([
+            Chapter(title="One", html='<p><a href="https://a.example">a</a></p>'),
+        ])
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = os.path.join(tmp.name, "t.epub")
+        write_epub(book, path, link_marker="bracket")
+        with zipfile.ZipFile(path) as zf:
+            doc = zf.read("OEBPS/text/chapter-001.xhtml").decode("utf-8")
+        self.assertIn('role="doc-noteref" href="#ln-1">[1]</a>', doc)
+        self.assertNotIn(">L1</a>", doc)
+
+    def test_docx_bracket_marker(self):
+        book = make_book([
+            Chapter(title="One", html='<p><a href="https://a.example/p">a</a></p>'),
+        ])
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        path = os.path.join(tmp.name, "t.docx")
+        write_docx(book, path, link_marker="bracket")
+        with zipfile.ZipFile(path) as zf:
+            doc = zf.read("word/document.xml").decode("utf-8")
+        self.assertIn(">[1]</w:t>", doc)
+        self.assertNotIn(">L1</w:t>", doc)
+
+
 class CitationTests(unittest.TestCase):
     CITES = {
         "https://cats.example/naps": Citation(
@@ -512,6 +630,12 @@ class WiringTests(unittest.TestCase):
         self.assertEqual(args.link_notes, "end")
         args = build_parser().parse_args(["x.md", "--link-notes", "off"])
         self.assertEqual(args.link_notes, "off")
+
+    def test_cli_link_marker_flag(self):
+        args = build_parser().parse_args(["x.md"])
+        self.assertEqual(args.link_marker, "letter")
+        args = build_parser().parse_args(["x.md", "--link-marker", "bracket"])
+        self.assertEqual(args.link_marker, "bracket")
 
     def test_print_css_has_linknote_rules(self):
         for theme in themes.THEME_NAMES:

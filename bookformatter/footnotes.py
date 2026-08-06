@@ -125,6 +125,76 @@ def number_sidenote_calls(fragment: str) -> str:
     return htmldom.inner_html(root)
 
 
+_MARGIN_NOTE_CLASSES = ("footnote", "linknote")
+
+# Blocks whose immediately-following paragraph is set flush left by the base
+# print sheet (``h1 + p, ... figure + p, table + p, pre + p``). Hoisting a
+# note between such a block and that paragraph breaks the adjacency, so the
+# paragraph is re-tagged ``noindent`` (also honored by the base sheet) to keep
+# its flush-left first line.
+_NOINDENT_AFTER = {"h1", "h2", "h3", "h4", "figure", "table", "pre"}
+
+
+def hoist_margin_notes(fragment: str) -> str:
+    """Lift sidenote spans (``span.footnote``/``span.linknote``) out of the
+    text block that cites them, re-parenting each as a block-level sibling
+    right after that top-level block.
+
+    Margin-note themes (Tufte) float these notes into the margin column with a
+    negative margin wide enough to clear the text measure. As *inline* floats
+    inside a paragraph, WeasyPrint miscomputes ``clear`` once the float is
+    pulled fully past the content box, so two notes cited close together stack
+    on top of one another. Lifting them to block level — direct children of
+    the chapter section — restores reliable ``clear`` stacking while keeping
+    the full text measure. Notes already at the top level are left alone;
+    notes lifted from the same block keep their document order."""
+    root = htmldom.parse(fragment)
+    groups: list = []      # (top_block, [notes]) in first-seen order
+    index: dict = {}
+    for span in root.find_all("span"):
+        classes = (span.get("class") or "").split()
+        if not any(c in classes for c in _MARGIN_NOTE_CLASSES):
+            continue
+        top = span
+        while top.parent is not None and top.parent is not root:
+            top = top.parent
+        if top is span:    # already a top-level node — nothing to hoist
+            continue
+        slot = index.get(id(top))
+        if slot is None:
+            index[id(top)] = len(groups)
+            groups.append((top, [span]))
+        else:
+            groups[slot][1].append(span)
+    if not groups:
+        return fragment
+    for top, notes in groups:
+        follower = _next_element(top)
+        for note in notes:
+            note.detach()
+        top.insert_after(*notes)
+        if top.tag in _NOINDENT_AFTER and follower is not None \
+                and follower.tag == "p":
+            classes = (follower.get("class") or "").split()
+            if "noindent" not in classes:
+                classes.append("noindent")
+                follower.attrs["class"] = " ".join(classes)
+    return htmldom.inner_html(root)
+
+
+def _next_element(node: Node) -> Node:
+    """The next element sibling of *node*, or None (text nodes are skipped,
+    as CSS adjacent-sibling combinators ignore them)."""
+    parent = node.parent
+    if parent is None:
+        return None
+    idx = parent.children.index(node)
+    for sib in parent.children[idx + 1:]:
+        if not sib.is_text:
+            return sib
+    return None
+
+
 # -- reference side ---------------------------------------------------------
 
 def _is_call(a: Node) -> bool:
