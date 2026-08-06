@@ -117,10 +117,14 @@ DEFAULT_FONT_SIZE = "8.5pt"
 DEFAULT_LINE_HEIGHT = "1.41"
 
 # ---------------------------------------------------------------- fonts ----
-# Miller Text is commercial; Georgia is the closest widely installed Scotch
-# Roman (same designer). Argo is commercial and rare; the stack falls back
-# through humanist sans faces of similar color.
-SERIF_STACK = ('"Miller Text", Miller, Georgia, "Droid Serif", '
+# Miller Text is commercial; the @font-face block in EXTRA assembles it
+# from the reader's install, pinning each cut by PostScript name — the
+# fonts ship mis-tagged (every weight reports usWeightClass 500), so a bare
+# family entry resolves the body to the Bold face. Georgia is the closest
+# widely installed Scotch Roman (same designer) fallback. Argo is
+# commercial and rare; the sans stack falls back through humanist faces of
+# similar color.
+SERIF_STACK = ('"VSI Miller", Georgia, "Droid Serif", '
                '"Times New Roman", serif')
 SANS_STACK = ('"OUP Argo", Argo, "Source Sans 3", "Source Sans Pro", '
               'Seravek, "Segoe UI", "Helvetica Neue", Arial, sans-serif')
@@ -165,6 +169,26 @@ _TOKENS = {
 EXTRA = Template(
     """
 /* ---- vsi overrides (Oxford Very Short Introduction) ---- */
+/* Miller Text — the reference face — assembled from the reader's install.
+   The cuts ship mis-tagged (every weight reports usWeightClass 500), so a
+   bare family entry resolves the body to the Bold face; pin each style by
+   PostScript name instead. local() only, nothing bundled; absent it the
+   serif stack drops to Georgia. */
+@font-face {
+  font-family: "VSI Miller";
+  src: local("Miller-Text"), local("Miller Text");
+  font-weight: normal; font-style: normal;
+}
+@font-face {
+  font-family: "VSI Miller";
+  src: local("Miller-TextItalic"), local("Miller Text Italic");
+  font-weight: normal; font-style: italic;
+}
+@font-face {
+  font-family: "VSI Miller";
+  src: local("Miller-TextBold"), local("Miller Text Bold");
+  font-weight: bold; font-style: normal;
+}
 
 /* Chapter opener: gray flush-left sans pair, then the deep sink. */
 header.chapter-head {
