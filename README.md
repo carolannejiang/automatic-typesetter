@@ -45,6 +45,11 @@ python3 -m bookformatter chapters/ -t "Essays" --theme classicthesis
 # corners, and a leaderless contents page
 python3 -m bookformatter chapters/ -t "Essays" --theme memoir
 
+# The same template in full dress — lettrine drop caps opening each
+# chapter, per-chapter symbol footnotes († ‡ §), numbered bold contents
+# lines, and the byline and copyright dropped to the page foot
+python3 -m bookformatter chapters/ -t "Essays" --theme memoir2
+
 # Have TeX itself typeset those themes (the genuine classicthesis.sty or
 # memoir class, not the CSS transcription) — or any theme as a standard
 # LaTeX book; needs a TeX installation (MacTeX/TeX Live). -f tex keeps
@@ -255,7 +260,9 @@ compiles on its own; keep the `images/` folder beside it).
   class set up as the reference 6×9 novel template — 12pt EB Garamond,
   titlesec's centered small-caps chapters, fancyhdr italic running
   heads, per-page symbol footnotes — compiled with pdflatex like the
-  template itself.
+  template itself. `--theme memoir2` adds the template's full dress:
+  `lettrine` drop caps on every chapter, the flyleaf and half-title
+  front matter, and the self-listing unstarred contents.
 - every other theme becomes a standard LaTeX `book` matched to the
   theme's trim, margins, body size, leading, and nearest TeX Gyre face,
   compiled with LuaLaTeX (full Unicode). Heading dress beyond the book

@@ -14,6 +14,10 @@ rather than imitated. Two document shapes:
   (12pt EB Garamond, titlesec's centered small-caps chapters, fancyhdr
   italic running heads, per-page symbol footnotes), compiled with
   pdflatex as the template is.
+* theme "memoir2" is that same document in the template's full dress:
+  lettrine drop caps opening every chapter, the template's flyleaf and
+  half-title front matter, and the unstarred \\tableofcontents that
+  lists itself, exactly as the reference PDF shows.
 * theme "mydiss" transcribes Michael Ummels's mydiss dissertation class
   (an extbook derivative not on CTAN) into a self-contained preamble: 9pt
   Charter (XCharter with oldstyle figures, standing in for the commercial
@@ -453,8 +457,9 @@ def _memoir_preamble(theme, trim, font_size, line_height, chapter_start,
     baselinestretch, titlesec [center,sc] chapter heads, fancyhdr italic
     running heads with outer folios, per-page symbol footnotes.
     Template-only dress (chapter art, color names, CJK, lettrine) is not
-    carried over, and footmisc's symbol* option swaps in numbers when a
-    page outruns the symbol list. The template's tocloft load and
+    carried over — except for theme memoir2, which keeps the lettrine
+    chapter openings — and footmisc's symbol* option swaps in numbers
+    when a page outruns the symbol list. The template's tocloft load and
     \\numberline{} renewal are dropped: memoir carries the cft commands
     natively and numbers its chapter entries with \\chapternumberline."""
     width, height = TRIM_SIZES.get(trim, TRIM_SIZES["6x9"])
@@ -487,6 +492,8 @@ def _memoir_preamble(theme, trim, font_size, line_height, chapter_start,
         "\\checkandfixthelayout",
         "\\usepackage{ebgaramond}",
     ])
+    if theme == "memoir2":
+        lines.append("\\usepackage{lettrine}")
     if line_height == themes.default_line_height(theme):
         lines.append("\\renewcommand{\\baselinestretch}{1.125}")
     else:
@@ -645,15 +652,25 @@ def _memoir_verso_head(meta) -> str:
 
 def _front_matter(book: Book, toc: bool, style: str) -> list:
     classicthesis = style == "classicthesis"
-    memoir = style == "memoir"
+    memoir = style in ("memoir", "memoir2")
     # memoir's title-page environment is titlingpage; titlepage is the
     # standard classes'.
     titlepage = "titlingpage" if memoir else "titlepage"
     meta = book.meta
-    lines = ["\\pagenumbering{roman}" if classicthesis else "\\frontmatter",
-             "\\begin{%s}" % titlepage, "\\centering",
-             # The template opens its title just below the head margin.
-             "\\vspace*{24pt}" if memoir else "\\vspace*{0.18\\textheight}"]
+    lines = ["\\pagenumbering{roman}" if classicthesis else "\\frontmatter"]
+    if style == "memoir2":
+        # The template's opening leaves: two blank flyleaf pages, then the
+        # half title — the bare title in capitals at the head of a recto
+        # (titlepage.tex's \centerline{\Huge{BOOK TITLE}}).
+        lines.extend(["\\thispagestyle{empty}\\null\\clearpage",
+                      "\\thispagestyle{empty}\\null\\clearpage",
+                      "\\thispagestyle{empty}",
+                      "\\centerline{\\Huge\\MakeUppercase{%s}}"
+                      % escape(htmldom.normalize_ws(meta.title or "Untitled")),
+                      "\\cleardoublepage"])
+    lines.extend(["\\begin{%s}" % titlepage, "\\centering",
+                  # The template opens its title just below the head margin.
+                  "\\vspace*{24pt}" if memoir else "\\vspace*{0.18\\textheight}"])
     title = escape(htmldom.normalize_ws(meta.title or "Untitled"))
     if classicthesis:
         lines.append("{\\Huge\\spacedallcaps{%s}\\par}" % title)
@@ -698,9 +715,10 @@ def _front_matter(book: Book, toc: bool, style: str) -> list:
 
     if toc:
         # memoir's plain \tableofcontents lists itself; the starred form
-        # doesn't.
+        # doesn't. memoir2 keeps the template's unstarred call — the
+        # reference PDF opens its contents with "Contents  vii".
         lines.extend(["\\cleardoublepage",
-                      "\\tableofcontents*" if memoir
+                      "\\tableofcontents*" if style == "memoir"
                       else "\\tableofcontents"])
     lines.extend(["\\cleardoublepage",
                   "\\pagenumbering{arabic}" if classicthesis
@@ -709,6 +727,18 @@ def _front_matter(book: Book, toc: bool, style: str) -> list:
 
 
 # -- writer ------------------------------------------------------------------
+
+# A chapter body that opens with a plain word: the first letter and the rest
+# of the word become \lettrine's two arguments. Bodies opening with anything
+# else (a command, a quotation mark, a digit, a bare one-letter word — the
+# same openings the print pipeline's _bake_lettrine declines) are left alone.
+_LETTRINE_OPEN = re.compile(r"^([A-Za-z])([A-Za-z'’]+)")
+
+
+def _lettrine_open(body: str) -> str:
+    """The template's chapter opening, \\lettrine{L}{etterine}: a two-line
+    drop cap on the first letter, the rest of the word in small caps."""
+    return _LETTRINE_OPEN.sub(r"\\lettrine{\1}{\2}", body, count=1)
 
 def _references_section(book, assets, link_citations) -> list:
     """An unnumbered References chapter: the cited links as an APA list, then
@@ -755,7 +785,7 @@ def write_latex(book: Book, path: str, theme: str = "classic",
     if theme == "classicthesis":
         lines = _classicthesis_preamble(theme, trim, font_size, chapter_start,
                                         chapter_numbers, line_height, language)
-    elif theme == "memoir":
+    elif theme in ("memoir", "memoir2"):
         lines = _memoir_preamble(theme, trim, font_size, line_height,
                                  chapter_start, chapter_numbers, language,
                                  book.meta)
@@ -767,7 +797,8 @@ def write_latex(book: Book, path: str, theme: str = "classic",
                                chapter_start, chapter_numbers, language)
     lines.append("\\begin{document}")
     lines.extend(_front_matter(
-        book, toc, theme if theme in ("classicthesis", "memoir") else ""))
+        book, toc,
+        theme if theme in ("classicthesis", "memoir", "memoir2") else ""))
 
     assets = {a.filename: a for a in book.assets}
     next_note = 1
@@ -781,6 +812,8 @@ def write_latex(book: Book, path: str, theme: str = "classic",
         title = escape(htmldom.normalize_ws(chapter.title))
         lines.append("\\chapter{%s}" % title)
         body = _TexConverter(assets).convert(root)
+        if body and theme == "memoir2":
+            body = _lettrine_open(body)
         if body:
             lines.append(body)
 
