@@ -249,6 +249,9 @@ def run_build(params: dict, uploads: list, workdir: str,
         link_notes = "foot"
     if _first(params, "no_link_notes") == "on":  # pre-select cached form
         link_notes = "off"
+    link_marker = _first(params, "link_marker", "letter")
+    if link_marker not in ("letter", "bracket"):
+        link_marker = "letter"
     link_citations = _first(params, "no_link_citations") != "on"
     references = _first(params, "references") == "on"
     font_size = _clean_size(_first(params, "font_size"), None, _FONT_SIZE_RE)
@@ -288,7 +291,8 @@ def run_build(params: dict, uploads: list, workdir: str,
         theme=theme, trim=trim, font_size=font_size, line_height=line_height,
         chapter_start=chapter_start, toc=toc, drop_caps=drop_caps,
         chapter_numbers=chapter_numbers, footnotes=footnotes,
-        link_notes=link_notes, link_citations=citations, references=references,
+        link_notes=link_notes, link_marker=link_marker,
+        link_citations=citations, references=references,
         pdf_engine=pdf_engine,
         files=out.files, warnings=out.warnings, progress=progress,
     )
@@ -898,6 +902,11 @@ footer a { color: var(--link); }
               <option value="foot">At the foot of each page</option>
               <option value="end">At the end of the book (print/PDF)</option>
               <option value="off">Off &mdash; keep hyperlinks as-is</option>
+            </select></div>
+          <div><label for="link_marker">Note marker style</label>
+            <select id="link_marker" name="link_marker">
+              <option value="letter">L1, L2&hellip;</option>
+              <option value="bracket">[1], [2]&hellip;</option>
             </select></div>
         </div>
         <div class="row">

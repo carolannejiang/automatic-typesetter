@@ -67,7 +67,7 @@ class WebTests(unittest.TestCase):
                       "theme", "trim", "formats", "font_size", "line_height",
                       "pdf_engine", "chapter_start", "split", "images", "order",
                       "max_items", "fetch_full", "drop_caps", "no_chapter_numbers",
-                      "no_toc", "link_notes"):
+                      "no_toc", "link_notes", "link_marker"):
             self.assertIn(f'name="{field}"', page, f"missing form field {field}")
 
     def test_build_with_end_of_book_link_notes(self):
@@ -91,6 +91,26 @@ class WebTests(unittest.TestCase):
         self.assertIn('<section class="endnotes" id="endnotes">', html_body)
         self.assertIn('id="ln-1"', html_body)
         self.assertNotIn('<span class="linknote">', html_body)
+
+    def test_build_with_bracket_link_marker(self):
+        form = urllib.parse.urlencode(
+            {
+                "pasted": "# One\n\nSee [the spec](https://example.com/spec).\n",
+                "title": "Marked",
+                "formats": "html",
+                "link_marker": "bracket",
+                "no_link_citations": "on",
+                "name": "marked",
+            }
+        ).encode()
+        code, body = self._post("/build", form, "application/x-www-form-urlencoded")
+        self.assertEqual(code, 200)
+        status = self._wait_for_job(body["id"])
+        self.assertEqual(status["status"], "done", status["message"])
+        code, page = self._get(f"/download?id={body['id']}&file=marked.html")
+        self.assertEqual(code, 200)
+        html_body = page.decode().split("</style>")[1]
+        self.assertIn('class="linknote-call">[1]</sub>', html_body)
 
     def test_theme_picker_cards_with_thumbnails(self):
         code, body = self._get("/")
