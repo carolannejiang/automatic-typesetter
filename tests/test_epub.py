@@ -148,6 +148,31 @@ class EpubTests(unittest.TestCase):
                 os.environ["SOURCE_DATE_EPOCH"] = old
 
 
+class EpubReferencesTests(unittest.TestCase):
+    def test_references_document_added_when_enabled(self):
+        import datetime
+        from bookformatter import apacite
+        cite = apacite.Citation(
+            url="https://ex.example/p", title="How Cats Sleep",
+            author="Jane Q. Doe", date=datetime.datetime(2024, 6, 3),
+            site_name="Cat Journal")
+        book = support.make_book([
+            Chapter(title="One",
+                    html='<p><a href="https://ex.example/p">it</a></p>',
+                    source="https://blog.example/one")])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "b.epub")
+            write_epub(book, path, link_citations={"https://ex.example/p": cite},
+                       references=True)
+            with zipfile.ZipFile(path) as zf:
+                self.assertIn("OEBPS/text/references.xhtml", zf.namelist())
+                refs = zf.read("OEBPS/text/references.xhtml").decode("utf-8")
+                ET.fromstring(refs)  # well-formed XHTML
+                self.assertIn("How Cats Sleep", refs)
+                opf = zf.read("OEBPS/package.opf").decode("utf-8")
+                self.assertIn('idref="references"', opf)  # in the spine
+
+
 class EpubImageAltTests(unittest.TestCase):
     def test_image_without_alt_gets_empty_alt(self):
         # An <img> arriving with no alt ships alt="" so AT treats it as
