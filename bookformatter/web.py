@@ -727,6 +727,7 @@ textarea:focus-visible, select:focus-visible, summary:focus-visible {
 .theme-specs dt { color: var(--muted); font-weight: 600; }
 .theme-specs dd { margin: 0; }
 .theme-specs p { color: var(--muted); font-size: 0.76rem; margin: 0.65rem 0 0; }
+.theme-specs .theme-source a { color: var(--accent); word-break: break-all; }
 .checks { display: flex; gap: 1.2rem; flex-wrap: wrap; margin-top: 0.4rem; }
 .checks label { display: inline-flex; gap: 0.4rem; align-items: center; margin: 0; color: var(--ink); font-size: 0.9rem; }
 details { margin-top: 0.9rem; }
@@ -1114,10 +1115,19 @@ def _theme_specs_html() -> str:
         )
         note = specs.get("note")
         note_html = "<p>%s</p>" % html.escape(note) if note else ""
+        source = specs.get("source")
+        source_html = ""
+        if source:
+            source_html = (
+                '<p class="theme-source">Source: '
+                '<a href="%s" target="_blank" rel="noopener noreferrer">%s</a></p>'
+                % (html.escape(source["url"], quote=True),
+                   html.escape(source["name"]))
+            )
         panels.append(
-            '<section data-theme-spec="%s" hidden><h3>%s</h3><dl>%s</dl>%s</section>'
+            '<section data-theme-spec="%s" hidden><h3>%s</h3><dl>%s</dl>%s%s</section>'
             % (html.escape(theme, quote=True), html.escape(specs["title"]),
-               items, note_html)
+               items, note_html, source_html)
         )
     return "".join(panels)
 

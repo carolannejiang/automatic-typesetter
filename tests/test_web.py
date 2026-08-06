@@ -107,6 +107,11 @@ class WebTests(unittest.TestCase):
         self.assertIn("Recommended ClassicThesis print setup", page)
         self.assertIn("80–90 gsm uncoated stock", page)
         self.assertIn("updateThemeSpecs(ev.target.value)", page)
+        # Each template-derived spec panel cites its source template.
+        self.assertIn('<p class="theme-source">Source: <a href="https://www.overleaf.com/project/6a73ee79766a5d9bbca17c3e"', page)
+        self.assertIn("Memoir Book Template, 6×9 (Overleaf)", page)
+        self.assertIn("Book design inspired by Edward Tufte (Overleaf)", page)
+        self.assertIn("Book template using the ClassicThesis package (Overleaf)", page)
 
     def test_build_from_pasted_text_with_options(self):
         form = urllib.parse.urlencode(

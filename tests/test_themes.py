@@ -150,6 +150,25 @@ class MemoirCssTests(unittest.TestCase):
         self.assertEqual(themes.default_line_height("memoir"), "1.36")
         self.assertEqual(themes.default_trim("memoir"), "6x9")
 
+    def test_exposes_template_print_guidance(self):
+        specs = themes.print_specs("memoir")
+        self.assertEqual(specs["title"],
+                         "Recommended memoir template print setup")
+        guidance = " ".join(value for _, value in specs["items"])
+        # Faithful to the template's own settings, and only those.
+        self.assertIn("6 × 9 in (152 × 229 mm)", guidance)
+        self.assertIn("no bleed", guidance)
+        self.assertIn("0.75 in spine, 0.625 in fore-edge", guidance)
+        self.assertIn("12pt EB Garamond", guidance)
+        self.assertIn("per page with symbols", guidance)
+        # The template prescribes no stock/binding; the note says so
+        # rather than inventing figures.
+        self.assertIn("prescribes no paper stock", specs["note"])
+        self.assertNotIn("gsm", guidance + specs["note"])
+        # The panel cites the template it was transcribed from.
+        self.assertEqual(specs["source"]["url"],
+                         "https://www.overleaf.com/project/6a73ee79766a5d9bbca17c3e")
+
     def test_print_css_sets_outer_folios_and_italic_center_heads(self):
         css = themes.print_css(theme="memoir", book_title="Field Notes")
         # Folios in the top outer corners (fancyhead[LE,RO]{\thepage})...

@@ -117,6 +117,12 @@ PRINT_SPECS = {
         "The Tufte-LaTeX classes also ship b5 and a4 variants; on other "
         "trims this theme scales the page and margin column linearly."
     ),
+    "source": {
+        "name": "Book design inspired by Edward Tufte (Overleaf)",
+        "url": ("https://www.overleaf.com/project/new/template/112?id=180814"
+                "&mainFile=main.tex&templateName=Book+design+inspired+by+"
+                "Edward+Tufte&texImage=texlive-full%3A2025.1"),
+    },
 }
 
 # Tufte's books are set in Bembo; the classes fall back to Palatino. ET
