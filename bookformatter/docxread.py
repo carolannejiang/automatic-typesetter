@@ -328,6 +328,11 @@ class _Reader:
                 parts.append(self._run_html(child, rels))
             elif tag == f"{_W}hyperlink":
                 inner = self._inline_html(child, rels)
+                # Underline on link text is the source app's link styling
+                # (Google Docs writes it as direct run formatting), not
+                # emphasis; the themes render links grey with no underline.
+                # Run text is escaped, so <u> here only comes from _fmt_tags.
+                inner = inner.replace("<u>", "").replace("</u>", "")
                 rid = child.get(_R_ID)
                 target, mode = rels.get(rid, ("", "")) if rid else ("", "")
                 if inner and target and mode == "External":

@@ -666,6 +666,11 @@ def _clean_tree(container: Node) -> None:
         if node.tag in ("p", "em", "strong", "li", "blockquote", "figure", "figcaption") \
                 and not htmldom.normalize_ws(node.text_content()) and not node.find_all("img"):
             node.detach()
+    # Underline inside a link is the source's link styling, not emphasis;
+    # the themes render links grey with no underline (themes/base.py).
+    for a in container.find_all("a"):
+        for u in a.find_all("u"):
+            u.replace_with_children()
     # Third pass: unwrap fragment links whose target didn't survive cleanup,
     # so no dangling #refs remain (an EPUB validity error).
     defined = {n.get("id") for n in container.walk() if not n.is_text and n.get("id")}
