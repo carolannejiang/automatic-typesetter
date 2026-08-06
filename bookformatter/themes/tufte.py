@@ -185,7 +185,7 @@ EXTRA = Template(
 }
 @font-face {
   font-family: "Tufte Bembo";
-  src: local("Bembo-BoldItalic"), local("Bembo BoldItalic");
+  src: local("Bembo-BoldItalic"), local("Bembo Bold Italic"), local("Bembo BoldItalic");
   font-weight: bold; font-style: italic;
 }
 

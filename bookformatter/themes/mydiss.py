@@ -42,9 +42,9 @@ DEFAULT_LINE_HEIGHT = "1.53"
 
 # Production guidance drawn strictly from the class's own settings
 # (mydiss.cls \geometry and \setstretch): the 156 × 234 mm page, the four
-# margins as \geometry gives them, and 9pt Charter at the 1.25 spread.
-# The class prescribes nothing about paper stock or binding, so the note
-# says so rather than inventing numbers.
+# margins as \geometry gives them, and 9pt Fedra Serif B where installed
+# (else Charter) at the 1.25 spread. The class prescribes nothing about
+# paper stock or binding, so the note says so rather than inventing numbers.
 PRINT_SPECS = {
     "title": "Recommended mydiss print setup",
     "items": (
