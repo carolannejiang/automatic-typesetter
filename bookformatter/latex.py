@@ -14,6 +14,12 @@ rather than imitated. Two document shapes:
   (12pt EB Garamond, titlesec's centered small-caps chapters, fancyhdr
   italic running heads, per-page symbol footnotes), compiled with
   pdflatex as the template is.
+* theme "tufte" emits the genuine article too: the tufte-book class, whose
+  asymmetric margin column, ragged-right Palatino body, sans allcaps title
+  page, and \\sidenote/\\marginnote furniture the CSS theme transcribes.
+  Content footnotes and link notes become margin sidenotes; figure captions
+  become margin notes. Compiled with pdflatex, the tier its Palatino and
+  soul letterspacing want.
 * every other theme emits a standard book-class document matched to the
   theme's page geometry, body size, leading, and nearest TeX Gyre face,
   compiled with lualatex so arbitrary web-ingested Unicode survives.
@@ -113,8 +119,12 @@ _INLINE_CMDS = {
 
 
 class _TexConverter:
-    def __init__(self, assets: dict):
+    def __init__(self, assets: dict, sidenotes: bool = False):
         self.assets = assets
+        # The tufte class makes every note a margin sidenote; captions are
+        # margin material too.
+        self.sidenotes = sidenotes
+        self.note_cmd = "sidenote" if sidenotes else "footnote"
 
     def convert(self, root) -> str:
         return "\n\n".join(self._blocks(root.children))
@@ -238,7 +248,10 @@ class _TexConverter:
         if caption is not None:
             text = _tidy(self._inline(caption.children))
             if text:
-                parts.append("{\\itshape\\small %s\\par}" % text)
+                if self.sidenotes:
+                    parts.append("\\marginnote{%s}" % text)
+                else:
+                    parts.append("{\\itshape\\small %s\\par}" % text)
         if not parts:
             return []
         return ["\\begin{center}\n%s\n\\end{center}" % "\n\n".join(parts)]
@@ -272,7 +285,7 @@ class _TexConverter:
             elif tag == "span" and "footnote" in (node.get("class") or "").split():
                 inner = _tidy(self._inline(node.children))
                 if inner:
-                    parts.append("\\footnote{%s}" % inner)
+                    parts.append("\\%s{%s}" % (self.note_cmd, inner))
             elif tag == "a":
                 href = (node.get("href") or "").strip()
                 inner = self._inline(node.children)
@@ -526,9 +539,55 @@ def _memoir_verso_head(meta) -> str:
     return head
 
 
+def _tufte_preamble(theme, trim, chapter_start, chapter_numbers,
+                    language) -> list:
+    """The genuine Tufte-LaTeX setup: the tufte-book class, which carries
+    the asymmetric margin-column layout, the ragged-right 10/14 Palatino
+    body, the sans allcaps title page (\\maketitlepage), and the
+    \\sidenote/\\marginnote furniture the CSS theme only transcribes.
+    Compiled with pdflatex, the tier the class's Palatino (mathpazo) and
+    letterspacing (soul) want — as the reference sample book is. The class
+    fixes its own fonts, leading, and page geometry (letterpaper), so the
+    theme's font size and line height are the class's, not the CSS
+    values."""
+    # nobib: this pipeline sets no bibliography (link citations are sidenote
+    # text, never \cite), so keep the class from loading natbib — otherwise
+    # latexmk runs bibtex and fails the build on the empty bibliography.
+    class_opts = ["nobib", "twoside",
+                  "openright" if chapter_start == "right" else "openany"]
+    lines = [
+        "% !TEX program = pdflatex",
+        "\\documentclass[%s]{tufte-book}" % ",".join(class_opts),
+        "\\usepackage[utf8]{inputenc}",
+        "\\usepackage[T1]{fontenc}",
+    ]
+    babel = _babel_line(language)
+    if babel:
+        lines.append(babel)
+    # graphicx/booktabs/ulem back the converter's images, tables, and
+    # underlines; hyperref the class already loads.
+    lines.extend([
+        "\\usepackage{graphicx}",
+        "\\usepackage[normalem]{ulem}",
+        "\\usepackage{booktabs}",
+        _MAXWIDTH,
+    ])
+    # The class hardwires letterpaper; on other trims keep its layout on a
+    # resized sheet.
+    if trim != "8.5x11":
+        width, height = TRIM_SIZES.get(trim, TRIM_SIZES["6x9"])
+        lines.append("\\geometry{paperwidth=%gin,paperheight=%gin}"
+                     % (width, height))
+    if not chapter_numbers:
+        lines.append("\\setcounter{secnumdepth}{-1}")
+    return lines
+
+
 # -- front matter ------------------------------------------------------------
 
 def _front_matter(book: Book, toc: bool, style: str) -> list:
+    if style == "tufte":
+        return _tufte_front_matter(book, toc)
     classicthesis = style == "classicthesis"
     memoir = style == "memoir"
     # memoir's title-page environment is titlingpage; titlepage is the
@@ -593,6 +652,35 @@ def _front_matter(book: Book, toc: bool, style: str) -> list:
     return lines
 
 
+def _tufte_front_matter(book: Book, toc: bool) -> list:
+    """The class's own title page and contents. Folios stay continuous
+    arabic from the first leaf — no \\frontmatter — as in Tufte's books."""
+    meta = book.meta
+    lines = []
+    if meta.author:
+        lines.append("\\author{%s}"
+                     % escape(htmldom.normalize_ws(meta.author)))
+    title = escape(htmldom.normalize_ws(meta.title or "Untitled"))
+    if meta.description:
+        # \maketitlepage has no subtitle slot, and its allcaps title is set
+        # with soul (no \\ break, no size change); join them on one line.
+        title += " : " + escape(htmldom.normalize_ws(meta.description))
+    lines.append("\\title{%s}" % title)
+    if meta.publisher:
+        lines.append("\\publisher{%s}"
+                     % escape(htmldom.normalize_ws(meta.publisher)))
+    lines.append("\\maketitlepage")
+    lines.extend(["\\thispagestyle{empty}", "\\null\\vfill",
+                  "{\\footnotesize\\noindent"])
+    lines.append("\n\n\\noindent ".join(
+        escape(line) for line in copyright_lines(book)))
+    lines.append("\\par}")
+    if toc:
+        lines.extend(["\\clearpage", "\\tableofcontents"])
+    lines.append("\\clearpage")
+    return lines
+
+
 # -- writer ------------------------------------------------------------------
 
 def write_latex(book: Book, path: str, theme: str = "classic",
@@ -615,12 +703,16 @@ def write_latex(book: Book, path: str, theme: str = "classic",
         lines = _memoir_preamble(theme, trim, font_size, line_height,
                                  chapter_start, chapter_numbers, language,
                                  book.meta)
+    elif theme == "tufte":
+        lines = _tufte_preamble(theme, trim, chapter_start, chapter_numbers,
+                                language)
     else:
         lines = _book_preamble(theme, trim, font_size, line_height,
                                chapter_start, chapter_numbers, language)
     lines.append("\\begin{document}")
     lines.extend(_front_matter(
-        book, toc, theme if theme in ("classicthesis", "memoir") else ""))
+        book, toc,
+        theme if theme in ("classicthesis", "memoir", "tufte") else ""))
 
     assets = {a.filename: a for a in book.assets}
     next_note = 1
@@ -633,7 +725,7 @@ def write_latex(book: Book, path: str, theme: str = "classic",
         root = htmldom.parse(markup)
         title = escape(htmldom.normalize_ws(chapter.title))
         lines.append("\\chapter{%s}" % title)
-        body = _TexConverter(assets).convert(root)
+        body = _TexConverter(assets, sidenotes=theme == "tufte").convert(root)
         if body:
             lines.append(body)
 

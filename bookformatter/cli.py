@@ -57,6 +57,10 @@ def build_parser() -> argparse.ArgumentParser:
                              "Chrome); latex typesets a .tex source with latexmk — "
                              "genuine classicthesis.sty for --theme classicthesis, "
                              "the genuine memoir class for --theme memoir, "
+                             "the genuine tufte-book class for --theme tufte "
+                             "(which fixes its own 10/14 leading and letter "
+                             "geometry, so --font-size, --line-height, and "
+                             "non-letter --trim have limited effect), "
                              "a standard LaTeX book otherwise")
 
     design = parser.add_argument_group("design")

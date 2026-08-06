@@ -178,6 +178,33 @@ class WriteLatexTests(unittest.TestCase):
         self.assertIn("\\renewcommand{\\baselinestretch}{1.25}", tex)
         self.assertNotIn("{1.125}", tex)
 
+    def test_tufte_uses_real_class(self):
+        tex = render(theme="tufte")
+        self.assertTrue(tex.startswith("% !TEX program = pdflatex"))
+        self.assertIn("\\documentclass[nobib,twoside,openright]{tufte-book}",
+                      tex)
+        # Notes become margin sidenotes, not page-bottom footnotes.
+        self.assertIn("\\sidenote{The note text.}", tex)
+        self.assertNotIn("\\footnote{", tex)
+        # The class's own title page, set from the metadata; the subtitle
+        # shares the title's allcaps line (soul forbids the break).
+        self.assertIn("\\maketitlepage", tex)
+        self.assertIn("\\title{Test \\& Book : A sub<title>}", tex)
+        self.assertIn("\\author{A. Author <tester>}", tex)
+        # The class owns fonts, leading, and heads — no book-class dress.
+        self.assertNotIn("\\setmainfont", tex)
+        self.assertNotIn("\\frontmatter", tex)
+
+    def test_tufte_link_notes_become_sidenotes(self):
+        tex = render(theme="tufte")
+        self.assertIn(
+            "the reference\\sidenote{\\href{https://example.com/ref}"
+            "{https://example.com/ref}}", tex)
+
+    def test_tufte_trim_resizes_sheet(self):
+        tex = render(theme="tufte", trim="6x9")
+        self.assertIn("\\geometry{paperwidth=6in,paperheight=9in}", tex)
+
     def test_no_chapter_numbers(self):
         tex = render(chapter_numbers=False)
         self.assertIn("\\setcounter{secnumdepth}{-1}", tex)
@@ -225,6 +252,9 @@ class CompileTests(unittest.TestCase):
 
     def test_memoir_compiles(self):
         self._compile(theme="memoir")
+
+    def test_tufte_compiles(self):
+        self._compile(theme="tufte")
 
     def test_error_reports_first_tex_error(self):
         with tempfile.TemporaryDirectory() as tmp:
