@@ -24,6 +24,36 @@ class WritePdfLadderTests(unittest.TestCase):
         self.assertEqual(engine, "chrome")
         chrome.assert_called_once()
 
+    def test_auto_reports_both_engine_failures(self):
+        # When both engines fail, the weasyprint reason (e.g. a macOS arch
+        # mismatch) must survive the fallback — it's usually the real fix.
+        with mock.patch.object(printbook, "_pdf_weasyprint",
+                               side_effect=printbook.PdfError("weasy down")), \
+             mock.patch.object(printbook, "_pdf_chrome",
+                               side_effect=printbook.PdfError("no chrome")):
+            with self.assertRaises(printbook.PdfError) as ctx:
+                printbook.write_pdf("in.html", "out.pdf", engine="auto")
+        self.assertIn("no chrome", str(ctx.exception))
+        self.assertIn("weasy down", str(ctx.exception))
+
+    def test_explicit_engine_does_not_fall_back(self):
+        with mock.patch.object(printbook, "_pdf_weasyprint",
+                               side_effect=printbook.PdfError("weasy down")), \
+             mock.patch.object(printbook, "_pdf_chrome") as chrome:
+            with self.assertRaises(printbook.PdfError):
+                printbook.write_pdf("in.html", "out.pdf", engine="weasyprint")
+        chrome.assert_not_called()
+
+    def test_chrome_profile_dir_failure_becomes_pdferror(self):
+        # An unwritable/full TMPDIR must surface as PdfError so the callers'
+        # kept-the-HTML fallback engages, not as a raw OSError.
+        with mock.patch.object(printbook.tempfile, "mkdtemp",
+                               side_effect=OSError("No space left on device")), \
+             mock.patch.object(printbook, "find_chrome", return_value="/fake/chrome"):
+            with self.assertRaises(printbook.PdfError) as ctx:
+                printbook._pdf_chrome("in.html", "out.pdf")
+        self.assertIn("No space left", str(ctx.exception))
+
     def test_weasyprint_render_error_becomes_pdferror(self):
         # A render-time failure (not just an import/load error) must surface
         # as PdfError so the ladder degrades instead of crashing the build.

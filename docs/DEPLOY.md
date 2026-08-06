@@ -96,7 +96,7 @@ in the Docker image) turns on:
   addresses (localhost, 10.x, 192.168.x, 169.254.x, …) are refused, on
   every redirect hop, so visitors can't use the server to probe its
   network.
-- **Rate limiting** (long-running server only) — 6 builds per 15 minutes
+- **Rate limiting** (long-running server only) — 20 builds per 15 minutes
   per client IP (reads `X-Forwarded-For` behind a proxy).
 - Caps everywhere: 100 inputs per build, 20 MB per fetched resource,
   request-body limits, 2 concurrent builds on the long-running server.
