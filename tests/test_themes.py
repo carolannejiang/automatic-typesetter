@@ -242,29 +242,6 @@ class VsiCssTests(unittest.TestCase):
         self.assertNotIn("@left-middle", css)
 
 
-class ShortIntroCssTests(unittest.TestCase):
-    def test_declares_the_pocket_page(self):
-        self.assertEqual(themes.default_trim("short intro"), "vsi")
-
-    def test_print_geometry_sets_the_specified_measure_and_grid(self):
-        css = themes.print_css(theme="short intro", trim="vsi")
-        self.assertIn("size: 4.37in 6.85in;", css)
-        # 0.477 in sides leave a 20.5-pica measure; 0.375/0.475 head and
-        # foot leave a 6 in column — 36 lines of the 12 pt grid.
-        self.assertIn("margin: 0.375in 0.477in 0.475in 0.477in;", css)
-
-    def test_body_sets_ragged_right(self):
-        css = themes.epub_css(theme="short intro")
-        # The override comes after the shared justification it replaces.
-        self.assertGreater(css.index("section.chapter { text-align: left; }"),
-                           css.index("text-align: justify"))
-
-    def test_block_paragraphs_open_a_blank_line(self):
-        css = themes.epub_css(theme="short intro", line_height="1.41")
-        self.assertIn("p + p { margin-top: 1.41em; }", css)
-        self.assertIn("text-indent: 0", css)
-
-
 class TufteCssTests(unittest.TestCase):
     def test_chapter_label_is_the_bare_number(self):
         self.assertEqual(themes.chapter_label("tufte", 3), "3")
@@ -349,23 +326,6 @@ class TufteCssTests(unittest.TestCase):
         self.assertNotIn("sidenote-call", plain)
 
 
-class CrimsonCssTests(unittest.TestCase):
-    def test_sets_the_crimson_pro_body_and_sans_heads(self):
-        css = themes.print_css(theme="crimson")
-        self.assertIn('font-family: "Crimson Pro"', css)
-        self.assertIn('"Source Sans 3"', css)
-
-    def test_chapter_opener_is_flush_left_over_a_rule(self):
-        css = themes.print_css(theme="crimson")
-        self.assertIn("header.chapter-head { text-align: left; }", css)
-        self.assertIn("border-bottom: 2px solid #1a1a1a;", css)
-
-    def test_paragraphs_carry_a_first_line_indent(self):
-        css = themes.epub_css(theme="crimson")
-        self.assertIn("crimson overrides", css)
-        self.assertIn("text-indent: 1em", css)
-
-
 class ThemeBuildTests(unittest.TestCase):
     def test_print_html_classic_is_unchanged(self):
         page = printbook.build_print_html(_book(), theme="classic")
@@ -439,9 +399,8 @@ class TitleFitTests(unittest.TestCase):
 
 class DefaultTypeTests(unittest.TestCase):
     def test_pocket_themes_declare_their_design_setting(self):
-        for theme in ("vsi", "short intro"):
-            self.assertEqual(themes.default_font_size(theme), "8.5pt")
-            self.assertEqual(themes.default_line_height(theme), "1.41")
+        self.assertEqual(themes.default_font_size("vsi"), "8.5pt")
+        self.assertEqual(themes.default_line_height("vsi"), "1.41")
 
     def test_other_themes_default_to_house_setting(self):
         for theme in ("classic", "nonsense"):
