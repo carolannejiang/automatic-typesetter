@@ -26,7 +26,9 @@ from bookformatter import themes  # noqa: E402
 
 SAMPLE = os.path.join(ROOT, "examples", "field-notes")
 THUMBS = os.path.join(ROOT, "bookformatter", "thumbs")
-OPENER_MARKER = "Nobody reads"  # first line of chapter 1's body
+# From chapter 1's opening line — but not its first word, which lettrine
+# themes (memoir2, polimi) split into drop-cap spans in the text layer.
+OPENER_MARKER = "wall of text"
 HEIGHT = 440
 
 

@@ -20,6 +20,24 @@ rather than imitated. Two document shapes:
   Content footnotes and link notes become margin sidenotes; figure captions
   become margin notes. Compiled with pdflatex, the tier its Palatino and
   soul letterspacing want.
+* theme "memoir2" is that same document in the template's full dress:
+  lettrine drop caps opening every chapter, the template's flyleaf and
+  half-title front matter, and the unstarred \\tableofcontents that
+  lists itself, exactly as the reference PDF shows.
+* theme "mydiss" transcribes Michael Ummels's mydiss dissertation class
+  (an extbook derivative not on CTAN) into a self-contained preamble: 9pt
+  Charter (XCharter with oldstyle figures, standing in for the commercial
+  Fedra Serif the reference book was set in) on extbook at a 1.25 spread,
+  the class's titlesec display chapter (a 96pt halfgray numeral over a
+  bold title, both ragged right), titleps italic outer running heads, and
+  a titletoc bullet-leader contents, compiled with pdflatex as the class is.
+* theme "polimi" likewise emits the genuine article: memoir set up as
+  the Polimi thesis's thesis_polimi.tex (the veelo chapter style, the
+  companion-copied fancyheads page style, titlesec's TikZ section bar,
+  white-on-black caption boxes, the \\start four-line BrickRed lettrine
+  opening every chapter), compiled with xelatex as the thesis directs,
+  its fontspec faces falling back to TeX Gyre where Minion Pro, Myriad
+  Pro, or Monaco are not installed.
 * every other theme emits a standard book-class document matched to the
   theme's page geometry, body size, leading, and nearest TeX Gyre face,
   compiled with lualatex so arbitrary web-ingested Unicode survives.
@@ -41,7 +59,7 @@ import re
 import shutil
 import subprocess
 
-from . import htmldom, themes
+from . import apacite, htmldom, themes
 from .footnotes import inline_footnotes
 from .frontmatter import copyright_lines
 from .linknotes import annotate_links
@@ -157,7 +175,12 @@ class _TexConverter:
             return [text] if text else []
         if tag in _SECTION_FOR:
             text = _tidy(self._inline(node.children))
-            return ["\\%s{%s}" % (_SECTION_FOR[tag], text)] if text else []
+            if not text:
+                return []
+            # A footnote in a sectioning command's moving argument is fragile;
+            # \protect keeps it from erroring in the ToC / running head.
+            text = text.replace("\\footnote", "\\protect\\footnote")
+            return ["\\%s{%s}" % (_SECTION_FOR[tag], text)]
         if tag == "blockquote":
             inner = self._blocks(node.children)
             if not inner:
@@ -352,6 +375,8 @@ def _book_preamble(theme, trim, font_size, line_height, chapter_start,
         paper = "a4paper"
     elif trim == "a5":
         paper = "a5paper"
+    elif trim == "b5":
+        paper = "b5paper"
     else:
         paper = "paperwidth=%gin,paperheight=%gin" % (width, height)
     try:
@@ -396,7 +421,7 @@ def _classicthesis_preamble(theme, trim, font_size, chapter_start,
     """André Miede's canonical scrreprt setup, options as ClassicThesis.tex
     ships them (pdfspacing dropped: the style marks it obsolete now that
     microtype letterspaces by default)."""
-    paper = {"a4": "a4", "a5": "a5", "8.5x11": "letter"}.get(trim)
+    paper = {"a4": "a4", "a5": "a5", "b5": "b5", "8.5x11": "letter"}.get(trim)
     class_opts = [
         "twoside", "openright" if chapter_start == "right" else "openany",
         "titlepage", "numbers=noenddot", "headinclude", "footinclude",
@@ -452,8 +477,9 @@ def _memoir_preamble(theme, trim, font_size, line_height, chapter_start,
     baselinestretch, titlesec [center,sc] chapter heads, fancyhdr italic
     running heads with outer folios, per-page symbol footnotes.
     Template-only dress (chapter art, color names, CJK, lettrine) is not
-    carried over, and footmisc's symbol* option swaps in numbers when a
-    page outruns the symbol list. The template's tocloft load and
+    carried over — except for theme memoir2, which keeps the lettrine
+    chapter openings — and footmisc's symbol* option swaps in numbers
+    when a page outruns the symbol list. The template's tocloft load and
     \\numberline{} renewal are dropped: memoir carries the cft commands
     natively and numbers its chapter entries with \\chapternumberline."""
     width, height = TRIM_SIZES.get(trim, TRIM_SIZES["6x9"])
@@ -486,6 +512,8 @@ def _memoir_preamble(theme, trim, font_size, line_height, chapter_start,
         "\\checkandfixthelayout",
         "\\usepackage{ebgaramond}",
     ])
+    if theme == "memoir2":
+        lines.append("\\usepackage{lettrine}")
     if line_height == themes.default_line_height(theme):
         lines.append("\\renewcommand{\\baselinestretch}{1.125}")
     else:
@@ -527,6 +555,230 @@ def _memoir_preamble(theme, trim, font_size, line_height, chapter_start,
     ])
     if not chapter_numbers:
         lines.append("\\setcounter{secnumdepth}{-1}")
+    return lines
+
+
+def _mydiss_preamble(theme, trim, font_size, line_height, chapter_start,
+                     chapter_numbers, language) -> list:
+    """Michael Ummels's mydiss dissertation class, transcribed as a
+    self-contained preamble (the .cls is not on CTAN and pulls in a great
+    deal of dissertation-only machinery). extbook at the class's body size
+    and 1.25 spread, its titlesec display chapter (a 96pt halfgray numeral
+    ragged right over a 24pt bold title), \\Large upright section heads,
+    titleps running heads (chapter verso / section recto in small italics,
+    outer folios), and a titletoc bullet-leader contents. The class's
+    Fedra option, theorem/index/complexity apparatus, and marginpar column
+    are not part of the book output."""
+    width, height = TRIM_SIZES.get(trim, TRIM_SIZES["mydiss"])
+    margins = themes.theme_margins(theme, width, height)
+    body_pt = _pt_size(font_size, 9.0)
+    class_pt = min((8, 9, 10, 11, 12, 14, 17, 20),
+                   key=lambda opt: abs(opt - body_pt))
+    lines = [
+        "% !TEX program = pdflatex",
+        "\\documentclass[%dpt,twoside,%s]{extbook}"
+        % (class_pt, "openright" if chapter_start == "right" else "openany"),
+        "\\usepackage[T1]{fontenc}",
+        "\\usepackage[utf8]{inputenc}",
+        # Charter (XCharter) with oldstyle figures stands in for the
+        # reference's commercial Fedra Serif; a warm, low-contrast humanist
+        # book serif far closer to it than the class's Latin Modern default.
+        "\\usepackage[osf]{XCharter}",
+    ]
+    babel = _babel_line(language)
+    if babel:
+        lines.append(babel)
+    lines.extend([
+        "\\usepackage[paperwidth=%gin,paperheight=%gin,twoside,top=%sin,"
+        "bottom=%sin,inner=%sin,outer=%sin]{geometry}"
+        % (width, height, margins["M_TOP"], margins["M_BOTTOM"],
+           margins["M_IN"], margins["M_OUT"]),
+        "\\usepackage{setspace}",
+        "\\usepackage{xcolor}",
+        "\\usepackage[clearempty,pagestyles,newlinetospace]{titlesec}",
+        "\\usepackage{titletoc}",
+        "\\usepackage{booktabs}",
+        "\\usepackage{graphicx}",
+        "\\usepackage[normalem]{ulem}",
+        "\\usepackage[final]{microtype}",
+        "\\usepackage[hidelinks]{hyperref}",
+        "\\urlstyle{same}",
+        _MAXWIDTH,
+    ])
+    # Leading: the class's \setstretch{1.25} on extbook's 11pt baseline; a
+    # non-default line-height maps back to the stretch it implies.
+    if line_height == themes.default_line_height(theme):
+        lines.append("\\setstretch{1.25}")
+    else:
+        try:
+            lines.append("\\setstretch{%.4g}" % (float(line_height) / 1.2222))
+        except (TypeError, ValueError):
+            lines.append("\\setstretch{1.25}")
+    lines.extend([
+        "\\setlength{\\parindent}{1.5em}",
+        # Chapter opener (\titleformat name=\chapter [display]): a 96pt
+        # halfgray bold numeral ragged right over a 24pt bold title.
+        "\\definecolor{chaptergrey}{rgb}{0.7,0.7,0.7}",
+        "\\newcommand{\\periodafter}[1]{#1.}",
+        "\\titleformat{name=\\chapter}[display]{\\normalfont\\hfuzz=\\maxdimen}"
+        "{\\color{chaptergrey}\\raggedleft\\fontseries{bx}"
+        "\\fontsize{96}{96}\\selectfont\\thechapter}{-1.5pc}"
+        "{\\raggedleft\\fontseries{bx}\\fontsize{24}{24}\\selectfont}",
+        "\\titleformat{name=\\chapter,numberless}[display]"
+        "{\\normalfont\\hfuzz=\\maxdimen}{}{-1pc}"
+        "{\\raggedleft\\fontseries{bx}\\fontsize{24}{24}\\selectfont}",
+        "\\titlespacing*{\\chapter}{0pt}{*7}{*9}",
+        "\\titleformat{\\section}[hang]{\\normalfont\\Large}{\\thesection}{.5em}{}",
+        "\\titleformat{\\subsection}[hang]{\\normalfont\\itshape}"
+        "{\\thesubsection}{.5em}{}",
+        "\\titleformat{\\subsubsection}[runin]{\\normalfont\\itshape}"
+        "{\\thesubsubsection}{.5em}{\\periodafter}",
+        "\\setcounter{secnumdepth}{1}",
+        # Running heads (titleps): chapter title verso, section title recto,
+        # both small italic; folio at the outer edge. Openers use plain.
+        "\\newcommand{\\dissbullet}{\\textbullet}",
+        "\\newpagestyle{main}{"
+        "\\sethead[\\small\\itshape\\ifthechapter{\\thechapter\\enspace}{}"
+        "\\chaptertitle][][]{}{}{\\small\\itshape\\ifthesection"
+        "{\\thesection\\enspace}{}\\sectiontitle}\\setfoot*{}{}{\\thepage}}",
+        "\\renewpagestyle{plain}{\\setfoot*{}{}{\\thepage}}",
+        "\\pagestyle{main}",
+        # Contents: \Large chapter lines with a bullet leader, no dots.
+        "\\titlecontents{chapter}[1pc]{\\addvspace{2ex}\\Large\\filright}"
+        "{\\contentslabel{1pc}}{\\hspace*{-1pc}}"
+        "{\\nolinebreak\\enskip\\nolinebreak\\dissbullet\\nolinebreak"
+        "\\enspace\\nolinebreak\\thecontentspage}[]",
+        "\\titlecontents{section}[2.4pc]{\\filright}"
+        "{\\contentslabel{1.4pc}}{\\hspace*{-1.4pc}}"
+        "{\\nolinebreak\\enskip\\nolinebreak\\dissbullet\\nolinebreak"
+        "\\enspace\\nolinebreak\\thecontentspage}[]",
+        "\\setcounter{tocdepth}{1}",
+    ])
+    if not chapter_numbers:
+        lines.append("\\setcounter{secnumdepth}{-1}")
+    return lines
+
+
+def _polimi_preamble(theme, trim, font_size, line_height, chapter_start,
+                     chapter_numbers, language) -> list:
+    """The Polimi thesis's own setup, transcribed from thesis_polimi.tex:
+    12pt A4 memoir with the veelo chapter style, the companion-copied
+    fancyheads page style, titlesec's TikZ section bar, and white-on-black
+    caption boxes, under XeTeX as the thesis directs. The thesis is
+    oneside; twoside serves book duplexing. Its commercial faces fall
+    back to TeX Gyre kin where they are not installed. The \\start
+    lettrine (a four-line BrickRed initial) is defined verbatim and
+    applied to each chapter's opening word by write_latex. Template-only
+    dress (pgfplots/TikZ diagrams, acronyms, verbments listings) is not
+    carried over — no such markup exists in this pipeline."""
+    body_pt = _pt_size(font_size, 12.0)
+    class_pt = min((9, 10, 11, 12, 14, 17),
+                   key=lambda opt: abs(opt - body_pt))
+    paper = {"a4": "a4paper", "a5": "a5paper", "b5": "b5paper",
+             "8.5x11": "letterpaper"}.get(trim)
+    lines = [
+        "% !TEX program = xelatex",
+        "\\RequirePackage{silence}",
+        "\\WarningFilter{titlesec}{Non standard sectioning command detected}",
+        # Always openright: the one-sided source has recto openers only,
+        # and on a verso the veelo bar would run into the gutter.
+        "\\documentclass[%dpt, %s, twoside, openright, oldfontcommands]"
+        "{memoir}" % (class_pt, paper or "a4paper"),
+        "\\chapterstyle{veelo}",
+        "\\copypagestyle{fancyheads}{companion}",
+        "\\makeevenhead{fancyheads}{\\thepage}{}{\\sffamily\\leftmark}",
+        "\\makeoddhead{fancyheads}{\\sffamily\\rightmark}{}{\\thepage}",
+        "\\setsecnumdepth{subsection}",
+        "\\maxsecnumdepth{subsection}",
+    ]
+    babel = _babel_line(language)
+    if babel:
+        lines.append(babel)
+    if paper is None:
+        # A trim memoir has no class option for: the stock as the trim,
+        # with the CSS theme's own scaled adaptation of the margins.
+        width, height = TRIM_SIZES.get(trim, TRIM_SIZES["6x9"])
+        margins = themes.theme_margins(theme, width, height)
+        lines.extend([
+            "\\setstocksize{%gin}{%gin}" % (height, width),
+            "\\settrimmedsize{\\stockheight}{\\stockwidth}{*}",
+            "\\setlrmarginsandblock{%sin}{%sin}{*}"
+            % (margins["M_IN"], margins["M_OUT"]),
+            "\\setulmarginsandblock{%sin}{%sin}{*}"
+            % (margins["M_TOP"], margins["M_BOTTOM"]),
+            "\\checkandfixthelayout",
+        ])
+    if line_height != themes.default_line_height(theme):
+        try:
+            # memoir's 12pt \normalsize is 14.5pt leading (a 1.2083 ratio).
+            lines.append("\\renewcommand{\\baselinestretch}{%.4g}"
+                         % (float(line_height) / 1.2083))
+        except (TypeError, ValueError):
+            pass
+    lines.extend([
+        "\\usepackage{graphicx}",
+        # dvipsnames for BrickRed, the \start lettrine's ink (the thesis
+        # passes the option through its document class).
+        "\\usepackage[dvipsnames]{xcolor}",
+        # The thesis redefines its DarkGray to pure black.
+        "\\definecolor{DarkGray}{RGB}{0,0,0}",
+        "\\usepackage{fontspec}",
+        # The TeX Gyre fallbacks load by file name: XeTeX resolves texmf
+        # fonts through kpathsea, not by family name.
+        "\\IfFontExistsTF{Minion Pro}"
+        "{\\setmainfont[Ligatures=TeX]{Minion Pro}}{%",
+        "  \\setmainfont{texgyretermes}[Extension=.otf,"
+        " UprightFont=*-regular,",
+        "    BoldFont=*-bold, ItalicFont=*-italic,"
+        " BoldItalicFont=*-bolditalic]}",
+        "\\IfFontExistsTF{Myriad Pro}{\\setsansfont{Myriad Pro}}{%",
+        "  \\setsansfont{texgyreheros}[Extension=.otf,"
+        " UprightFont=*-regular,",
+        "    BoldFont=*-bold, ItalicFont=*-italic,"
+        " BoldItalicFont=*-bolditalic]}",
+        "\\IfFontExistsTF{Monaco}"
+        "{\\setmonofont[Scale=MatchLowercase]{Monaco}}{%",
+        "  \\setmonofont{DejaVuSansMono}[Scale=MatchLowercase,"
+        " Extension=.ttf,",
+        "    UprightFont=*, BoldFont=*-Bold, ItalicFont=*-Oblique]}",
+        "\\usepackage{tikz}",
+        "\\usepackage{titlesec}",
+        # The section title bar, verbatim from the thesis.
+        "\\newcommand{\\titlebar}{%",
+        "  \\tikz[baseline,trim left=3.1cm,trim right=3cm] {",
+        "    \\node [anchor=base east, minimum height=3.5ex,",
+        "           fill=DarkGray, text=white] at (3cm,0) {\\thesection};",
+        "  }%",
+        "}",
+        "\\titleformat{\\section}{\\large\\bfseries\\sffamily}"
+        "{\\titlebar}{0.1cm}{}",
+        "\\usepackage{caption}",
+        "\\DeclareCaptionFont{white}{\\color{white}}",
+        "\\DeclareCaptionFormat{figure}{\\colorbox{DarkGray}{%",
+        "  \\parbox{\\dimexpr\\columnwidth-2\\fboxsep}"
+        "{\\hspace{.1cm}#1#2#3}}}",
+        "\\captionsetup{format=figure,labelfont=white,textfont=white,"
+        "margin=0pt,font={bf,small,sf}}",
+        "\\usepackage{lettrine}",
+        # The thesis's chapter opening, verbatim: a four-line BrickRed
+        # initial (lettrine's default sets the rest of the opening word
+        # in small caps, as the published PDF shows).
+        "\\newcommand{\\start}[2]"
+        "{\\lettrine[lines=4]{\\color{BrickRed}#1}{#2}}",
+        "\\usepackage[normalem]{ulem}",
+        "\\usepackage{booktabs}",
+        "\\usepackage{hyperref}",
+        "\\hypersetup{hidelinks}",
+        "\\usepackage{memhfixc}",
+        "\\urlstyle{same}",
+        _MAXWIDTH,
+        "\\pagestyle{fancyheads}",
+    ])
+    if not chapter_numbers:
+        # Lower maxsecnumdepth too: memoir's \mainmatter restores
+        # secnumdepth from it, which would undo the -1.
+        lines.append("\\setcounter{secnumdepth}{-1}")
+        lines.append("\\setcounter{maxsecnumdepth}{-1}")
     return lines
 
 
@@ -589,26 +841,44 @@ def _front_matter(book: Book, toc: bool, style: str) -> list:
     if style == "tufte":
         return _tufte_front_matter(book, toc)
     classicthesis = style == "classicthesis"
-    memoir = style == "memoir"
+    memoir = style in ("memoir", "memoir2")
+    polimi = style == "polimi"
     # memoir's title-page environment is titlingpage; titlepage is the
     # standard classes'.
-    titlepage = "titlingpage" if memoir else "titlepage"
+    titlepage = "titlingpage" if memoir or polimi else "titlepage"
     meta = book.meta
-    lines = ["\\pagenumbering{roman}" if classicthesis else "\\frontmatter",
-             "\\begin{%s}" % titlepage, "\\centering",
-             # The template opens its title just below the head margin.
-             "\\vspace*{24pt}" if memoir else "\\vspace*{0.18\\textheight}"]
+    lines = ["\\pagenumbering{roman}" if classicthesis else "\\frontmatter"]
+    if style == "memoir2":
+        # The template's opening leaves: two blank flyleaf pages, then the
+        # half title — the bare title in capitals at the head of a recto
+        # (titlepage.tex's \centerline{\Huge{BOOK TITLE}}).
+        lines.extend(["\\thispagestyle{empty}\\null\\clearpage",
+                      "\\thispagestyle{empty}\\null\\clearpage",
+                      "\\thispagestyle{empty}",
+                      "\\centerline{\\Huge\\MakeUppercase{%s}}"
+                      % escape(htmldom.normalize_ws(meta.title or "Untitled")),
+                      "\\cleardoublepage"])
+    lines.extend(["\\begin{%s}" % titlepage, "\\centering",
+                  # The template opens its title just below the head margin.
+                  "\\vspace*{24pt}" if memoir else "\\vspace*{0.18\\textheight}"])
     title = escape(htmldom.normalize_ws(meta.title or "Untitled"))
     if classicthesis:
         lines.append("{\\Huge\\spacedallcaps{%s}\\par}" % title)
     elif memoir:
         lines.append("{\\scshape\\Huge %s\\par}" % title)
+    elif polimi:
+        # After the thesis's cover: heavy sans caps over a quiet sans line.
+        lines.append("{\\sffamily\\bfseries\\Huge"
+                     "\\MakeTextUppercase{%s}\\par}" % title)
     else:
         lines.append("{\\Huge %s\\par}" % title)
     if meta.description:
         lines.append("\\vspace{6pt}" if memoir else "\\vspace{1.5em}")
         if memoir:
             lines.append("{\\scshape\\large %s\\par}"
+                         % escape(htmldom.normalize_ws(meta.description)))
+        elif polimi:
+            lines.append("{\\sffamily\\large %s\\par}"
                          % escape(htmldom.normalize_ws(meta.description)))
         else:
             lines.append("{\\Large\\itshape %s\\par}"
@@ -624,13 +894,21 @@ def _front_matter(book: Book, toc: bool, style: str) -> list:
                           "{\\itshape\\large by\\par}",
                           "\\vspace{6pt}",
                           "{\\itshape\\Large %s\\par}" % author])
+        elif polimi:
+            lines.append("\\vspace{3em}")
+            lines.append("{\\sffamily\\large %s\\par}" % author)
         else:
             lines.append("\\vspace{3em}")
             lines.append("{\\large %s\\par}" % author)
     lines.append("\\vfill")
     if meta.publisher:
-        lines.append("{\\large %s\\par}"
-                     % escape(htmldom.normalize_ws(meta.publisher)))
+        if polimi:
+            # The cover's small-caps foot line.
+            lines.append("{\\scshape\\large %s\\par}"
+                         % escape(htmldom.normalize_ws(meta.publisher)))
+        else:
+            lines.append("{\\large %s\\par}"
+                         % escape(htmldom.normalize_ws(meta.publisher)))
         lines.append("\\vspace*{0.08\\textheight}")
     lines.append("\\end{%s}" % titlepage)
 
@@ -642,9 +920,10 @@ def _front_matter(book: Book, toc: bool, style: str) -> list:
 
     if toc:
         # memoir's plain \tableofcontents lists itself; the starred form
-        # doesn't.
+        # doesn't. memoir2 keeps the template's unstarred call — the
+        # reference PDF opens its contents with "Contents  vii".
         lines.extend(["\\cleardoublepage",
-                      "\\tableofcontents*" if memoir
+                      "\\tableofcontents*" if style in ("memoir", "polimi")
                       else "\\tableofcontents"])
     lines.extend(["\\cleardoublepage",
                   "\\pagenumbering{arabic}" if classicthesis
@@ -683,12 +962,54 @@ def _tufte_front_matter(book: Book, toc: bool) -> list:
 
 # -- writer ------------------------------------------------------------------
 
+# A chapter body that opens with a plain word: the first letter and the rest
+# of the word become \lettrine's two arguments. Bodies opening with anything
+# else (a command, a quotation mark, a digit, a bare one-letter word — the
+# same openings the print pipeline's _bake_lettrine declines) are left alone.
+_LETTRINE_OPEN = re.compile(r"^([A-Za-z])([A-Za-z'’]+)")
+
+
+def _lettrine_open(body: str, command: str = "lettrine") -> str:
+    """The template's chapter opening, \\lettrine{L}{etterine}: a drop cap
+    on the first letter, the rest of the word in small caps. polimi passes
+    its thesis's own \\start (a four-line BrickRed \\lettrine)."""
+    return _LETTRINE_OPEN.sub(r"\\%s{\1}{\2}" % command, body, count=1)
+
+def _references_section(book, assets, link_citations) -> list:
+    """An unnumbered References chapter: the cited links as an APA list, then
+    the web-ingested chapters' own sources — each a hanging-indent paragraph
+    (the ref-entry HTML fragments apacite emits, converted inline)."""
+    entries = apacite.reference_entries(link_citations)
+    sources = apacite.chapter_source_entries(book.chapters)
+    if not (entries or sources):
+        return []
+    conv = _TexConverter(assets)
+
+    def paras(frags):
+        out = []
+        for frag in frags:
+            node = htmldom.parse(frag).find("p")
+            inner = _tidy(conv._inline(node.children)) if node is not None else ""
+            if inner:
+                out.append("\\par\\noindent\\hangindent=1.5em\\hangafter=1\n"
+                           "%s\\par" % inner)
+        return out
+
+    lines = ["\\chapter*{References}",
+             "\\addcontentsline{toc}{chapter}{References}"]
+    lines.extend(paras(entries))
+    if sources:
+        lines.append("\\section*{Chapter sources}")
+        lines.extend(paras(sources))
+    return lines
+
+
 def write_latex(book: Book, path: str, theme: str = "classic",
                 trim: str = None, font_size: str = None,
                 line_height: str = None, chapter_start: str = "right",
                 toc: bool = True, chapter_numbers: bool = True,
                 footnotes: bool = True, link_notes: bool = True,
-                link_citations: dict = None) -> None:
+                link_citations: dict = None, references: bool = False) -> None:
     trim = trim if trim is not None else themes.default_trim(theme)
     font_size = (font_size if font_size is not None
                  else themes.default_font_size(theme))
@@ -699,20 +1020,27 @@ def write_latex(book: Book, path: str, theme: str = "classic",
     if theme == "classicthesis":
         lines = _classicthesis_preamble(theme, trim, font_size, chapter_start,
                                         chapter_numbers, line_height, language)
-    elif theme == "memoir":
+    elif theme in ("memoir", "memoir2"):
         lines = _memoir_preamble(theme, trim, font_size, line_height,
                                  chapter_start, chapter_numbers, language,
                                  book.meta)
     elif theme == "tufte":
         lines = _tufte_preamble(theme, trim, chapter_start, chapter_numbers,
                                 language)
+    elif theme == "mydiss":
+        lines = _mydiss_preamble(theme, trim, font_size, line_height,
+                                 chapter_start, chapter_numbers, language)
+    elif theme == "polimi":
+        lines = _polimi_preamble(theme, trim, font_size, line_height,
+                                 chapter_start, chapter_numbers, language)
     else:
         lines = _book_preamble(theme, trim, font_size, line_height,
                                chapter_start, chapter_numbers, language)
     lines.append("\\begin{document}")
     lines.extend(_front_matter(
         book, toc,
-        theme if theme in ("classicthesis", "memoir", "tufte") else ""))
+        theme if theme in ("classicthesis", "memoir", "memoir2", "tufte",
+                           "polimi") else ""))
 
     assets = {a.filename: a for a in book.assets}
     next_note = 1
@@ -726,8 +1054,15 @@ def write_latex(book: Book, path: str, theme: str = "classic",
         title = escape(htmldom.normalize_ws(chapter.title))
         lines.append("\\chapter{%s}" % title)
         body = _TexConverter(assets, sidenotes=theme == "tufte").convert(root)
+        if body and theme == "memoir2":
+            body = _lettrine_open(body)
+        elif body and theme == "polimi":
+            body = _lettrine_open(body, command="start")
         if body:
             lines.append(body)
+
+    if references:
+        lines.extend(_references_section(book, assets, link_citations))
 
     lines.append("\\end{document}")
     parent = os.path.dirname(os.path.abspath(path))

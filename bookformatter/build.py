@@ -21,8 +21,9 @@ def write_outputs(book, formats, out_dir: str, name: str, *,
                   chapter_start: str = "right", toc: bool = True,
                   drop_caps: bool = False, chapter_numbers: bool = True,
                   footnotes: bool = True, link_notes: str = "foot",
+                  link_marker: str = "letter",
                   link_citations: dict = None, references: bool = False,
-                  pdf_engine: str = "auto",
+                  link_note_color: str = "#555", pdf_engine: str = "auto",
                   files: dict = None, warnings: list = None,
                   progress=lambda message: None) -> dict:
     """Write every requested format for an assembled Book.
@@ -46,8 +47,10 @@ def write_outputs(book, formats, out_dir: str, name: str, *,
         epub_writer.write_epub(book, epub_path, theme=theme, drop_caps=drop_caps,
                                chapter_numbers=chapter_numbers,
                                link_notes=link_notes != "off",
+                               link_marker=link_marker,
                                link_citations=link_citations,
-                               references=references)
+                               references=references,
+                               link_note_color=link_note_color)
         files[f"{name}.epub"] = epub_path
 
     if "docx" in formats:
@@ -57,6 +60,7 @@ def write_outputs(book, formats, out_dir: str, name: str, *,
                                font_size=font_size, line_height=line_height,
                                chapter_numbers=chapter_numbers,
                                link_notes=link_notes != "off",
+                               link_marker=link_marker,
                                link_citations=link_citations,
                                references=references)
         files[f"{name}.docx"] = docx_path
@@ -99,7 +103,8 @@ def write_outputs(book, formats, out_dir: str, name: str, *,
             book, tex_path, theme=theme, trim=trim, font_size=font_size,
             line_height=line_height, chapter_start=chapter_start, toc=toc,
             chapter_numbers=chapter_numbers, footnotes=footnotes,
-            link_notes=link_notes != "off", link_citations=link_citations)
+            link_notes=link_notes != "off", link_citations=link_citations,
+            references=references)
         if "tex" in formats:
             files[f"{name}.tex"] = tex_path
         if book.assets:
@@ -132,7 +137,9 @@ def write_outputs(book, formats, out_dir: str, name: str, *,
             line_height=line_height, chapter_start=chapter_start,
             toc=toc, drop_caps=drop_caps, chapter_numbers=chapter_numbers,
             footnotes=footnotes, link_notes=link_notes,
+            link_marker=link_marker,
             link_citations=link_citations, references=references,
+            link_note_color=link_note_color,
         )
         with open(html_path, "w", encoding="utf-8") as fh:
             fh.write(page)

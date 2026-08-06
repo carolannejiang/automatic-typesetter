@@ -57,10 +57,12 @@ def build_parser() -> argparse.ArgumentParser:
                              "Chrome); latex typesets a .tex source with latexmk — "
                              "genuine classicthesis.sty for --theme classicthesis, "
                              "the genuine memoir class for --theme memoir, "
+                             "memoir2, or polimi, "
                              "the genuine tufte-book class for --theme tufte "
                              "(which fixes its own 10/14 leading and letter "
                              "geometry, so --font-size, --line-height, and "
                              "non-letter --trim have limited effect), "
+                             "the mydiss dissertation class for --theme mydiss, "
                              "a standard LaTeX book otherwise")
 
     design = parser.add_argument_group("design")
@@ -70,19 +72,24 @@ def build_parser() -> argparse.ArgumentParser:
                              "WeasyPrint's book-classical sample, vsi after Oxford's "
                              "Very Short Introduction series, classicthesis after "
                              "Miede's ClassicThesis LaTeX style, memoir after a "
-                             "6x9 memoir-class novel template (default: classic)")
+                             "6x9 memoir-class novel template, memoir2 that "
+                             "template in full dress — drop caps, symbol "
+                             "footnotes — mydiss after Ummels's mydiss "
+                             "dissertation class, and polimi after the "
+                             "Cerberus Polimi thesis (memoir veelo chapter "
+                             "bars, Minion & Myriad) (default: classic)")
     design.add_argument("--trim", default=None, choices=sorted(themes.TRIM_SIZES),
                         help="print trim size in inches (default: the theme's own "
                              "page — A4 for classicthesis, 4.37x6.85 for vsi, "
-                             "6x9 otherwise)")
+                             "156x234mm for mydiss, 6x9 otherwise)")
     design.add_argument("--font-size", default=None,
                         help="print body size (default: the theme's design size — "
-                             "8.5pt for vsi, 12pt for memoir, "
-                             "11pt otherwise)")
+                             "8.5pt for vsi, 12pt for the memoir themes, "
+                             "9pt for mydiss, 11pt otherwise)")
     design.add_argument("--line-height", default=None,
                         help="body leading (default: the theme's design leading — "
-                             "1.30 for classicthesis, 1.36 for memoir, "
-                             "1.41 for vsi, 1.45 otherwise)")
+                             "1.30 for classicthesis, 1.36 for the memoir themes, "
+                             "1.41 for vsi, 1.53 for mydiss, 1.45 otherwise)")
     design.add_argument("--chapter-start", default="right", choices=["right", "any"],
                         help="print: chapters open on a recto page or any page (default: right)")
     design.add_argument("--drop-caps", action="store_true", help="drop cap on each chapter's first paragraph")
@@ -100,6 +107,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="synonym for --link-notes off: keep hyperlinks as-is "
                              "instead of presenting each as an L-numbered note "
                              "carrying its URL")
+    design.add_argument("--link-marker", default="letter",
+                        choices=["letter", "bracket"],
+                        help="style of the link-note marker: letter sets L1, L2…; "
+                             "bracket sets [1], [2] (default: letter)")
     design.add_argument("--no-link-citations", action="store_true",
                         help="set link notes as bare URLs instead of fetching each "
                              "linked page to expand its note into an APA-style citation")
@@ -206,6 +217,7 @@ def main(argv=None) -> int:
         toc=not args.no_toc, drop_caps=args.drop_caps,
         chapter_numbers=not args.no_chapter_numbers,
         footnotes=not args.no_footnotes, link_notes=link_notes,
+        link_marker=args.link_marker,
         link_citations=citations, references=args.references,
         pdf_engine=args.pdf_engine,
         warnings=warnings, progress=lambda message: print(message, file=sys.stderr),

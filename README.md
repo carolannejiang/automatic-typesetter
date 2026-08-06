@@ -45,6 +45,18 @@ python3 -m bookformatter chapters/ -t "Essays" --theme classicthesis
 # corners, and a leaderless contents page
 python3 -m bookformatter chapters/ -t "Essays" --theme memoir
 
+# The same template in full dress — lettrine drop caps opening each
+# chapter, per-chapter symbol footnotes († ‡ §), numbered bold contents
+# lines, and the byline and copyright dropped to the page foot
+python3 -m bookformatter chapters/ -t "Essays" --theme memoir2
+
+# Or the Cerberus Polimi thesis design (memoir's veelo chapter style):
+# 12pt Minion Pro on memoir's A4 page, huge chapter numerals beside black
+# bars bleeding off the fore-edge, white-on-black section numbers hung in
+# the margin, Myriad running heads under a companion-style rule, BrickRed
+# four-line chapter initials, and white-on-black figure caption boxes
+python3 -m bookformatter chapters/ -t "Essays" --theme polimi
+
 # Have TeX itself typeset those themes (the genuine classicthesis.sty or
 # memoir class, not the CSS transcription) — or any theme as a standard
 # LaTeX book; needs a TeX installation (MacTeX/TeX Live). -f tex keeps
@@ -202,7 +214,10 @@ Paged Media:
   the text (`write to Jane (jane@x.com)`), an address being short enough
   to read in line. `--link-notes end` gathers the notes in a Notes
   section at the end of the book instead (listed in the contents, each
-  note cross-linked with its call); `--no-link-notes` turns the rule off
+  note cross-linked with its call), where a URL cited more than once
+  reuses its first note rather than repeating; `--link-marker bracket`
+  swaps the `L1`, `L2` calls for IEEE-style `[1]`, `[2]`;
+  `--no-link-notes` turns the rule off
 - link notes cite, not just point: each linked page is fetched once and its
   note set as an APA-style citation — `Doe, J. (2024, June 3).
   *Article title.* Site Name. https://…` — built from the page's own
@@ -252,7 +267,15 @@ compiles on its own; keep the `images/` folder beside it).
   class set up as the reference 6×9 novel template — 12pt EB Garamond,
   titlesec's centered small-caps chapters, fancyhdr italic running
   heads, per-page symbol footnotes — compiled with pdflatex like the
-  template itself.
+  template itself. `--theme memoir2` adds the template's full dress:
+  `lettrine` drop caps on every chapter, the flyleaf and half-title
+  front matter, and the self-listing unstarred contents.
+- `--theme polimi` likewise: `memoir` set up as the Polimi thesis's own
+  `thesis_polimi.tex` — the veelo chapter style, the companion-copied
+  running heads, titlesec's TikZ section bar, white-on-black caption
+  boxes, the `\start` four-line BrickRed lettrine opening every chapter
+  — compiled with xelatex as the thesis directs, with Minion Pro/Myriad
+  Pro/Monaco when installed and TeX Gyre fallbacks when not.
 - every other theme becomes a standard LaTeX `book` matched to the
   theme's trim, margins, body size, leading, and nearest TeX Gyre face,
   compiled with LuaLaTeX (full Unicode). Heading dress beyond the book

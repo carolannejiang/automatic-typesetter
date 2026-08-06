@@ -205,6 +205,139 @@ class WriteLatexTests(unittest.TestCase):
         tex = render(theme="tufte", trim="6x9")
         self.assertIn("\\geometry{paperwidth=6in,paperheight=9in}", tex)
 
+    def test_polimi_uses_real_memoir_veelo(self):
+        tex = render(theme="polimi")
+        # The thesis's own setup: xelatex, 12pt A4 memoir on its untouched
+        # default page (no stock/margin lines), veelo chapters, and the
+        # companion-copied fancyheads page style.
+        self.assertTrue(tex.startswith("% !TEX program = xelatex"))
+        self.assertIn("\\documentclass[12pt, a4paper, twoside, openright, "
+                      "oldfontcommands]{memoir}", tex)
+        self.assertIn("\\chapterstyle{veelo}", tex)
+        self.assertIn("\\copypagestyle{fancyheads}{companion}", tex)
+        self.assertIn("\\makeoddhead{fancyheads}"
+                      "{\\sffamily\\rightmark}{}{\\thepage}", tex)
+        self.assertIn("\\pagestyle{fancyheads}", tex)
+        self.assertNotIn("\\setstocksize", tex)
+        # The TikZ section bar and the white-on-black caption boxes.
+        self.assertIn("\\titleformat{\\section}{\\large\\bfseries\\sffamily}"
+                      "{\\titlebar}{0.1cm}{}", tex)
+        self.assertIn("\\captionsetup{format=figure,labelfont=white,"
+                      "textfont=white,margin=0pt,font={bf,small,sf}}", tex)
+        # The thesis faces, falling back to TeX Gyre kin by file name.
+        self.assertIn("\\IfFontExistsTF{Minion Pro}", tex)
+        self.assertIn("texgyretermes", tex)
+        # The memoir-class front matter and the cover-voice title.
+        self.assertIn("\\begin{titlingpage}", tex)
+        self.assertIn("\\MakeTextUppercase{Test \\& Book}", tex)
+        self.assertIn("\\tableofcontents*", tex)
+        self.assertIn("\\frontmatter", tex)
+
+    def test_polimi_opens_chapters_with_the_start_lettrine(self):
+        tex = render(theme="polimi")
+        # The thesis's own command, verbatim, applied to each chapter's
+        # opening word (the same openings memoir2's lettrine declines
+        # stay plain — shared _lettrine_open machinery).
+        self.assertIn("\\newcommand{\\start}[2]"
+                      "{\\lettrine[lines=4]{\\color{BrickRed}#1}{#2}}", tex)
+        self.assertIn("\\usepackage[dvipsnames]{xcolor}", tex)
+        self.assertIn("\\start{F}{irst} chapter with an image.", tex)
+        self.assertIn("\\start{R}{ead} ", tex)
+        self.assertNotIn("\\lettrine{", tex)
+
+    def test_polimi_off_a4_imposes_the_scaled_adaptation(self):
+        tex = render(theme="polimi", trim="6x9")
+        self.assertIn("\\setstocksize{9in}{6in}", tex)
+        self.assertIn("\\setlrmarginsandblock{1.067in}{1.087in}{*}", tex)
+
+    def test_polimi_off_default_leading_computes_baselinestretch(self):
+        tex = render(theme="polimi", line_height="1.45")
+        self.assertIn("\\renewcommand{\\baselinestretch}{1.2}", tex)
+        self.assertNotIn("\\baselinestretch", render(theme="polimi"))
+
+    def test_polimi_no_chapter_numbers_lowers_maxsecnumdepth_too(self):
+        # memoir's \mainmatter restores secnumdepth from maxsecnumdepth,
+        # so -1 alone would be undone at the start of the body.
+        tex = render(theme="polimi", chapter_numbers=False)
+        self.assertIn("\\setcounter{secnumdepth}{-1}", tex)
+        self.assertIn("\\setcounter{maxsecnumdepth}{-1}", tex)
+
+    def test_polimi_openers_stay_recto_whatever_the_start_option(self):
+        # The one-sided source has recto openers only; openany would sink
+        # the veelo bar into the gutter on verso openers.
+        self.assertIn("openright", render(theme="polimi",
+                                          chapter_start="any"))
+
+    def test_memoir_leaves_the_full_dress_off(self):
+        tex = render(theme="memoir")
+        self.assertNotIn("\\usepackage{lettrine}", tex)
+        self.assertNotIn("\\lettrine{", tex)
+        self.assertNotIn("\\MakeUppercase", tex)
+
+    def test_memoir2_adds_the_template_full_dress(self):
+        tex = render(theme="memoir2")
+        # The same genuine memoir setup as --theme memoir...
+        self.assertTrue(tex.startswith("% !TEX program = pdflatex"))
+        self.assertIn("extrafontsizes]{memoir}", tex)
+        self.assertIn("\\setstocksize{9in}{6in}", tex)
+        self.assertIn("\\usepackage{ebgaramond}", tex)
+        self.assertIn("\\usepackage[symbol*]{footmisc}", tex)
+        # ...plus lettrine chapter openings on plain-word chapters,
+        self.assertIn("\\usepackage{lettrine}", tex)
+        self.assertIn("\\lettrine{F}{irst} chapter with an image.", tex)
+        self.assertIn("\\lettrine{R}{ead} ", tex)
+        # the flyleaf and half-title leaves,
+        self.assertEqual(tex.count("\\thispagestyle{empty}\\null\\clearpage"), 2)
+        self.assertIn("\\centerline{\\Huge\\MakeUppercase{Test \\& Book}}", tex)
+        # and the template's unstarred, self-listing contents.
+        self.assertIn("\\tableofcontents\n", tex)
+        self.assertNotIn("\\tableofcontents*", tex)
+
+    def test_memoir2_leaves_wordless_openings_plain(self):
+        # A chapter that opens with a list (no opening word) gets no
+        # lettrine, and neither does a one-letter opening word — the same
+        # openings the print pipeline's _bake_lettrine declines.
+        b = support.make_book([
+            Chapter(title="C", html=BRACKETS_HTML),
+            Chapter(title="D", html="<p>I remember the day it began.</p>"),
+        ])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "b.tex")
+            write_latex(b, path, theme="memoir2")
+            tex = open(path).read()
+        self.assertNotIn("\\lettrine{", tex)
+        self.assertIn("I remember the day it began.", tex)
+
+    def test_mydiss_uses_extbook_and_transcribes_the_class(self):
+        tex = render(theme="mydiss")
+        self.assertTrue(tex.startswith("% !TEX program = pdflatex"))
+        self.assertIn("\\documentclass[9pt,twoside,openright]{extbook}", tex)
+        # Charter (XCharter, oldstyle figures) stands in for Fedra Serif.
+        self.assertIn("\\usepackage[osf]{XCharter}", tex)
+        # The class's page and 1.25 spread.
+        self.assertIn("paperwidth=6.14173in,paperheight=9.2126in", tex)
+        self.assertIn("\\setstretch{1.25}", tex)
+        self.assertIn("\\setlength{\\parindent}{1.5em}", tex)
+        # The signature display chapter: a 96pt halfgray numeral ragged
+        # right over a 24pt bold title.
+        self.assertIn("\\definecolor{chaptergrey}{rgb}{0.7,0.7,0.7}", tex)
+        self.assertIn("\\color{chaptergrey}\\raggedleft\\fontseries{bx}"
+                      "\\fontsize{96}{96}\\selectfont\\thechapter", tex)
+        self.assertIn("\\fontsize{24}{24}\\selectfont", tex)
+        # \Large upright section heads and titleps outer running heads.
+        self.assertIn("\\titleformat{\\section}[hang]{\\normalfont\\Large}", tex)
+        self.assertIn("\\newpagestyle{main}{", tex)
+        self.assertIn("\\chaptertitle][][]{}{}{\\small\\itshape", tex)
+        # A titletoc bullet-leader contents, and the generic title page.
+        self.assertIn("\\nolinebreak\\dissbullet\\nolinebreak", tex)
+        self.assertIn("\\frontmatter", tex)
+        self.assertIn("{\\Huge Test \\& Book\\par}", tex)
+
+    def test_mydiss_off_default_leading_computes_setstretch(self):
+        tex = render(theme="mydiss", line_height="1.5")
+        self.assertIn("\\setstretch{1.227}", tex)
+        self.assertNotIn("\\setstretch{1.25}", tex)
+
     def test_no_chapter_numbers(self):
         tex = render(chapter_numbers=False)
         self.assertIn("\\setcounter{secnumdepth}{-1}", tex)
@@ -229,6 +362,49 @@ class WriteLatexTests(unittest.TestCase):
         self.assertIn("{[}b] & y \\\\", tex)
 
 
+class ReferencesTests(unittest.TestCase):
+    def _cited(self):
+        import datetime
+        from bookformatter import apacite
+        return {"https://example.com/ref": apacite.Citation(
+            url="https://example.com/ref", title="The Reference",
+            author="Jane Q. Doe", date=datetime.datetime(2024, 6, 3),
+            site_name="Ref Site")}
+
+    def test_references_section_emitted(self):
+        tex = render(references=True, link_citations=self._cited())
+        self.assertIn(r"\chapter*{References}", tex)
+        self.assertIn(r"\addcontentsline{toc}{chapter}{References}", tex)
+        self.assertIn(r"\emph{The Reference}", tex)   # APA italic title
+        self.assertIn("Doe, J. Q.", tex)
+        self.assertIn(r"\hangindent", tex)            # APA hanging indent
+
+    def test_chapter_sources_listed_for_web_chapters(self):
+        b = support.make_book([Chapter(
+            title="From the web", html="<p>Body.</p>",
+            source="https://blog.example/post", author="Web Writer")])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "b.tex")
+            write_latex(b, path, references=True)
+            tex = open(path).read()
+        self.assertIn(r"\section*{Chapter sources}", tex)
+        self.assertIn("blog.example", tex)
+
+    def test_no_references_when_disabled(self):
+        tex = render(references=False, link_citations=self._cited())
+        self.assertNotIn(r"\chapter*{References}", tex)
+
+    def test_footnote_in_heading_is_protected(self):
+        # \footnote in a sectioning command's moving argument is fragile.
+        b = support.make_book([Chapter(
+            title="C", html='<h2>Head<span class="footnote">n</span></h2><p>x</p>')])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "b.tex")
+            write_latex(b, path)
+            tex = open(path).read()
+        self.assertIn(r"\protect\footnote", tex)
+
+
 @unittest.skipUnless(shutil.which("latexmk"), "latexmk not installed")
 class CompileTests(unittest.TestCase):
     def _compile(self, **kwargs):
@@ -247,6 +423,15 @@ class CompileTests(unittest.TestCase):
     def test_generic_compiles(self):
         self._compile()
 
+    def test_references_page_compiles(self):
+        import datetime
+        from bookformatter import apacite
+        self._compile(references=True, link_citations={
+            "https://example.com/ref": apacite.Citation(
+                url="https://example.com/ref", title="The Reference",
+                author="Jane Q. Doe", date=datetime.datetime(2024, 6, 3),
+                site_name="Ref Site")})
+
     def test_classicthesis_compiles(self):
         self._compile(theme="classicthesis")
 
@@ -255,6 +440,15 @@ class CompileTests(unittest.TestCase):
 
     def test_tufte_compiles(self):
         self._compile(theme="tufte")
+
+    def test_memoir2_compiles(self):
+        self._compile(theme="memoir2")
+
+    def test_mydiss_compiles(self):
+        self._compile(theme="mydiss")
+
+    def test_polimi_compiles(self):
+        self._compile(theme="polimi")
 
     def test_error_reports_first_tex_error(self):
         with tempfile.TemporaryDirectory() as tmp:

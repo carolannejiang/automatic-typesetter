@@ -59,10 +59,15 @@ Contents (titletoc; set full width)
 Engine notes: sidenotes are CSS right floats pulled into the margin
 column (width + negative right margin, clear: right so successive notes
 stack) — plain CSS 2.1 that WeasyPrint, Prince, and Chrome all honor, so
-the signature survives every engine tier. Because the page-bottom
-float:footnote machinery (and its auto-numbered call) is not used, the
-print pipeline bakes the superscript numbers into the markup when the
-theme declares SIDENOTE_CALLS (see footnotes.number_sidenote_calls). For
+the signature survives every engine tier. The print pipeline lifts each
+note out of its text block to a block-level sibling first (SIDENOTE_CALLS
+triggers footnotes.hoist_margin_notes): as an inline float inside a
+paragraph, WeasyPrint miscomputes clear once the note is pulled past the
+content box and stacks close-together notes on top of one another, which
+block-level floats avoid. Because the page-bottom float:footnote machinery
+(and its auto-numbered call) is not used, the print pipeline bakes the
+superscript numbers into the markup when the theme declares SIDENOTE_CALLS
+(see footnotes.number_sidenote_calls). For
 the native page render with:  --theme tufte  (letter trim, 10pt/1.4 are
 its declared defaults); margins and the margin column scale linearly on
 other trims.
@@ -290,10 +295,13 @@ section.chapter, section.endnotes { padding-right: ${MARGIN_COL}in; }
    environment around every chapter title. */
 header.chapter-head { margin-right: -${MARGIN_COL}in; }
 
-/* Sidenotes and hyperlink L-notes: 8/10, top-aligned with their calls,
-   stacked \\marginparpush (10 pt) apart. The floats bypass the footnote
-   area, so the markup carries baked superscript numbers (SIDENOTE_CALLS):
-   a \\tiny 5 pt call in the text, the same number before the note. */
+/* Sidenotes and hyperlink L-notes: 8/10, floated into the margin column
+   just after the block that cites them (hoist_margin_notes lifts each note
+   out to block level), so a note's top sits by the end of its block rather
+   than its exact call; successive notes stack \\marginparpush (10 pt) apart.
+   The floats bypass the footnote area, so the markup carries baked
+   superscript numbers (SIDENOTE_CALLS): a \\tiny 5 pt call in the text, the
+   same number before the note. */
 span.footnote, span.linknote {
   float: right; clear: right;
   width: ${SIDENOTE_W}in;
@@ -304,10 +312,6 @@ span.footnote, span.linknote {
   text-align: left;
   text-indent: 0;
   hyphens: none; -webkit-hyphens: none;
-}
-/* A note cited inside an indented quote still aligns with the column. */
-blockquote span.footnote, blockquote span.linknote {
-  margin-right: calc(-${MARGIN_COL}in - 1.2rem);
 }
 sup.sidenote-call { font-size: 0.5em; }
 span.footnote sup.sidenote-mark { font-size: 0.625em; margin-right: 0.17em; }

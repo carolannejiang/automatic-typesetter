@@ -15,12 +15,13 @@ import base64
 import glob
 import html
 import os
+import re
 import shutil
 import subprocess
 import tempfile
 
 from . import apacite, frontmatter, htmldom, themes
-from .footnotes import inline_footnotes, number_sidenote_calls
+from .footnotes import hoist_margin_notes, inline_footnotes, number_sidenote_calls
 from .linknotes import annotate_links, endnote_html
 from .models import Book
 
@@ -55,16 +56,55 @@ def _inline_assets(fragment: str, assets_by_name: dict) -> str:
     return htmldom.inner_html(root)
 
 
+# An opening word: optional opening quote plus a letter (together the
+# dropped initial), then the rest of the word for the small-caps run-in.
+_LETTRINE_LEAD = re.compile(
+    "^\\s*([\"'“‘]?[A-Za-z])([A-Za-z'’]*)")
+
+
+def _bake_lettrine(fragment: str) -> str:
+    """Split the chapter's opening word into the two lettrine spans — the
+    dropped initial (span.lettrine) and the small-caps run-in that follows
+    it (span.lettrine-run), the template's ``\\lettrine{L}{etterine}``.
+    Both are baked rather than styled via ::first-letter: CSS cannot
+    select the rest of the word at all, and WeasyPrint lays the opening
+    line before excluding a floated first-letter, so only a real element
+    float wraps correctly. Chapters that open with anything but a plain
+    word (markup, a bare initial, no paragraph) are left untouched."""
+    root = htmldom.parse(fragment)
+    para = next((n for n in root.children
+                 if not n.is_text and n.tag == "p"), None)
+    if para is None or not para.children or not para.children[0].is_text:
+        return fragment
+    first = para.children[0]
+    match = _LETTRINE_LEAD.match(first.text or "")
+    if not match or not match.group(2):
+        return fragment
+    initial = htmldom.Node("span", {"class": "lettrine"})
+    initial.append(htmldom.Node(text=match.group(1)))
+    run = htmldom.Node("span", {"class": "lettrine-run"})
+    run.append(htmldom.Node(text=match.group(2)))
+    pieces = [initial, run]
+    rest = (first.text or "")[match.end():]
+    if rest:
+        pieces.append(htmldom.Node(text=rest))
+    first.replace_with(*pieces)
+    return htmldom.inner_html(root)
+
+
 def build_print_html(book: Book, theme: str = "classic", trim: str = None,
                      font_size: str = None, line_height: str = None,
                      chapter_start: str = "right", toc: bool = True,
                      drop_caps: bool = False, chapter_numbers: bool = True,
                      footnotes: bool = True, link_notes="foot",
-                     link_citations: dict = None, references: bool = False) -> str:
+                     link_marker: str = "letter",
+                     link_citations: dict = None, references: bool = False,
+                     link_note_color: str = "#555") -> str:
     """link_notes places the hyperlink URL notes (L1, L2, ...): "foot" sets
     each at the foot of its citing page, "end" gathers them in a Notes
     section at the end of the book, "off" keeps hyperlinks as-is. True and
-    False are accepted as "foot" and "off" for older callers."""
+    False are accepted as "foot" and "off" for older callers. link_marker
+    picks the marker style: "letter" (L1) or "bracket" ([1])."""
     if link_notes is True:
         link_notes = "foot"
     elif not link_notes:
@@ -78,6 +118,7 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
         theme=theme, trim=trim, font_size=font_size, line_height=line_height,
         book_title=meta.title, book_subtitle=meta.description or "",
         chapter_start=chapter_start, drop_caps=drop_caps,
+        link_note_color=link_note_color,
     )
     assets_by_name = {a.filename: a for a in book.assets}
 
@@ -85,6 +126,7 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
     # list the Notes section when book-end link notes produce one.
     next_link_note = 1
     endnotes: list = []  # (number, url) when link_notes == "end"
+    seen_endnotes: dict = {}  # url -> L number, to dedupe repeats book-wide
     chapter_parts: list = []
     for i, chapter in enumerate(book.chapters, 1):
         content = htmldom.normalize_fragment(chapter.html)
@@ -96,10 +138,20 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
         if link_notes == "end":
             content, next_link_note = annotate_links(
                 content, start=next_link_note, mode="endnote",
-                citations=link_citations, notes=endnotes)
+                citations=link_citations, notes=endnotes, seen=seen_endnotes,
+                marker=link_marker)
         elif link_notes != "off":
             content, next_link_note = annotate_links(
-                content, start=next_link_note, citations=link_citations)
+                content, start=next_link_note, citations=link_citations,
+                marker=link_marker)
+        # Margin-note themes (Tufte) float notes into the side column; lift them
+        # to block level so WeasyPrint's clear stacks them without overlapping.
+        if themes.sidenote_calls(theme):
+            content = hoist_margin_notes(content)
+        # Lettrine themes (memoir2) open on a drop cap with the rest of
+        # the word in small caps; CSS can't select either, so bake both.
+        if themes.lettrine_run(theme):
+            content = _bake_lettrine(content)
         chapter_parts.append(f'<section class="chapter" id="chapter-{i}">')
         chapter_parts.append(
             frontmatter.chapter_head_html(theme, i, chapter.title, chapter_numbers))
@@ -111,7 +163,8 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
         chapter_parts.append(
             frontmatter.chapter_head_html(theme, 0, "Notes", False))
         for number, href in endnotes:
-            chapter_parts.append(endnote_html(number, href, link_citations))
+            chapter_parts.append(
+                endnote_html(number, href, link_citations, marker=link_marker))
         chapter_parts.append("</section>")
 
     ref_entries = apacite.reference_entries(link_citations) if references else []
@@ -137,11 +190,17 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
     parts.append("</section>")
 
     if toc and book.chapters:
+        # Chapter-numbered contents lines (memoir2's \chapternumberline
+        # look) when the theme asks and chapter numbers are on; the Notes
+        # and References lines stay unnumbered like LaTeX's \chapter*.
+        toc_nums = themes.toc_numbers(theme) and chapter_numbers
         parts.append('<nav class="print-toc frontmatter">')
         parts.append("<h1>Contents</h1>")
         parts.append("<ol>")
         for i, chapter in enumerate(book.chapters, 1):
-            parts.append(f'<li><a href="#chapter-{i}">{_esc(chapter.title)}</a></li>')
+            number = f'<span class="toc-number">{i}</span>' if toc_nums else ""
+            parts.append(
+                f'<li><a href="#chapter-{i}">{number}{_esc(chapter.title)}</a></li>')
         if endnotes:
             parts.append('<li><a href="#endnotes">Notes</a></li>')
         if ref_entries or ref_sources:
