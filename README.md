@@ -209,6 +209,11 @@ Paged Media:
   metadata (og:/meta tags, JSON-LD, `<title>`), the URL still a live link.
   A page that can't be fetched or names no title keeps the bare URL;
   `--no-link-citations` keeps every note a bare URL and skips the fetching
+- `--references` appends a References page — every cited link as an
+  alphabetized APA reference list with hanging indents, followed by the
+  chapters' own web sources when the book was ingested from the web — in
+  every output format (in the InDesign handoff it arrives as a
+  `Reference Entry` paragraph style)
 - opened in a browser on screen (before printing), footnotes and link
   notes render as bracketed inline asides, so the same file doubles as a
   proof

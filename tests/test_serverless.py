@@ -61,6 +61,7 @@ class ServerlessTests(unittest.TestCase):
         self.assertNotIn("pdf_engine", page)           # engine select removed
         self.assertIn('fetch("build"', page)           # serverless script in place
         self.assertNotIn('fetch("status?id=', page)    # no polling script
+        self.assertIn("dataset.trim", page)            # theme->trim sync kept
         self.assertIn("nothing is stored on the server", page)
 
     def test_page_at_function_path(self):

@@ -246,6 +246,107 @@ class ShortIntroCssTests(unittest.TestCase):
         self.assertIn("text-indent: 0", css)
 
 
+class TufteCssTests(unittest.TestCase):
+    def test_chapter_label_is_the_bare_number(self):
+        self.assertEqual(themes.chapter_label("tufte", 3), "3")
+
+    def test_declares_the_native_letter_page_and_type(self):
+        self.assertEqual(themes.default_trim("tufte"), "8.5x11")
+        self.assertEqual(themes.default_font_size("tufte"), "10pt")
+        self.assertEqual(themes.default_line_height("tufte"), "1.4")
+
+    def test_print_geometry_reserves_the_margin_column(self):
+        css = themes.print_css(theme="tufte", trim="8.5x11")
+        # 1 in left, 26 pc measure + 2 pc gutter + 12 pc sidenote column.
+        self.assertIn("margin: 1in 0.833in 1.444in 1in;", css)
+        self.assertIn("padding-right: 2.333in;", css)
+        self.assertIn("width: 2in;", css)
+        self.assertIn("margin-right: -2.333in;", css)
+
+    def test_page_is_asymmetric_not_mirrored(self):
+        css = themes.print_css(theme="tufte", trim="8.5x11")
+        # The theme's :left override restores the recto margins after the
+        # base sheet mirrors them.
+        unmirror = css.index("@page :left { margin: 1in 0.833in 1.444in 1in; }")
+        self.assertGreater(unmirror, css.index("@page :left {\n  margin: 1in 1in 1.444in 0.833in;"))
+
+    def test_sidenotes_float_into_the_margin_after_the_footnote_rules(self):
+        css = themes.print_css(theme="tufte", book_title="Field Notes")
+        furniture = css.index("tufte print")
+        self.assertGreater(furniture, css.index("float: footnote"))
+        self.assertIn("float: right; clear: right;", css[furniture:])
+        self.assertIn("sup.sidenote-call", css[furniture:])
+
+    def test_theme_asks_for_baked_sidenote_numbers(self):
+        self.assertTrue(themes.sidenote_calls("tufte"))
+        self.assertFalse(themes.sidenote_calls("classic"))
+        self.assertFalse(themes.sidenote_calls("nonsense"))
+
+    def test_furniture_rides_the_top_corners_and_openers_are_bare(self):
+        css = themes.print_css(theme="tufte", book_title="Field Notes")
+        self.assertIn('content: counter(page) "\\2003" string(book-title, first-except)', css)
+        self.assertIn('content: string(chapter-title, first-except) "\\2003" counter(page)', css)
+        self.assertIn("header.chapter-head { page: clean; }", css)
+        self.assertIn("section.chapter, section.endnotes { page: auto; }", css)
+
+    def test_folios_run_continuously_through_the_front_matter(self):
+        css = themes.print_css(theme="tufte")
+        cancel = css.index("counter-reset: none;")
+        self.assertGreater(cancel, css.index("counter-reset: page 0;"))
+
+    def test_toc_sets_upright_folios_after_a_quad_without_leaders(self):
+        css = themes.print_css(theme="tufte")
+        furniture = css.index("tufte print")
+        self.assertNotIn("leader(", css[furniture:])
+        self.assertIn('content: "\\2003\\2003" target-counter(attr(href url), page)',
+                      css[furniture:])
+
+    def test_epub_css_restyles_without_paged_furniture(self):
+        css = themes.epub_css(theme="tufte")
+        self.assertIn("tufte overrides", css)
+        self.assertIn("Gill Sans", css)
+        self.assertNotIn("@top-left", css)
+        self.assertNotIn("float: right", css)
+
+    def test_print_html_bakes_sidenote_numbers_per_chapter(self):
+        book = Book(
+            meta=BookMeta(title="Field Notes", author="Jane Doe"),
+            chapters=[
+                Chapter(title="One", html=(
+                    '<p>Cite<sup><a href="#fn1" id="fnref1">1</a></sup>.</p>'
+                    '<div class="footnotes"><ol><li id="fn1"><p>A note. '
+                    '<a href="#fnref1">&#8617;</a></p></li></ol></div>')),
+                Chapter(title="Two", html=(
+                    '<p>Again<sup><a href="#fn1" id="fnref1">1</a></sup>.</p>'
+                    '<div class="footnotes"><ol><li id="fn1"><p>B note. '
+                    '<a href="#fnref1">&#8617;</a></p></li></ol></div>')),
+            ],
+        )
+        page = printbook.build_print_html(book, theme="tufte")
+        self.assertEqual(page.count('<sup class="sidenote-call">1</sup>'), 2)
+        self.assertEqual(page.count('<sup class="sidenote-mark">1</sup>'), 2)
+        # Other themes keep the engine-numbered page-bottom notes.
+        plain = printbook.build_print_html(book, theme="classic")
+        self.assertNotIn("sidenote-call", plain)
+
+
+class CrimsonCssTests(unittest.TestCase):
+    def test_sets_the_crimson_pro_body_and_sans_heads(self):
+        css = themes.print_css(theme="crimson")
+        self.assertIn('font-family: "Crimson Pro"', css)
+        self.assertIn('"Source Sans 3"', css)
+
+    def test_chapter_opener_is_flush_left_over_a_rule(self):
+        css = themes.print_css(theme="crimson")
+        self.assertIn("header.chapter-head { text-align: left; }", css)
+        self.assertIn("border-bottom: 2px solid #1a1a1a;", css)
+
+    def test_paragraphs_carry_a_first_line_indent(self):
+        css = themes.epub_css(theme="crimson")
+        self.assertIn("crimson overrides", css)
+        self.assertIn("text-indent: 1em", css)
+
+
 class ThemeBuildTests(unittest.TestCase):
     def test_print_html_classic_is_unchanged(self):
         page = printbook.build_print_html(_book(), theme="classic")

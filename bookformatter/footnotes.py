@@ -100,6 +100,31 @@ def inline_footnotes(fragment: str) -> str:
     return htmldom.inner_html(root)
 
 
+def number_sidenote_calls(fragment: str) -> str:
+    """Bake superscript sidenote numbers into inlined footnotes: a
+    ``<sup class="sidenote-call">`` before each ``<span class="footnote">``
+    and a matching ``<sup class="sidenote-mark">`` opening the note,
+    numbered 1.. per fragment (i.e. per chapter, like LaTeX's per-chapter
+    footnote counter). For themes that float the notes into a margin
+    column (Tufte), where the page-bottom ``float: footnote`` machinery
+    that auto-numbers calls and markers is bypassed."""
+    root = htmldom.parse(fragment)
+    notes = [n for n in root.walk()
+             if not n.is_text and n.tag == "span"
+             and "footnote" in (n.get("class") or "").split()]
+    if not notes:
+        return fragment
+    for number, span in enumerate(notes, 1):
+        call = Node("sup", {"class": "sidenote-call"})
+        call.append(Node(text=str(number)))
+        span.replace_with(call, span)
+        mark = Node("sup", {"class": "sidenote-mark"})
+        mark.append(Node(text=str(number)))
+        span.children.insert(0, mark)
+        mark.parent = span
+    return htmldom.inner_html(root)
+
+
 # -- reference side ---------------------------------------------------------
 
 def _is_call(a: Node) -> bool:

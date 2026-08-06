@@ -250,6 +250,7 @@ def run_build(params: dict, uploads: list, workdir: str,
     if _first(params, "no_link_notes") == "on":  # pre-select cached form
         link_notes = "off"
     link_citations = _first(params, "no_link_citations") != "on"
+    references = _first(params, "references") == "on"
     font_size = _clean_size(_first(params, "font_size"), None, _FONT_SIZE_RE)
     line_height = _clean_size(_first(params, "line_height"), None, _LINE_HEIGHT_RE)
     pdf_engine = _first(params, "pdf_engine", "auto")
@@ -270,7 +271,9 @@ def run_build(params: dict, uploads: list, workdir: str,
     name = slugify(_first(params, "name") or meta.title)
 
     citations = None
-    if link_notes != "off" and link_citations:
+    # Fetch citation metadata when the link notes want it OR a References
+    # page is requested (which is APA citations by definition).
+    if references or (link_notes != "off" and link_citations):
         urls = list(dict.fromkeys(
             u for ch in book.chapters for u in citable_urls(ch.html)))
         if urls:
@@ -285,7 +288,8 @@ def run_build(params: dict, uploads: list, workdir: str,
         theme=theme, trim=trim, font_size=font_size, line_height=line_height,
         chapter_start=chapter_start, toc=toc, drop_caps=drop_caps,
         chapter_numbers=chapter_numbers, footnotes=footnotes,
-        link_notes=link_notes, link_citations=citations, pdf_engine=pdf_engine,
+        link_notes=link_notes, link_citations=citations, references=references,
+        pdf_engine=pdf_engine,
         files=out.files, warnings=out.warnings, progress=progress,
     )
     return out
@@ -762,6 +766,19 @@ ul.warnings { color: var(--warn); font-size: 0.85rem; padding-left: 1.2rem; }
 .downloads a strong { color: var(--accent); }
 footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 2.5rem; }
 footer a { color: var(--link); }
+/* Drop a bare checkbox down to line up with the labelled inputs beside it. */
+.fetch-full { margin-top: 1.9rem; }
+/* Phones: reclaim horizontal room, stack paired fields, fatten tap targets. */
+@media (max-width: 560px) {
+  .wrap { padding: 1.25rem 0.9rem 3rem; }
+  header.masthead { margin-bottom: 1.25rem; }
+  header.masthead h1 { font-size: 1.4rem; }
+  .card { padding: 1.15rem 1.05rem; border-radius: 10px; }
+  .row > div { flex-basis: 100%; }
+  .checks { flex-direction: column; gap: 0.7rem; }
+  .fetch-full { margin-top: 0.3rem; }
+  .downloads a { flex: 1 1 100%; text-align: center; }
+}
 </style>
 </head>
 <body>
@@ -890,7 +907,7 @@ footer a { color: var(--link); }
             </select></div>
           <div><label for="max_items">Max posts (0 = all)</label>
             <input type="text" id="max_items" name="max_items" value="0"></div>
-          <div><label style="margin-top:1.9rem"><input type="checkbox" name="fetch_full"> Fetch full post pages
+          <div><label class="fetch-full"><input type="checkbox" name="fetch_full"> Fetch full post pages
             (automatic for truncated feeds)</label></div>
         </div>
         <div class="checks" style="margin-top:0.9rem">
@@ -900,6 +917,7 @@ footer a { color: var(--link); }
           <label><input type="checkbox" name="no_toc"> Omit the contents page (print)</label>
           <label><input type="checkbox" name="no_footnotes"> Content footnotes: collect as endnotes</label>
           <label><input type="checkbox" name="no_link_citations"> Bare URLs in link notes (skip APA-style citations)</label>
+          <label><input type="checkbox" name="references"> Append an APA References page</label>
         </div>
       </details>
     </div>

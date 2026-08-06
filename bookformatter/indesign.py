@@ -25,7 +25,7 @@ import os
 import re
 import struct
 
-from . import footnotes, htmldom, themes
+from . import apacite, footnotes, htmldom, themes
 from .frontmatter import copyright_lines
 from .linknotes import annotate_links
 from .models import Book
@@ -259,6 +259,9 @@ def build_styles(theme: str = "classic", font_size: str = "11pt",
     para("Footnote Text", font=body_font, lead=body_lead(em(0.8)),
          PointSize=em(0.8), Justification="LeftJustified",
          FirstLineIndent=0.0)
+    para("Reference Entry", based="Body", lead=body_lead(em(0.95)),
+         PointSize=em(0.95), Justification="LeftJustified",
+         LeftIndent=em(1.4), FirstLineIndent=-em(1.4), SpaceAfter=em(0.35))
     para("Folio", font=body_font, lead=head_lead(em(0.82)),
          PointSize=em(0.82), Justification="CenterAlign")
 
@@ -596,7 +599,8 @@ def book_to_story_items(book: Book, theme: str = "classic",
                         chapter_numbers: bool = True,
                         converter_cls=None, link_notes: bool = True,
                         link_note_mode: str = "native",
-                        link_citations: dict = None) -> list:
+                        link_citations: dict = None,
+                        references: bool = False) -> list:
     """The whole book as a flat list of Para items: front matter, then the
     chapters. Chapter openers carry start="NextOddPage" (write_idml maps that
     to "NextPage" when chapter_start is not "right"). converter_cls swaps in
@@ -638,6 +642,25 @@ def book_to_story_items(book: Book, theme: str = "classic",
         items.extend(opener)
         converter = (converter_cls or _Converter)(assets)
         items.extend(converter.convert(root))
+
+    if references:
+        cited = apacite.reference_entries(link_citations)
+        sources = apacite.chapter_source_entries(book.chapters)
+        if cited or sources:
+            items.append(Para("Chapter Title", [TextRun("References")],
+                              start="NextOddPage"))
+            converter = (converter_cls or _Converter)(assets)
+
+            def _entry_paras(entries):
+                for entry in entries:
+                    runs = converter._inline(htmldom.parse(entry).children)
+                    if _has_substance(runs):
+                        items.append(Para("Reference Entry", runs))
+
+            _entry_paras(cited)
+            if sources:
+                items.append(Para("Heading 2", [TextRun("Chapter sources")]))
+                _entry_paras(sources)
     return items
 
 

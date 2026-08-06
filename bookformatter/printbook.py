@@ -19,8 +19,8 @@ import shutil
 import subprocess
 import tempfile
 
-from . import frontmatter, htmldom, themes
-from .footnotes import inline_footnotes
+from . import apacite, frontmatter, htmldom, themes
+from .footnotes import inline_footnotes, number_sidenote_calls
 from .linknotes import annotate_links, endnote_html
 from .models import Book
 
@@ -60,7 +60,7 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
                      chapter_start: str = "right", toc: bool = True,
                      drop_caps: bool = False, chapter_numbers: bool = True,
                      footnotes: bool = True, link_notes="foot",
-                     link_citations: dict = None) -> str:
+                     link_citations: dict = None, references: bool = False) -> str:
     """link_notes places the hyperlink URL notes (L1, L2, ...): "foot" sets
     each at the foot of its citing page, "end" gathers them in a Notes
     section at the end of the book, "off" keeps hyperlinks as-is. True and
@@ -91,6 +91,8 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
         content = _inline_assets(content, assets_by_name)
         if footnotes:
             content = inline_footnotes(content)
+            if themes.sidenote_calls(theme):
+                content = number_sidenote_calls(content)
         if link_notes == "end":
             content, next_link_note = annotate_links(
                 content, start=next_link_note, mode="endnote",
@@ -112,6 +114,18 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
             chapter_parts.append(endnote_html(number, href, link_citations))
         chapter_parts.append("</section>")
 
+    ref_entries = apacite.reference_entries(link_citations) if references else []
+    ref_sources = apacite.chapter_source_entries(book.chapters) if references else []
+    if ref_entries or ref_sources:
+        chapter_parts.append('<section class="chapter references" id="references">')
+        chapter_parts.append(
+            frontmatter.chapter_head_html(theme, 0, "References", False))
+        chapter_parts.extend(ref_entries)
+        if ref_sources:
+            chapter_parts.append("<h2>Chapter sources</h2>")
+            chapter_parts.extend(ref_sources)
+        chapter_parts.append("</section>")
+
     parts: list = []
 
     parts.append('<section class="titlepage frontmatter">')
@@ -130,6 +144,8 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
             parts.append(f'<li><a href="#chapter-{i}">{_esc(chapter.title)}</a></li>')
         if endnotes:
             parts.append('<li><a href="#endnotes">Notes</a></li>')
+        if ref_entries or ref_sources:
+            parts.append('<li><a href="#references">References</a></li>')
         parts.append("</ol>")
         parts.append("</nav>")
 
@@ -205,7 +221,12 @@ def _pdf_chrome(html_path: str, pdf_path: str) -> None:
         base + [url],  # headless_shell needs no --headless flag
     ]
     last_err = ""
-    with tempfile.TemporaryDirectory(prefix="bookformatter-chrome-") as profile:
+    try:
+        profile = tempfile.mkdtemp(prefix="bookformatter-chrome-")
+    except OSError as exc:
+        # Stay inside the engine ladder so auto/fallback semantics hold.
+        raise PdfError(f"could not create a Chrome profile dir: {exc}") from exc
+    try:
         for cmd in attempts:
             try:
                 proc = subprocess.run(
@@ -218,6 +239,10 @@ def _pdf_chrome(html_path: str, pdf_path: str) -> None:
             if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0:
                 return
             last_err = (proc.stderr or proc.stdout or "").strip()[-500:]
+    finally:
+        # Chrome may still be flushing profile files as it exits; a strict
+        # cleanup races that and can crash an otherwise-successful render.
+        shutil.rmtree(profile, ignore_errors=True)
     raise PdfError(f"Chrome PDF rendering failed: {last_err}")
 
 
@@ -233,8 +258,13 @@ def write_pdf(html_path: str, pdf_path: str, engine: str = "auto") -> str:
         try:
             _pdf_weasyprint(html_path, pdf_path)
             return "weasyprint"
-        except PdfError:
-            pass
-        _pdf_chrome(html_path, pdf_path)
-        return "chrome"
+        except PdfError as weasy_exc:
+            try:
+                _pdf_chrome(html_path, pdf_path)
+                return "chrome"
+            except PdfError as chrome_exc:
+                # Surface both reasons: the weasyprint one (e.g. a macOS arch
+                # mismatch) is usually the diagnosis the user actually needs.
+                raise PdfError(f"{chrome_exc}; weasyprint also failed: "
+                               f"{weasy_exc}") from chrome_exc
     raise PdfError(f"unknown pdf engine: {engine}")

@@ -1,6 +1,6 @@
 import unittest
 
-from bookformatter.footnotes import inline_footnotes
+from bookformatter.footnotes import inline_footnotes, number_sidenote_calls
 
 
 class TestInlineFootnotes(unittest.TestCase):
@@ -77,6 +77,36 @@ class TestInlineFootnotes(unittest.TestCase):
         self.assertEqual(out.count('<span class="footnote">'), 1)
         self.assertIn("<sup>1</sup>", out)  # the repeat keeps a visible marker
         self.assertNotIn("#fn1", out)  # no dangling link to the removed note
+
+
+class TestNumberSidenoteCalls(unittest.TestCase):
+    def test_bakes_call_and_marker_in_document_order(self):
+        html = ('<p>One<span class="footnote">First note.</span> and '
+                'two<span class="footnote">Second note.</span>.</p>')
+        out = number_sidenote_calls(html)
+        self.assertIn('One<sup class="sidenote-call">1</sup>'
+                      '<span class="footnote">'
+                      '<sup class="sidenote-mark">1</sup>First note.</span>',
+                      out)
+        self.assertIn('two<sup class="sidenote-call">2</sup>'
+                      '<span class="footnote">'
+                      '<sup class="sidenote-mark">2</sup>Second note.</span>',
+                      out)
+
+    def test_numbers_restart_per_fragment(self):
+        html = '<p>Cite<span class="footnote">Note.</span>.</p>'
+        self.assertIn('sidenote-call">1<', number_sidenote_calls(html))
+        self.assertIn('sidenote-call">1<', number_sidenote_calls(html))
+
+    def test_other_spans_and_linknotes_untouched(self):
+        html = ('<p>Link<span class="linknote">'
+                '<span class="linknote-label">L1</span> url</span> and '
+                '<span class="emph">styled</span> text.</p>')
+        self.assertEqual(number_sidenote_calls(html), html)
+
+    def test_no_notes_returns_input_unchanged(self):
+        html = "<p>A plain paragraph.</p>"
+        self.assertEqual(number_sidenote_calls(html), html)
 
 
 if __name__ == "__main__":

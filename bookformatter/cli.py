@@ -99,6 +99,10 @@ def build_parser() -> argparse.ArgumentParser:
     design.add_argument("--no-link-citations", action="store_true",
                         help="set link notes as bare URLs instead of fetching each "
                              "linked page to expand its note into an APA-style citation")
+    design.add_argument("--references", action="store_true",
+                        help="append a References page: every cited link as an "
+                             "alphabetized APA reference list, followed by the "
+                             "chapters' own web sources when known")
 
     content = parser.add_argument_group("content handling")
     content.add_argument("--split", default="auto", choices=["auto", "h1", "h2", "none"],
@@ -171,7 +175,9 @@ def main(argv=None) -> int:
     )
 
     citations = None
-    if link_notes != "off" and not args.no_link_citations:
+    # Fetch citation metadata when the link notes want it OR a References
+    # page is requested (which is APA citations by definition).
+    if args.references or (link_notes != "off" and not args.no_link_citations):
         urls = list(dict.fromkeys(
             u for ch in book.chapters for u in citable_urls(ch.html)))
         if urls:
@@ -196,7 +202,8 @@ def main(argv=None) -> int:
         toc=not args.no_toc, drop_caps=args.drop_caps,
         chapter_numbers=not args.no_chapter_numbers,
         footnotes=not args.no_footnotes, link_notes=link_notes,
-        link_citations=citations, pdf_engine=args.pdf_engine,
+        link_citations=citations, references=args.references,
+        pdf_engine=args.pdf_engine,
         warnings=warnings, progress=lambda message: print(message, file=sys.stderr),
     )
     for warning in warnings:

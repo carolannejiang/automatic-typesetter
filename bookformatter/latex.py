@@ -86,6 +86,13 @@ def _tidy(text: str) -> str:
     return _EDGE_BREAKS.sub("", text.strip()).strip()
 
 
+def _guard_brackets(text: str) -> str:
+    """Brace a leading "[" so it cannot read as an optional argument to
+    whatever command precedes the text (\\item, a tabular row's \\\\, or a
+    booktabs rule)."""
+    return "{[}" + text[1:] if text.startswith("[") else text
+
+
 # -- chapter HTML to LaTeX body ----------------------------------------------
 
 _PARA_LIKE = {"p", "dt", "dd", "address"}
@@ -192,7 +199,7 @@ class _TexConverter:
                     if rendered:
                         body.append(rendered)
             if body:
-                chunks.append("\\item " + "\n\n".join(body))
+                chunks.append("\\item " + _guard_brackets("\n\n".join(body)))
         if not chunks:
             return ""
         if depth >= 4:  # LaTeX refuses deeper nesting; continue the level
@@ -206,6 +213,7 @@ class _TexConverter:
                      if not c.is_text and c.tag in ("td", "th")]
             texts = [_tidy(self._inline(c.children)) for c in cells]
             if any(texts):
+                texts[0] = _guard_brackets(texts[0])
                 rows.append((all(c.tag == "th" for c in cells), texts))
         if not rows:
             return []

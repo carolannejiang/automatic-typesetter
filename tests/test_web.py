@@ -95,10 +95,10 @@ class WebTests(unittest.TestCase):
     def test_theme_picker_cards_with_thumbnails(self):
         code, body = self._get("/")
         page = body.decode()
-        for value in ("classic", "modern", "classical", "vsi",
-                      "classicthesis", "memoir", "short intro"):
+        for value in ("classic", "modern", "crimson", "classical", "vsi",
+                      "classicthesis", "memoir", "short intro", "tufte"):
             self.assertIn(f'name="theme" value="{value}"', page)
-        self.assertEqual(page.count("data:image/webp;base64,"), 7)
+        self.assertEqual(page.count("data:image/webp;base64,"), 9)
         # data-trim is driven by themes.default_trim so it can't drift.
         self.assertIn('value="classic" data-trim="6x9" checked', page)
         self.assertIn('value="classicthesis" data-trim="a4"', page)

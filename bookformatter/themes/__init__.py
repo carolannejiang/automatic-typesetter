@@ -23,6 +23,10 @@ module supplies:
                    title-cased) and its one-line description (else "")
     PRINT_SPECS    optional: selected-theme print guidance shown by the
                    web interface (title, items, and an optional note)
+    SIDENOTE_CALLS optional: True to have print markup bake superscript
+                   sidenote numbers (footnotes.number_sidenote_calls) for
+                   margin-note designs that bypass the auto-numbered
+                   page-bottom footnote machinery
 
 To add a theme, write such a module and list it in `_THEME_MODULES` below.
 Unknown theme names fall back to classic.
@@ -30,12 +34,12 @@ Unknown theme names fall back to classic.
 
 from __future__ import annotations
 
-from . import (base, classic, classical, classicthesis, memoir, modern,
-               shortintro, vsi)
+from . import (base, classic, classical, classicthesis, crimson, memoir,
+               modern, shortintro, tufte, vsi)
 from .base import TRIM_SIZES
 
-_THEME_MODULES = (classic, modern, classical, vsi, classicthesis, memoir,
-                  shortintro)
+_THEME_MODULES = (classic, modern, crimson, classical, vsi, classicthesis,
+                  memoir, shortintro, tufte)
 _THEMES = {mod.NAME: mod for mod in _THEME_MODULES}
 
 THEME_NAMES = [mod.NAME for mod in _THEME_MODULES]
@@ -88,6 +92,13 @@ def theme_blurb(theme: str) -> str:
 def print_specs(theme: str):
     """Theme-specific production guidance, or None when none is declared."""
     return getattr(_theme(theme), "PRINT_SPECS", None)
+
+
+def sidenote_calls(theme: str) -> bool:
+    """Whether print markup should bake superscript sidenote numbers —
+    themes that float notes into a margin column instead of the page foot
+    bypass the engine's auto-numbered footnote calls."""
+    return getattr(_theme(theme), "SIDENOTE_CALLS", False)
 
 
 def theme_params(theme: str, font_size: str, line_height: str) -> dict:
