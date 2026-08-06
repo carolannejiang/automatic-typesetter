@@ -326,6 +326,69 @@ class TufteCssTests(unittest.TestCase):
         self.assertNotIn("sidenote-call", plain)
 
 
+class MydissCssTests(unittest.TestCase):
+    def test_chapter_label_is_the_bare_number(self):
+        self.assertEqual(themes.chapter_label("mydiss", 3), "3")
+
+    def test_declares_the_class_page_and_type(self):
+        self.assertEqual(themes.default_trim("mydiss"), "mydiss")
+        self.assertEqual(themes.default_font_size("mydiss"), "9pt")
+        self.assertEqual(themes.default_line_height("mydiss"), "1.53")
+
+    def test_exposes_class_print_guidance(self):
+        specs = themes.print_specs("mydiss")
+        self.assertEqual(specs["title"], "Recommended mydiss print setup")
+        guidance = " ".join(value for _, value in specs["items"])
+        self.assertIn("156 × 234 mm", guidance)
+        self.assertIn("9pt Latin Modern", guidance)
+        # The class prescribes no stock/binding; the note says so.
+        self.assertIn("prescribes no paper stock", specs["note"])
+        self.assertNotIn("gsm", guidance + specs["note"])
+
+    def test_print_geometry_matches_the_class(self):
+        css = themes.print_css(theme="mydiss", trim="mydiss")
+        self.assertIn("size: 6.14173in 9.2126in;", css)
+        self.assertIn("margin: 0.795in 1.228in 1.449in 0.819in;", css)
+
+    def test_chapter_opener_is_an_oversized_grey_numeral(self):
+        css = themes.print_css(theme="mydiss", book_title="Field Notes")
+        self.assertIn("mydiss overrides", css)
+        # The signature: a huge halfgray numeral, the head ragged right.
+        self.assertIn("color: #b3b3b3;", css)
+        self.assertIn("font-size: 10.67em;", css)
+        self.assertIn("header.chapter-head { text-align: right; }", css)
+
+    def test_print_css_sets_italic_outer_heads_and_a_bullet_toc(self):
+        css = themes.print_css(theme="mydiss", book_title="Field Notes")
+        # Chapter title verso, section title recto, both small italic...
+        self.assertIn("string-set: section-title content();", css)
+        self.assertIn("content: string(chapter-title, first-except);", css)
+        self.assertIn("content: string(section-title);", css)
+        self.assertIn("font-style: italic;", css)
+        # ...the theme block comes after the shared furniture it replaces...
+        furniture = css.index("mydiss print furniture")
+        self.assertGreater(furniture, css.index("string(book-title, first-except)"))
+        self.assertGreater(furniture, css.index("content: counter(page)"))
+        self.assertGreater(furniture, css.index('leader(". ")'))
+        # ...and the contents page drops dot leaders for a bullet.
+        self.assertNotIn("leader(", css[furniture:])
+        self.assertIn('content: "\\2002\\2022\\2002" target-counter(attr(href url), page)',
+                      css[furniture:])
+
+    def test_print_css_openers_take_a_plain_folio(self):
+        css = themes.print_css(theme="mydiss")
+        self.assertIn("header.chapter-head { page: clean; }", css)
+        self.assertIn("section.chapter { page: auto; }", css)
+        clean = css.index("@page clean")
+        self.assertIn("@bottom-right { content: counter(page)", css[clean:])
+
+    def test_epub_css_restyles_without_paged_furniture(self):
+        css = themes.epub_css(theme="mydiss")
+        self.assertIn("mydiss overrides", css)
+        self.assertNotIn("@top-left", css)
+        self.assertNotIn("page: clean", css)
+
+
 class ThemeBuildTests(unittest.TestCase):
     def test_print_html_classic_is_unchanged(self):
         page = printbook.build_print_html(_book(), theme="classic")
@@ -424,7 +487,7 @@ class ThemeLabelTests(unittest.TestCase):
 class ThemeSourceTests(unittest.TestCase):
     def test_template_themes_cite_a_linked_source(self):
         # The LaTeX-template themes carry their source in PRINT_SPECS.
-        for name in ("memoir", "classicthesis", "tufte"):
+        for name in ("memoir", "classicthesis", "tufte", "mydiss"):
             source = themes.theme_source(name)
             self.assertTrue(source["name"], name)
             self.assertTrue(source["url"].startswith("https://"), name)
