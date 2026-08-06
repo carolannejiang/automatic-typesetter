@@ -340,7 +340,7 @@ class MydissCssTests(unittest.TestCase):
         self.assertEqual(specs["title"], "Recommended mydiss print setup")
         guidance = " ".join(value for _, value in specs["items"])
         self.assertIn("156 × 234 mm", guidance)
-        self.assertIn("9pt Charter", guidance)
+        self.assertIn("9pt Fedra Serif B", guidance)
         # The class prescribes no stock/binding; the note says so.
         self.assertIn("prescribes no paper stock", specs["note"])
         self.assertNotIn("gsm", guidance + specs["note"])
@@ -358,12 +358,15 @@ class MydissCssTests(unittest.TestCase):
         self.assertIn("font-size: 10.67em;", css)
         self.assertIn("header.chapter-head { text-align: right; }", css)
 
-    def test_body_sets_charter_with_oldstyle_figures(self):
-        # Charter (with oldstyle figures) stands in for the reference's
-        # commercial Fedra Serif.
+    def test_body_prefers_fedra_with_charter_fallback_and_oldstyle_figures(self):
+        # Fedra Serif B (the reference face) is preferred where installed —
+        # assembled by @font-face from the reader's own copy — with Charter
+        # as the fallback, both showing oldstyle figures.
         css = themes.epub_css(theme="mydiss")
         self.assertIn("font-variant-numeric: oldstyle-nums;", css)
-        self.assertIn("Charter", css)
+        self.assertIn('font-family: "Fedra Serif B";', css)
+        self.assertIn('local("Fedra Serif B Pro Book")', css)
+        self.assertIn('"Fedra Serif B", Charter', css)
 
     def test_print_css_sets_italic_outer_heads_and_a_bullet_toc(self):
         css = themes.print_css(theme="mydiss", book_title="Field Notes")
