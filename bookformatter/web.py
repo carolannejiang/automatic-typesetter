@@ -858,6 +858,7 @@ footer a { color: var(--link); }
             <option value="a5">A5</option>
             <option value="b5">B5 (176 &times; 250 mm)</option>
             <option value="vsi">4.37 &times; 6.85 in (111 &times; 174 mm pocket)</option>
+            <option value="mydiss">6.14 &times; 9.21 in (156 &times; 234 mm)</option>
           </select></div>
       </div>
       <label>Formats</label>
