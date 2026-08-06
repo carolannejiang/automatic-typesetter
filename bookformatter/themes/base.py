@@ -135,6 +135,8 @@ th, td { border-bottom: 0.5pt solid #999; padding: 0.35em 0.7em; text-align: lef
 thead th { border-bottom: 1pt solid #333; }
 
 a { color: #555; text-decoration: none; }
+/* A link note's retained words and its L call read as one quiet grey hyperlink. */
+span.linknote-text, sub.linknote-call { color: #555; }
 sup, sub { line-height: 0; font-size: 0.75em; }
 
 /* front matter */

@@ -131,22 +131,25 @@ def annotate_links(fragment: str, start: int = 1, mode: str = "inline",
                 note.append(item)
             nodes.append(note)
         elif mode == "aside":
+            linked = _linked_text(nodes)
             call = Node("sub", {"class": "linknote-call", "id": f"lnref-{number}"})
             ref = Node("a", {"epub:type": "noteref", "role": "doc-noteref",
                              "href": f"#ln-{number}"})
             ref.append(Node(text=label))
             call.append(ref)
-            nodes.append(call)
+            nodes = [linked, call]
             asides.append(_aside(number, label, href, citations))
         elif mode == "endnote":
+            linked = _linked_text(nodes)
             call = Node("sub", {"class": "linknote-call", "id": f"lnref-{number}"})
             ref = Node("a", {"href": f"#ln-{number}"})
             ref.append(Node(text=label))
             call.append(ref)
-            nodes.append(call)
+            nodes = [linked, call]
             if notes is not None:
                 notes.append((number, href))
         else:  # inline
+            linked = _linked_text(nodes)
             call = Node("sub", {"class": "linknote-call"})
             call.append(Node(text=label))
             note = Node("span", {"class": "linknote"})
@@ -156,7 +159,7 @@ def annotate_links(fragment: str, start: int = 1, mode: str = "inline",
             note.append(Node(text=" "))
             for item in _note_body(href, citations):
                 note.append(item)
-            nodes.extend([call, note])
+            nodes = [linked, call, note]
         if trailing:
             nodes.append(Node(text=trailing))
         a.replace_with(*nodes)
@@ -284,6 +287,16 @@ def _unwrapped_content(a: Node):
     call can sit tight against the linked text."""
     trailing = _split_trailing(a)
     return list(a.children), trailing
+
+
+def _linked_text(nodes: list) -> Node:
+    """Wrap the former link's words so the stylesheet can render them in the
+    same quiet grey as the L call — they read as a hyperlink, unclickable in
+    print."""
+    span = Node("span", {"class": "linknote-text"})
+    for node in nodes:
+        span.append(node)
+    return span
 
 
 def _url_anchor(href: str, text: str = None) -> Node:
