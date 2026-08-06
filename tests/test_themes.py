@@ -340,7 +340,7 @@ class MydissCssTests(unittest.TestCase):
         self.assertEqual(specs["title"], "Recommended mydiss print setup")
         guidance = " ".join(value for _, value in specs["items"])
         self.assertIn("156 × 234 mm", guidance)
-        self.assertIn("9pt Latin Modern", guidance)
+        self.assertIn("9pt Charter", guidance)
         # The class prescribes no stock/binding; the note says so.
         self.assertIn("prescribes no paper stock", specs["note"])
         self.assertNotIn("gsm", guidance + specs["note"])
@@ -358,11 +358,23 @@ class MydissCssTests(unittest.TestCase):
         self.assertIn("font-size: 10.67em;", css)
         self.assertIn("header.chapter-head { text-align: right; }", css)
 
+    def test_body_sets_charter_with_oldstyle_figures(self):
+        # Charter (with oldstyle figures) stands in for the reference's
+        # commercial Fedra Serif.
+        css = themes.epub_css(theme="mydiss")
+        self.assertIn("font-variant-numeric: oldstyle-nums;", css)
+        self.assertIn("Charter", css)
+
     def test_print_css_sets_italic_outer_heads_and_a_bullet_toc(self):
         css = themes.print_css(theme="mydiss", book_title="Field Notes")
-        # Chapter title verso, section title recto, both small italic...
+        # Chapter (number + title) verso, section title recto, small italic...
         self.assertIn("string-set: section-title content();", css)
-        self.assertIn("content: string(chapter-title, first-except);", css)
+        # The number carries its own trailing space (unnumbered chapters add
+        # nothing), and the head resets section-title so it can't go stale.
+        self.assertIn('string-set: chapter-num content() "\\2002";', css)
+        self.assertIn("string-set: chapter-title content(), section-title \"\";", css)
+        self.assertIn("content: string(chapter-num, first-except) "
+                      "string(chapter-title, first-except);", css)
         self.assertIn("content: string(section-title);", css)
         self.assertIn("font-style: italic;", css)
         # ...the theme block comes after the shared furniture it replaces...
@@ -381,6 +393,8 @@ class MydissCssTests(unittest.TestCase):
         self.assertIn("section.chapter { page: auto; }", css)
         clean = css.index("@page clean")
         self.assertIn("@bottom-right { content: counter(page)", css[clean:])
+        # The Chrome fallback neutralizer keeps named-page pagination intact.
+        self.assertIn("@supports (page: auto) {\n  header.chapter-head { page: auto; }\n}", css)
 
     def test_epub_css_restyles_without_paged_furniture(self):
         css = themes.epub_css(theme="mydiss")

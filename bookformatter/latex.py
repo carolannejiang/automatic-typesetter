@@ -16,10 +16,11 @@ rather than imitated. Two document shapes:
   pdflatex as the template is.
 * theme "mydiss" transcribes Michael Ummels's mydiss dissertation class
   (an extbook derivative not on CTAN) into a self-contained preamble: 9pt
-  Latin Modern on extbook at a 1.25 spread, the class's titlesec display
-  chapter (a 96pt halfgray numeral over a bold title, both ragged right),
-  titleps italic outer running heads, and a titletoc bullet-leader
-  contents, compiled with pdflatex as the class is.
+  Charter (XCharter with oldstyle figures, standing in for the commercial
+  Fedra Serif the reference book was set in) on extbook at a 1.25 spread,
+  the class's titlesec display chapter (a 96pt halfgray numeral over a
+  bold title, both ragged right), titleps italic outer running heads, and
+  a titletoc bullet-leader contents, compiled with pdflatex as the class is.
 * every other theme emits a standard book-class document matched to the
   theme's page geometry, body size, leading, and nearest TeX Gyre face,
   compiled with lualatex so arbitrary web-ingested Unicode survives.
@@ -552,8 +553,10 @@ def _mydiss_preamble(theme, trim, font_size, line_height, chapter_start,
         % (class_pt, "openright" if chapter_start == "right" else "openany"),
         "\\usepackage[T1]{fontenc}",
         "\\usepackage[utf8]{inputenc}",
-        "\\usepackage{lmodern}",
-        "\\usepackage{textcomp}",
+        # Charter (XCharter) with oldstyle figures stands in for the
+        # reference's commercial Fedra Serif; a warm, low-contrast humanist
+        # book serif far closer to it than the class's Latin Modern default.
+        "\\usepackage[osf]{XCharter}",
     ]
     babel = _babel_line(language)
     if babel:

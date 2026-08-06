@@ -182,7 +182,8 @@ class WriteLatexTests(unittest.TestCase):
         tex = render(theme="mydiss")
         self.assertTrue(tex.startswith("% !TEX program = pdflatex"))
         self.assertIn("\\documentclass[9pt,twoside,openright]{extbook}", tex)
-        self.assertIn("\\usepackage{lmodern}", tex)
+        # Charter (XCharter, oldstyle figures) stands in for Fedra Serif.
+        self.assertIn("\\usepackage[osf]{XCharter}", tex)
         # The class's page and 1.25 spread.
         self.assertIn("paperwidth=6.14173in,paperheight=9.2126in", tex)
         self.assertIn("\\setstretch{1.25}", tex)
