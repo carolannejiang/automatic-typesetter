@@ -79,14 +79,15 @@ def _paragraph_group(catalog, used) -> list:
 def write_icml(book: Book, path: str, theme: str = "classic",
                font_size: str = None, line_height: str = None,
                chapter_numbers: bool = True, link_notes: bool = True,
-               link_citations: dict = None) -> None:
+               link_citations: dict = None, references: bool = False) -> None:
     font_size = font_size if font_size is not None else themes.default_font_size(theme)
     line_height = (line_height if line_height is not None
                    else themes.default_line_height(theme))
     catalog = build_styles(theme, font_size, line_height)
     items = book_to_story_items(book, theme, chapter_numbers,
                                 link_notes=link_notes,
-                                link_citations=link_citations)
+                                link_citations=link_citations,
+                                references=references)
     ids = IdGen()
     used_p: set = set()
     used_c: set = set()
