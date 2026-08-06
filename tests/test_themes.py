@@ -197,6 +197,23 @@ class ShortIntroCssTests(unittest.TestCase):
         self.assertIn("text-indent: 0", css)
 
 
+class CrimsonCssTests(unittest.TestCase):
+    def test_sets_the_crimson_pro_body_and_sans_heads(self):
+        css = themes.print_css(theme="crimson")
+        self.assertIn('font-family: "Crimson Pro"', css)
+        self.assertIn('"Source Sans 3"', css)
+
+    def test_chapter_opener_is_flush_left_over_a_rule(self):
+        css = themes.print_css(theme="crimson")
+        self.assertIn("header.chapter-head { text-align: left; }", css)
+        self.assertIn("border-bottom: 2px solid #1a1a1a;", css)
+
+    def test_paragraphs_carry_a_first_line_indent(self):
+        css = themes.epub_css(theme="crimson")
+        self.assertIn("crimson overrides", css)
+        self.assertIn("text-indent: 1em", css)
+
+
 class ThemeBuildTests(unittest.TestCase):
     def test_print_html_classic_is_unchanged(self):
         page = printbook.build_print_html(_book(), theme="classic")
