@@ -622,8 +622,9 @@ def _front_matter(book: Book, toc: bool, style: str) -> list:
 
 # A chapter body that opens with a plain word: the first letter and the rest
 # of the word become \lettrine's two arguments. Bodies opening with anything
-# else (a command, a quotation mark, a digit) are left alone.
-_LETTRINE_OPEN = re.compile(r"^([A-Za-z])([A-Za-z'’]*)")
+# else (a command, a quotation mark, a digit, a bare one-letter word — the
+# same openings the print pipeline's _bake_lettrine declines) are left alone.
+_LETTRINE_OPEN = re.compile(r"^([A-Za-z])([A-Za-z'’]+)")
 
 
 def _lettrine_open(body: str) -> str:

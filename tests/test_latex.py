@@ -205,13 +205,18 @@ class WriteLatexTests(unittest.TestCase):
 
     def test_memoir2_leaves_wordless_openings_plain(self):
         # A chapter that opens with a list (no opening word) gets no
-        # lettrine; the command never wraps markup.
-        b = support.make_book([Chapter(title="C", html=BRACKETS_HTML)])
+        # lettrine, and neither does a one-letter opening word — the same
+        # openings the print pipeline's _bake_lettrine declines.
+        b = support.make_book([
+            Chapter(title="C", html=BRACKETS_HTML),
+            Chapter(title="D", html="<p>I remember the day it began.</p>"),
+        ])
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "b.tex")
             write_latex(b, path, theme="memoir2")
             tex = open(path).read()
         self.assertNotIn("\\lettrine{", tex)
+        self.assertIn("I remember the day it began.", tex)
 
     def test_no_chapter_numbers(self):
         tex = render(chapter_numbers=False)

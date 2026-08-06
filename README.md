@@ -46,7 +46,7 @@ python3 -m bookformatter chapters/ -t "Essays" --theme classicthesis
 python3 -m bookformatter chapters/ -t "Essays" --theme memoir
 
 # The same template in full dress — lettrine drop caps opening each
-# chapter, per-chapter symbol footnotes (* † ‡), numbered bold contents
+# chapter, per-chapter symbol footnotes († ‡ §), numbered bold contents
 # lines, and the byline and copyright dropped to the page foot
 python3 -m bookformatter chapters/ -t "Essays" --theme memoir2
 
