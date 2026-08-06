@@ -250,6 +250,7 @@ def run_build(params: dict, uploads: list, workdir: str,
     if _first(params, "no_link_notes") == "on":  # pre-select cached form
         link_notes = "off"
     link_citations = _first(params, "no_link_citations") != "on"
+    references = _first(params, "references") == "on"
     font_size = _clean_size(_first(params, "font_size"), None, _FONT_SIZE_RE)
     line_height = _clean_size(_first(params, "line_height"), None, _LINE_HEIGHT_RE)
     pdf_engine = _first(params, "pdf_engine", "auto")
@@ -270,7 +271,9 @@ def run_build(params: dict, uploads: list, workdir: str,
     name = slugify(_first(params, "name") or meta.title)
 
     citations = None
-    if link_notes != "off" and link_citations:
+    # Fetch citation metadata when the link notes want it OR a References
+    # page is requested (which is APA citations by definition).
+    if references or (link_notes != "off" and link_citations):
         urls = list(dict.fromkeys(
             u for ch in book.chapters for u in citable_urls(ch.html)))
         if urls:
@@ -285,7 +288,8 @@ def run_build(params: dict, uploads: list, workdir: str,
         theme=theme, trim=trim, font_size=font_size, line_height=line_height,
         chapter_start=chapter_start, toc=toc, drop_caps=drop_caps,
         chapter_numbers=chapter_numbers, footnotes=footnotes,
-        link_notes=link_notes, link_citations=citations, pdf_engine=pdf_engine,
+        link_notes=link_notes, link_citations=citations, references=references,
+        pdf_engine=pdf_engine,
         files=out.files, warnings=out.warnings, progress=progress,
     )
     return out
@@ -913,6 +917,7 @@ footer a { color: var(--link); }
           <label><input type="checkbox" name="no_toc"> Omit the contents page (print)</label>
           <label><input type="checkbox" name="no_footnotes"> Content footnotes: collect as endnotes</label>
           <label><input type="checkbox" name="no_link_citations"> Bare URLs in link notes (skip APA-style citations)</label>
+          <label><input type="checkbox" name="references"> Append an APA References page</label>
         </div>
       </details>
     </div>

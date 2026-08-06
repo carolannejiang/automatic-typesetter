@@ -487,7 +487,7 @@ def write_idml(book: Book, path: str, theme: str = "classic",
                trim: str = None, font_size: str = None,
                line_height: str = None, chapter_start: str = "right",
                chapter_numbers: bool = True, link_notes: bool = True,
-               link_citations: dict = None) -> None:
+               link_citations: dict = None, references: bool = False) -> None:
     trim = trim if trim is not None else themes.default_trim(theme)
     font_size = font_size if font_size is not None else themes.default_font_size(theme)
     line_height = (line_height if line_height is not None
@@ -497,7 +497,8 @@ def write_idml(book: Book, path: str, theme: str = "classic",
 
     items = book_to_story_items(book, theme, chapter_numbers,
                                 link_notes=link_notes,
-                                link_citations=link_citations)
+                                link_citations=link_citations,
+                                references=references)
     if chapter_start != "right":
         for para in items:
             if para.start == "NextOddPage":

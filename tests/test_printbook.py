@@ -113,6 +113,38 @@ class BuildPdfBranchTests(unittest.TestCase):
                             for w in warnings), warnings)
 
 
+class ReferencesPageTests(unittest.TestCase):
+    def _cited_book(self):
+        import datetime
+        from bookformatter import apacite
+        cite = apacite.Citation(
+            url="https://ex.example/p", title="How Cats Sleep",
+            author="Jane Q. Doe", date=datetime.datetime(2024, 6, 3),
+            site_name="Cat Journal")
+        book = Book(meta=BookMeta(title="T", author="A"), chapters=[
+            Chapter(title="One",
+                    html='<p>See <a href="https://ex.example/p">it</a>.</p>',
+                    source="https://blog.example/one", author="Web Writer")])
+        return book, {"https://ex.example/p": cite}
+
+    def test_references_page_appended_when_enabled(self):
+        book, citations = self._cited_book()
+        html = printbook.build_print_html(
+            book, link_citations=citations, references=True)
+        self.assertIn('id="references"', html)
+        self.assertIn("How Cats Sleep", html)          # the APA citation
+        self.assertIn('class="ref-entry"', html)        # hanging-indent class
+        self.assertIn("Chapter sources", html)          # provenance list
+        self.assertIn('href="#references">References', html)  # TOC entry
+
+    def test_no_references_page_when_disabled(self):
+        book, citations = self._cited_book()
+        html = printbook.build_print_html(
+            book, link_citations=citations, references=False)
+        self.assertNotIn('id="references"', html)
+        self.assertNotIn("Chapter sources", html)
+
+
 class _nullcontext:
     def __enter__(self):
         return None

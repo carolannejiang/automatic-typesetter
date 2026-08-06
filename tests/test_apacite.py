@@ -198,5 +198,40 @@ class CollectTests(unittest.TestCase):
             release.set()
 
 
+class ReferenceListTests(unittest.TestCase):
+    def test_reference_entries_alphabetized_with_hanging_class(self):
+        cites = {
+            "u1": Citation(url="u1", title="Zebras at dusk", author="Ann Bee"),
+            "u2": Citation(url="u2", title="Aardvarks awake", author="Carl Dey"),
+        }
+        entries = apacite.reference_entries(cites)
+        self.assertEqual(len(entries), 2)
+        self.assertTrue(all('class="ref-entry"' in e for e in entries))
+        # Sorted by leading author surname: Bee before Dey.
+        self.assertLess(entries[0].index("Bee"), 1e9)
+        self.assertTrue(entries[0].find("Bee") >= 0 and entries[1].find("Dey") >= 0)
+
+    def test_reference_entries_empty_when_no_citations(self):
+        self.assertEqual(apacite.reference_entries(None), [])
+        self.assertEqual(apacite.reference_entries({}), [])
+
+    def test_chapter_source_entries_only_web_chapters(self):
+        class Ch:
+            def __init__(self, title, source, author=None, date=None):
+                self.title, self.source, self.author, self.date = title, source, author, date
+        chapters = [
+            Ch("Web one", "https://www.blog.example/a", author="Web Writer"),
+            Ch("Local", "/home/me/draft.md"),   # not http -> skipped
+            Ch("Web two", "http://other.example/b"),
+        ]
+        entries = apacite.chapter_source_entries(chapters)
+        self.assertEqual(len(entries), 2)
+        joined = " ".join(entries)
+        self.assertIn("Web one", joined)
+        self.assertIn("Web two", joined)
+        self.assertNotIn("Local", joined)
+        self.assertIn("blog.example", joined)  # www- stripped site name
+
+
 if __name__ == "__main__":
     unittest.main()
