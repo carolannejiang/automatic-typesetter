@@ -271,7 +271,9 @@ def run_build(params: dict, uploads: list, workdir: str,
     name = slugify(_first(params, "name") or meta.title)
 
     citations = None
-    if link_notes != "off" and link_citations:
+    # Fetch citation metadata when the link notes want it OR a References
+    # page is requested (which is APA citations by definition).
+    if references or (link_notes != "off" and link_citations):
         urls = list(dict.fromkeys(
             u for ch in book.chapters for u in citable_urls(ch.html)))
         if urls:

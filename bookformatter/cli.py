@@ -166,7 +166,9 @@ def main(argv=None) -> int:
     )
 
     citations = None
-    if link_notes != "off" and not args.no_link_citations:
+    # Fetch citation metadata when the link notes want it OR a References
+    # page is requested (which is APA citations by definition).
+    if args.references or (link_notes != "off" and not args.no_link_citations):
         urls = list(dict.fromkeys(
             u for ch in book.chapters for u in citable_urls(ch.html)))
         if urls:
