@@ -60,7 +60,8 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
                      chapter_start: str = "right", toc: bool = True,
                      drop_caps: bool = False, chapter_numbers: bool = True,
                      footnotes: bool = True, link_notes="foot",
-                     link_citations: dict = None, references: bool = False) -> str:
+                     link_citations: dict = None, references: bool = False,
+                     link_note_color: str = "#555") -> str:
     """link_notes places the hyperlink URL notes (L1, L2, ...): "foot" sets
     each at the foot of its citing page, "end" gathers them in a Notes
     section at the end of the book, "off" keeps hyperlinks as-is. True and
@@ -78,6 +79,7 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
         theme=theme, trim=trim, font_size=font_size, line_height=line_height,
         book_title=meta.title, book_subtitle=meta.description or "",
         chapter_start=chapter_start, drop_caps=drop_caps,
+        link_note_color=link_note_color,
     )
     assets_by_name = {a.filename: a for a in book.assets}
 
