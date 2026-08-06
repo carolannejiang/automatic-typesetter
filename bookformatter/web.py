@@ -53,8 +53,6 @@ MEDIA_TYPES = {
 MAX_JOBS = 20
 MAX_INPUTS = 100          # links + files per build
 CONCURRENT_BUILDS = 2     # simultaneous presses; others wait their turn
-CITE_LIMIT = 50           # cap link-note citations per build (bounds fetch count)
-CITE_BUDGET = 30.0        # overall seconds to spend fetching citations
 
 _jobs: dict = {}
 _jobs_lock = threading.Lock()
@@ -271,16 +269,10 @@ def run_build(params: dict, uploads: list, workdir: str,
     if link_notes != "off" and link_citations:
         urls = list(dict.fromkeys(
             u for ch in book.chapters for u in citable_urls(ch.html)))
-        if len(urls) > CITE_LIMIT:
-            out.warnings.append(
-                f"{len(urls)} linked pages found; citing the first {CITE_LIMIT} "
-                "to keep the build within time — the rest keep their bare URLs."
-            )
-            urls = urls[:CITE_LIMIT]
         if urls:
             progress(f"Citing {len(urls)} linked page(s)…")
             citations = apacite.collect(
-                urls, budget=CITE_BUDGET,
+                urls,
                 progress=lambda done, total: progress(
                     f"Citing linked pages… {done}/{total}"))
 
