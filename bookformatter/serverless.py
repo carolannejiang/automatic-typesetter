@@ -65,7 +65,13 @@ form.addEventListener("submit", async (ev) => {
     const resp = await fetch("build", { method: "POST", body: new FormData(form) });
     if (!resp.ok) {
       let detail = "The build failed.";
-      try { detail = (await resp.json()).error || detail; } catch (e) {}
+      try {
+        const err = await resp.json();
+        detail = err.error || detail;
+        for (const w of err.warnings || []) {
+          const li = document.createElement("li"); li.textContent = w; warnings.appendChild(li);
+        }
+      } catch (e) {}
       throw new Error(detail);
     }
     let meta = {};
@@ -136,15 +142,24 @@ def _build(environ, start_response):
     error, params, uploads = _web.read_form_body(
         environ.get("CONTENT_LENGTH"), environ.get("CONTENT_TYPE"),
         environ["wsgi.input"], MAX_BODY)
+    if error == 413:
+        return _json(start_response, 413,
+                     {"error": f"Upload too large — the limit here is "
+                               f"{MAX_BODY // (1024 * 1024)} MB."})
     if error:
         return _json(start_response, error, {"error": "bad request body"})
 
     workdir = tempfile.mkdtemp(prefix="bookformatter-fn-")
     try:
+        out = _web.BuildResult()
         try:
-            result = _web.run_build(params, uploads, workdir, allow_pdf=False)
+            result = _web.run_build(params, uploads, workdir,
+                                    allow_pdf=False, out=out)
         except ValueError as exc:
-            return _json(start_response, 400, {"error": str(exc)})
+            # Surface the per-input diagnostics collected before the failure
+            # (e.g. "try the blog's RSS feed") — this host can't poll a job.
+            return _json(start_response, 400,
+                         {"error": str(exc), "warnings": out.warnings})
 
         files = [(name, path) for name, path in result.files.items()
                  if os.path.exists(path)]

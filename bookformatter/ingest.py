@@ -764,6 +764,37 @@ def _prefetch_images(result: IngestResult, opts: IngestOptions) -> dict:
     return {u: v for u, v in fetched.items() if isinstance(v, fetch.FetchError)}
 
 
+_FIGURE_MEDIA = {"img", "video", "audio", "iframe", "embed", "object",
+                 "svg", "canvas"}
+
+
+def _figure_is_orphaned(figure) -> bool:
+    """The figure's only remaining content is its caption — the media it was
+    built around is gone. A figure that wraps a quote, table, or video with
+    an incidental image (an avatar or badge) still has real content and must
+    survive."""
+    for child in figure.children:
+        if child.is_text:
+            if (child.text or "").strip():
+                return False
+        elif child.tag != "figcaption":
+            if child.text_content().strip() or child.find_all(_FIGURE_MEDIA):
+                return False
+    return True
+
+
+def _detach_image(img) -> None:
+    """Detach an <img>, and the enclosing <figure> if that leaves only an
+    orphaned <figcaption> — otherwise the caption typesets with no picture
+    above it."""
+    figure = img.parent
+    while figure is not None and figure.tag != "figure":
+        figure = figure.parent
+    img.detach()
+    if figure is not None and _figure_is_orphaned(figure):
+        figure.detach()
+
+
 def process_images(result: IngestResult, opts: IngestOptions) -> None:
     """Apply the image policy across all chapters, filling result.assets."""
     if opts.images == "link":
@@ -777,7 +808,7 @@ def process_images(result: IngestResult, opts: IngestOptions) -> None:
             changed = True
             src = img.get("src") or ""
             if opts.images == "strip":
-                img.detach()
+                _detach_image(img)
                 continue
             if src in seen:
                 img.attrs["src"] = seen[src]
@@ -792,7 +823,7 @@ def process_images(result: IngestResult, opts: IngestOptions) -> None:
             if data is None:
                 alt = htmldom.normalize_ws(img.get("alt") or "")
                 result.warn(f"dropping image {src[:80]}" + (f" (alt: {alt})" if alt else ""))
-                img.detach()
+                _detach_image(img)
                 continue
             ext = fetch.MEDIA_EXT.get(media, ".bin")
             name = _asset_name(data, ext)

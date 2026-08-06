@@ -182,7 +182,12 @@ def _pdf_weasyprint(html_path: str, pdf_path: str) -> None:
         # failed to load — e.g. an arch mismatch on macOS. Keep this inside
         # the engine ladder so `auto` can still fall back to Chrome.
         raise PdfError(f"weasyprint could not load its libraries: {exc}") from exc
-    HTML(filename=html_path).write_pdf(pdf_path)
+    try:
+        HTML(filename=html_path).write_pdf(pdf_path)
+    except Exception as exc:
+        # A render-time failure must stay inside the engine ladder so `auto`
+        # can fall back to Chrome and the CLI/web degrade to the print HTML.
+        raise PdfError(f"weasyprint failed to render: {exc}") from exc
 
 
 def _pdf_chrome(html_path: str, pdf_path: str) -> None:

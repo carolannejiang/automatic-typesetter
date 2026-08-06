@@ -78,6 +78,21 @@ class EpubTests(unittest.TestCase):
         ch = self.zf.read("OEBPS/text/chapter-001.xhtml").decode("utf-8")
         self.assertIn('src="../images/img-abc.png"', ch)
 
+    def test_accessibility_metadata_present(self):
+        opf = self.zf.read("OEBPS/package.opf").decode("utf-8")
+        for prop in ("schema:accessMode", "schema:accessModeSufficient",
+                     "schema:accessibilityFeature", "schema:accessibilitySummary",
+                     "schema:accessibilityHazard"):
+            self.assertIn(prop, opf)
+        # The fixture has an image asset + cover, so visual mode is declared.
+        self.assertIn('<meta property="schema:accessMode">visual</meta>', opf)
+        # Text alone must be a sufficient set (images are decorative/described);
+        # an AND-joined "textual, visual" set would wrongly assert sight is
+        # required.
+        self.assertIn(
+            '<meta property="schema:accessModeSufficient">textual</meta>', opf)
+        self.assertNotIn("textual, visual", opf)
+
     def test_malformed_chapter_html_fixed(self):
         ch = self.zf.read("OEBPS/text/chapter-002.xhtml").decode("utf-8")
         ET.fromstring(ch)
@@ -131,6 +146,20 @@ class EpubTests(unittest.TestCase):
                 del os.environ["SOURCE_DATE_EPOCH"]
             else:
                 os.environ["SOURCE_DATE_EPOCH"] = old
+
+
+class EpubImageAltTests(unittest.TestCase):
+    def test_image_without_alt_gets_empty_alt(self):
+        # An <img> arriving with no alt ships alt="" so AT treats it as
+        # decorative instead of reading the filename.
+        book = support.make_book([
+            Chapter(title="One", html='<p>Text.</p><img src="images/img-abc.png" />')])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "b.epub")
+            write_epub(book, path)
+            with zipfile.ZipFile(path) as zf:
+                ch = zf.read("OEBPS/text/chapter-001.xhtml").decode("utf-8")
+        self.assertIn('alt=""', ch)
 
 
 if __name__ == "__main__":

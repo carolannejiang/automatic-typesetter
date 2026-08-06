@@ -134,6 +134,8 @@ def write_epub(book: Book, path: str, theme: str = "classic",
             src = img.get("src") or ""
             if src.startswith("images/"):
                 img.attrs["src"] = "../" + src
+            if img.get("alt") is None:
+                img.attrs["alt"] = ""  # decorative: don't let AT read the filename
         content = htmldom.inner_html(root)
         if link_notes:
             content, next_link_note = annotate_links(
@@ -228,6 +230,32 @@ def write_epub(book: Book, path: str, theme: str = "classic",
         optional.append(f"    <dc:source>{_esc(meta.source_url)}</dc:source>")
     if book.cover is not None:
         optional.append('    <meta name="cover" content="cover-image"/>')
+    # Accessibility metadata (schema.org via EPUB) — Ace/the European
+    # Accessibility Act expect these; the book is textual, with images when
+    # any asset or cover rides along.
+    has_images = bool(book.assets) or book.cover is not None
+    optional.append('    <meta property="schema:accessMode">textual</meta>')
+    if has_images:
+        optional.append('    <meta property="schema:accessMode">visual</meta>')
+    # Each accessModeSufficient is one complete sufficient set: text alone
+    # suffices (images are decorative — alt="" — or described), and a second
+    # set covers the sighted text+visual path.
+    optional.append(
+        '    <meta property="schema:accessModeSufficient">textual</meta>')
+    if has_images:
+        optional.append(
+            '    <meta property="schema:accessModeSufficient">textual,visual</meta>')
+    optional.append(
+        '    <meta property="schema:accessibilityFeature">structuralNavigation</meta>')
+    optional.append(
+        '    <meta property="schema:accessibilityFeature">readingOrder</meta>')
+    optional.append(
+        '    <meta property="schema:accessibilityHazard">none</meta>')
+    optional.append(
+        '    <meta property="schema:accessibilitySummary">'
+        'Reflowable text with a navigable table of contents'
+        + (' and described or decorative images.' if has_images else '.')
+        + '</meta>')
     opf = f"""<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id" xml:lang="{_esc(lang)}">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">

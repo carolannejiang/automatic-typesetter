@@ -304,6 +304,50 @@ class ClientIpTests(unittest.TestCase):
         self.assertEqual(self._ip({}), "9.9.9.9")
 
 
+class JobEvictionTests(unittest.TestCase):
+    def test_eviction_spares_running_jobs(self):
+        # Registering past MAX_JOBS must never rm -rf a still-running build's
+        # workdir — only finished jobs are evictable.
+        import os
+        import shutil
+        from bookformatter import web
+        web._jobs.clear()
+        running = web.Job()
+        running.status = "running"
+        keep_dir = running.workdir
+        web._register_job(running)
+        finished = []
+        for _ in range(web.MAX_JOBS + 2):
+            j = web.Job()
+            j.status = "done"
+            finished.append(j)
+            web._register_job(j)
+        self.addCleanup(web._jobs.clear)
+        for j in [running] + finished:
+            self.addCleanup(shutil.rmtree, j.workdir, ignore_errors=True)
+        self.assertIn(running.id, web._jobs)  # not evicted
+        self.assertTrue(os.path.isdir(keep_dir))  # workdir intact
+        self.assertLessEqual(len(web._jobs), web.MAX_JOBS + 1)
+
+
+class BuildWarningTests(unittest.TestCase):
+    def test_remote_images_warn_for_epub(self):
+        import os
+        import tempfile
+        from bookformatter import build
+        from bookformatter.models import Book, BookMeta, Chapter
+        book = Book(meta=BookMeta(title="T"), chapters=[
+            Chapter(title="One",
+                    html='<p>Hi</p><img src="https://x.example/p.png" alt="p">')])
+        warnings = []
+        with tempfile.TemporaryDirectory() as tmp:
+            build.write_outputs(
+                book, {"epub"}, tmp, "z", theme="classic", trim="6x9",
+                font_size="11pt", line_height="1.45", warnings=warnings)
+            self.assertTrue(os.path.exists(os.path.join(tmp, "z.epub")))
+        self.assertTrue(any("remote image" in w.lower() for w in warnings), warnings)
+
+
 class ReadFormBodyTests(unittest.TestCase):
     def test_error_codes_and_parsing(self):
         from bookformatter.web import read_form_body
