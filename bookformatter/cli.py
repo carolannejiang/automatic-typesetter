@@ -56,7 +56,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="PDF renderer (default: auto = weasyprint, then headless "
                              "Chrome); latex typesets a .tex source with latexmk — "
                              "genuine classicthesis.sty for --theme classicthesis, "
-                             "the genuine memoir class for --theme memoir or memoir2, "
+                             "the genuine memoir class for --theme memoir, "
+                             "memoir2, or polimi, "
                              "the mydiss dissertation class for --theme mydiss, "
                              "a standard LaTeX book otherwise")
 
@@ -69,8 +70,10 @@ def build_parser() -> argparse.ArgumentParser:
                              "Miede's ClassicThesis LaTeX style, memoir after a "
                              "6x9 memoir-class novel template, memoir2 that "
                              "template in full dress — drop caps, symbol "
-                             "footnotes — and mydiss after Ummels's mydiss "
-                             "dissertation class (default: classic)")
+                             "footnotes — mydiss after Ummels's mydiss "
+                             "dissertation class, and polimi after the "
+                             "Cerberus Polimi thesis (memoir veelo chapter "
+                             "bars, Minion & Myriad) (default: classic)")
     design.add_argument("--trim", default=None, choices=sorted(themes.TRIM_SIZES),
                         help="print trim size in inches (default: the theme's own "
                              "page — A4 for classicthesis, 4.37x6.85 for vsi, "

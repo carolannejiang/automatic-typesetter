@@ -178,6 +178,69 @@ class WriteLatexTests(unittest.TestCase):
         self.assertIn("\\renewcommand{\\baselinestretch}{1.25}", tex)
         self.assertNotIn("{1.125}", tex)
 
+    def test_polimi_uses_real_memoir_veelo(self):
+        tex = render(theme="polimi")
+        # The thesis's own setup: xelatex, 12pt A4 memoir on its untouched
+        # default page (no stock/margin lines), veelo chapters, and the
+        # companion-copied fancyheads page style.
+        self.assertTrue(tex.startswith("% !TEX program = xelatex"))
+        self.assertIn("\\documentclass[12pt, a4paper, twoside, openright, "
+                      "oldfontcommands]{memoir}", tex)
+        self.assertIn("\\chapterstyle{veelo}", tex)
+        self.assertIn("\\copypagestyle{fancyheads}{companion}", tex)
+        self.assertIn("\\makeoddhead{fancyheads}"
+                      "{\\sffamily\\rightmark}{}{\\thepage}", tex)
+        self.assertIn("\\pagestyle{fancyheads}", tex)
+        self.assertNotIn("\\setstocksize", tex)
+        # The TikZ section bar and the white-on-black caption boxes.
+        self.assertIn("\\titleformat{\\section}{\\large\\bfseries\\sffamily}"
+                      "{\\titlebar}{0.1cm}{}", tex)
+        self.assertIn("\\captionsetup{format=figure,labelfont=white,"
+                      "textfont=white,margin=0pt,font={bf,small,sf}}", tex)
+        # The thesis faces, falling back to TeX Gyre kin by file name.
+        self.assertIn("\\IfFontExistsTF{Minion Pro}", tex)
+        self.assertIn("texgyretermes", tex)
+        # The memoir-class front matter and the cover-voice title.
+        self.assertIn("\\begin{titlingpage}", tex)
+        self.assertIn("\\MakeTextUppercase{Test \\& Book}", tex)
+        self.assertIn("\\tableofcontents*", tex)
+        self.assertIn("\\frontmatter", tex)
+
+    def test_polimi_opens_chapters_with_the_start_lettrine(self):
+        tex = render(theme="polimi")
+        # The thesis's own command, verbatim, applied to each chapter's
+        # opening word (the same openings memoir2's lettrine declines
+        # stay plain — shared _lettrine_open machinery).
+        self.assertIn("\\newcommand{\\start}[2]"
+                      "{\\lettrine[lines=4]{\\color{BrickRed}#1}{#2}}", tex)
+        self.assertIn("\\usepackage[dvipsnames]{xcolor}", tex)
+        self.assertIn("\\start{F}{irst} chapter with an image.", tex)
+        self.assertIn("\\start{R}{ead} ", tex)
+        self.assertNotIn("\\lettrine{", tex)
+
+    def test_polimi_off_a4_imposes_the_scaled_adaptation(self):
+        tex = render(theme="polimi", trim="6x9")
+        self.assertIn("\\setstocksize{9in}{6in}", tex)
+        self.assertIn("\\setlrmarginsandblock{1.067in}{1.087in}{*}", tex)
+
+    def test_polimi_off_default_leading_computes_baselinestretch(self):
+        tex = render(theme="polimi", line_height="1.45")
+        self.assertIn("\\renewcommand{\\baselinestretch}{1.2}", tex)
+        self.assertNotIn("\\baselinestretch", render(theme="polimi"))
+
+    def test_polimi_no_chapter_numbers_lowers_maxsecnumdepth_too(self):
+        # memoir's \mainmatter restores secnumdepth from maxsecnumdepth,
+        # so -1 alone would be undone at the start of the body.
+        tex = render(theme="polimi", chapter_numbers=False)
+        self.assertIn("\\setcounter{secnumdepth}{-1}", tex)
+        self.assertIn("\\setcounter{maxsecnumdepth}{-1}", tex)
+
+    def test_polimi_openers_stay_recto_whatever_the_start_option(self):
+        # The one-sided source has recto openers only; openany would sink
+        # the veelo bar into the gutter on verso openers.
+        self.assertIn("openright", render(theme="polimi",
+                                          chapter_start="any"))
+
     def test_memoir_leaves_the_full_dress_off(self):
         tex = render(theme="memoir")
         self.assertNotIn("\\usepackage{lettrine}", tex)
@@ -353,6 +416,9 @@ class CompileTests(unittest.TestCase):
 
     def test_mydiss_compiles(self):
         self._compile(theme="mydiss")
+
+    def test_polimi_compiles(self):
+        self._compile(theme="polimi")
 
     def test_error_reports_first_tex_error(self):
         with tempfile.TemporaryDirectory() as tmp:

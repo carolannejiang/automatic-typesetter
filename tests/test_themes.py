@@ -492,6 +492,105 @@ class TufteCssTests(unittest.TestCase):
         self.assertNotIn("sidenote-call", plain)
 
 
+class PolimiCssTests(unittest.TestCase):
+    def test_chapter_label_is_the_bare_number(self):
+        self.assertEqual(themes.chapter_label("polimi", 4), "4")
+
+    def test_declares_the_thesis_type_setting(self):
+        self.assertEqual(themes.default_trim("polimi"), "a4")
+        self.assertEqual(themes.default_font_size("polimi"), "12pt")
+        self.assertEqual(themes.default_line_height("polimi"), "1.21")
+
+    def test_exposes_thesis_print_guidance(self):
+        specs = themes.print_specs("polimi")
+        self.assertEqual(specs["title"],
+                         "Recommended Polimi thesis print setup")
+        guidance = " ".join(value for _, value in specs["items"])
+        # Faithful to the thesis's own settings: memoir's untouched A4
+        # page, its faces, and the one bleed excursion (the veelo bars).
+        self.assertIn("A4 (210 × 297 mm)", guidance)
+        self.assertIn("trimmed fore-edge", guidance)
+        self.assertIn("1.47 in spine, 1.5 in fore-edge", guidance)
+        self.assertIn("12pt Minion Pro", guidance)
+        self.assertIn("one-sided", guidance)
+        # No invented stock or binding figures.
+        self.assertIn("prescribes no paper stock", specs["note"])
+        self.assertNotIn("gsm", guidance + specs["note"])
+        # The panel cites the published thesis it was transcribed from.
+        self.assertIn("politesi.polimi.it", specs["source"]["url"])
+
+    def test_print_css_hangs_the_veelo_numeral_and_bar(self):
+        css = themes.print_css(theme="polimi", trim="a4")
+        # The numeral anchors at the measure's edge whatever its digit
+        # count (veelo's zero-width box): "CHAPTER" hangs back inside the
+        # measure and the overlong bar is clipped by the trimmed edge.
+        self.assertIn("left: 100%;", css)
+        self.assertIn('content: "CHAPTER"', css)
+        self.assertIn("width: 2.2in", css)
+
+    def test_openers_stay_on_rectos_whatever_the_start_option(self):
+        # The one-sided source has recto openers only; a verso opener
+        # would sink the veelo bar into the gutter.
+        css = themes.print_css(theme="polimi", chapter_start="page")
+        furniture = css.index("polimi print")
+        self.assertIn("break-before: right", css[furniture:])
+
+    def test_print_css_sets_companion_furniture(self):
+        css = themes.print_css(theme="polimi", trim="a4",
+                               book_title="Field Notes")
+        # The recto carries the bottom section mark ("2.1. Title"), the
+        # verso the chapter title, folios at the head rule's outer ends
+        # in the fore-edge overhang.
+        self.assertIn("string(section-mark, last)", css)
+        self.assertIn('string-set: section-mark counter(chapter) "." '
+                      'counter(section) ". " content();', css)
+        self.assertIn("string(chapter-title, first-except)", css)
+        self.assertIn("margin-left: -0.678in", css)
+        self.assertIn("margin-right: -0.678in", css)
+        # No foot folio on ordinary pages; openers put it bottom right
+        # (veelo's plain odd foot) on a clean page.
+        self.assertIn("@page { @bottom-center { content: none; } }", css)
+        self.assertIn("header.chapter-head { page: clean; }", css)
+        clean = css.index("@page clean")
+        self.assertIn("@bottom-right { content: counter(page)", css[clean:])
+        # The theme block comes after the shared furniture it replaces.
+        furniture = css.index("polimi print")
+        self.assertGreater(furniture, css.index("content: counter(page)"))
+        self.assertGreater(furniture, css.index('leader(". ")'))
+        # Contents lines drop the dot leaders for memoir's plain fill.
+        self.assertNotIn('leader(". ")', css[furniture:])
+        self.assertIn('leader(" ")', css[furniture:])
+
+    def test_sections_number_themselves_in_black_boxes(self):
+        css = themes.print_css(theme="polimi")
+        self.assertIn('content: counter(chapter) "." counter(section);', css)
+        self.assertIn("counter-increment: chapter", css)
+        # The box hangs left of the measure, references excluded.
+        self.assertIn("right: 100%;", css)
+        self.assertIn("section.references h2::before { content: none; }", css)
+
+    def test_print_geometry_is_memoirs_untouched_a4_layout(self):
+        css = themes.print_css(theme="polimi", trim="a4")
+        self.assertIn("margin: 1.78in 1.498in 1.721in 1.47in;", css)
+
+    def test_chapter_initial_is_a_brickred_lettrine(self):
+        css = themes.print_css(theme="polimi")
+        self.assertIn("#B8140B", css)
+        # The spacer float that carves the four-line notch (WeasyPrint
+        # lays a line out without honoring its own first-letter float).
+        self.assertIn("p:first-of-type::before", css)
+
+    def test_epub_css_restyles_without_paged_furniture(self):
+        css = themes.epub_css(theme="polimi")
+        self.assertIn("polimi overrides", css)
+        self.assertIn("Myriad Pro", css)
+        self.assertIn("#B8140B", css)
+        self.assertNotIn("@top-left", css)
+        self.assertNotIn("string-set", css)
+        # In reflow the section boxes count within the chapter file only.
+        self.assertIn("content: counter(section);", css)
+
+
 class MydissCssTests(unittest.TestCase):
     def test_chapter_label_is_the_bare_number(self):
         self.assertEqual(themes.chapter_label("mydiss", 3), "3")

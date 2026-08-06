@@ -117,9 +117,9 @@ class WebTests(unittest.TestCase):
         page = body.decode()
         for value in ("classic", "modern", "classical", "vsi",
                       "classicthesis", "memoir", "memoir2", "tufte",
-                      "mydiss"):
+                      "mydiss", "polimi"):
             self.assertIn(f'name="theme" value="{value}"', page)
-        self.assertEqual(page.count("data:image/webp;base64,"), 9)
+        self.assertEqual(page.count("data:image/webp;base64,"), 10)
         # data-trim is driven by themes.default_trim so it can't drift.
         self.assertIn('value="classic" data-trim="6x9" checked', page)
         self.assertIn('value="classicthesis" data-trim="a4"', page)
