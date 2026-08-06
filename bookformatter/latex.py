@@ -344,6 +344,8 @@ def _book_preamble(theme, trim, font_size, line_height, chapter_start,
         paper = "a4paper"
     elif trim == "a5":
         paper = "a5paper"
+    elif trim == "b5":
+        paper = "b5paper"
     else:
         paper = "paperwidth=%gin,paperheight=%gin" % (width, height)
     try:
@@ -388,7 +390,7 @@ def _classicthesis_preamble(theme, trim, font_size, chapter_start,
     """André Miede's canonical scrreprt setup, options as ClassicThesis.tex
     ships them (pdfspacing dropped: the style marks it obsolete now that
     microtype letterspaces by default)."""
-    paper = {"a4": "a4", "a5": "a5", "8.5x11": "letter"}.get(trim)
+    paper = {"a4": "a4", "a5": "a5", "b5": "b5", "8.5x11": "letter"}.get(trim)
     class_opts = [
         "twoside", "openright" if chapter_start == "right" else "openany",
         "titlepage", "numbers=noenddot", "headinclude", "footinclude",

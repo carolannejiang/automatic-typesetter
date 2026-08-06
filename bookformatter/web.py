@@ -846,6 +846,7 @@ footer a { color: var(--link); }
             <option value="5x8">5 &times; 8 in</option>
             <option value="a4">A4 (210 &times; 297 mm)</option>
             <option value="a5">A5</option>
+            <option value="b5">B5 (176 &times; 250 mm)</option>
             <option value="vsi">4.37 &times; 6.85 in (111 &times; 174 mm pocket)</option>
           </select></div>
       </div>
