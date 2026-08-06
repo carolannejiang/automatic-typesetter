@@ -35,6 +35,11 @@ The rule renders five ways, one per output medium and note placement:
   appended to the caller's ``notes`` list as ``(number, url)``. The
   caller sets the collected notes in a back-matter Notes section
   (printbook.py), each entry carrying the ``ln-N`` id the call targets.
+  Because the whole book's notes gather in one place, a URL cited more
+  than once reuses its first number and note rather than repeating: the
+  later call points at the same ``ln-N`` anchor and adds no entry. The
+  caller threads a ``seen`` url→number map across chapters to make this
+  span the book.
 
 A note normally carries the bare destination URL. Given a ``citations``
 mapping (see apacite.py), a note whose URL has an entry is instead set as
@@ -68,6 +73,20 @@ from .htmldom import Node
 
 PREFIX = "L"
 
+# Marker styles for the call/note label: the ``L1`` letter series (default,
+# distinct from content footnotes) or IEEE-style ``[1]`` brackets.
+MARKER_LETTER = "letter"
+MARKER_BRACKET = "bracket"
+
+
+def _label(number: int, marker: str = MARKER_LETTER) -> str:
+    """The call/note text for a link number: ``L1`` in letter style, ``[1]``
+    in bracket style."""
+    if marker == MARKER_BRACKET:
+        return f"[{number}]"
+    return f"{PREFIX}{number}"
+
+
 _WEB_SCHEME = re.compile(r"^https?://", re.I)
 _MAILTO = re.compile(r"^mailto:", re.I)
 
@@ -80,7 +99,8 @@ _URL_CLASS = re.compile(r"(?:^|\s)linknote-url(?:$|\s)")
 
 
 def annotate_links(fragment: str, start: int = 1, mode: str = "inline",
-                   citations: dict = None, notes: list = None):
+                   citations: dict = None, notes: list = None,
+                   seen: dict = None, marker: str = MARKER_LETTER):
     """Rewrite external links in a body fragment into link notes.
 
     Returns ``(html, next_number)`` so callers can thread one continuous
@@ -90,7 +110,10 @@ def annotate_links(fragment: str, start: int = 1, mode: str = "inline",
     an apacite.Citation; a note whose URL has one is set as that citation
     instead of the bare address. In ``endnote`` mode each converted link
     appends ``(number, url)`` to *notes*, for the caller to set as a note
-    list at the end of the book.
+    list at the end of the book; passing a persistent *seen* url→number
+    map deduplicates, so a URL cited again reuses its first note's number
+    and adds no second entry. *marker* picks the call text: ``L1`` (letter,
+    default) or ``[1]`` (bracket).
     """
     root = htmldom.parse(fragment)
     calls, unfold = [], []
@@ -107,7 +130,7 @@ def annotate_links(fragment: str, start: int = 1, mode: str = "inline",
     number = start
     asides = []
     for a in calls:
-        label = f"{PREFIX}{number}"
+        label = _label(number, marker)
         href = (a.get("href") or "").strip()
         if mode == "word":
             # The manuscript keeps the hyperlink live; the labeled note
@@ -139,6 +162,21 @@ def annotate_links(fragment: str, start: int = 1, mode: str = "inline",
             nodes.append(call)
             asides.append(_aside(number, label, href, citations))
         elif mode == "endnote":
+            if seen is not None and href in seen:
+                # Already noted earlier in the book: point the call at that
+                # note, consume no new number, and add no second entry.
+                num = seen[href]
+                call = Node("sub", {"class": "linknote-call"})
+                ref = Node("a", {"href": f"#ln-{num}"})
+                ref.append(Node(text=_label(num, marker)))
+                call.append(ref)
+                nodes.append(call)
+                if trailing:
+                    nodes.append(Node(text=trailing))
+                a.replace_with(*nodes)
+                continue
+            if seen is not None:
+                seen[href] = number
             call = Node("sub", {"class": "linknote-call", "id": f"lnref-{number}"})
             ref = Node("a", {"href": f"#ln-{number}"})
             ref.append(Node(text=label))
@@ -191,11 +229,14 @@ def note_body_html(href: str, citations=None) -> str:
                    for item in _note_body(href, citations))
 
 
-def endnote_html(number: int, href: str, citations=None) -> str:
-    """One entry of the book-end Notes section: the L-labeled paragraph
-    that endnote mode's call (id lnref-N) links back to."""
+def endnote_html(number: int, href: str, citations=None,
+                 marker: str = MARKER_LETTER) -> str:
+    """One entry of the book-end Notes section: the labeled paragraph that
+    endnote mode's call (id lnref-N) links back to. *marker* matches the
+    call style (``L1`` letter or ``[1]`` bracket)."""
     return (f'<p class="endnote" id="ln-{number}">'
-            f'<a class="linknote-label" href="#lnref-{number}">{PREFIX}{number}</a> '
+            f'<a class="linknote-label" href="#lnref-{number}">'
+            f'{_label(number, marker)}</a> '
             f'{note_body_html(href, citations)}</p>')
 
 

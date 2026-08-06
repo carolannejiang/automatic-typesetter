@@ -599,6 +599,7 @@ def book_to_story_items(book: Book, theme: str = "classic",
                         chapter_numbers: bool = True,
                         converter_cls=None, link_notes: bool = True,
                         link_note_mode: str = "native",
+                        link_marker: str = "letter",
                         link_citations: dict = None,
                         references: bool = False) -> list:
     """The whole book as a flat list of Para items: front matter, then the
@@ -628,7 +629,7 @@ def book_to_story_items(book: Book, theme: str = "classic",
         if link_notes:
             markup, next_link_note = annotate_links(
                 markup, start=next_link_note, mode=link_note_mode,
-                citations=link_citations)
+                citations=link_citations, marker=link_marker)
         root = htmldom.parse(markup)
         opener: list = []
         title_attrs = None
