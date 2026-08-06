@@ -156,6 +156,30 @@ class TestHoistMarginNotes(unittest.TestCase):
             '<p>One.</p><span class="footnote">A.</span>'
             '<p>Two.</p><span class="footnote">B.</span>')
 
+    def test_note_from_special_block_keeps_following_paragraph_flush(self):
+        # A note cited in a figure/table/heading would land between that block
+        # and the next <p>, defeating the base sheet's `figure + p` flush-left
+        # rule; the paragraph is re-tagged noindent to preserve it.
+        html = ('<figure><figcaption>Credit'
+                '<span class="linknote">url</span></figcaption></figure>'
+                '<p>Following paragraph.</p>')
+        out = hoist_margin_notes(html)
+        self.assertEqual(
+            out,
+            '<figure><figcaption>Credit</figcaption></figure>'
+            '<span class="linknote">url</span>'
+            '<p class="noindent">Following paragraph.</p>')
+
+    def test_note_between_two_paragraphs_leaves_indent_intact(self):
+        # Plain paragraph flow: the second <p> should still indent, so it must
+        # NOT be tagged noindent.
+        html = ('<p>One<span class="footnote">A.</span>.</p>'
+                '<p>Two.</p>')
+        out = hoist_margin_notes(html)
+        self.assertEqual(
+            out,
+            '<p>One.</p><span class="footnote">A.</span><p>Two.</p>')
+
     def test_note_already_at_top_level_is_left_in_place(self):
         html = '<p>Body.</p><span class="footnote">Loose note.</span>'
         self.assertEqual(hoist_margin_notes(html), html)

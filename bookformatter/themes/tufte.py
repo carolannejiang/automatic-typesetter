@@ -291,10 +291,13 @@ section.chapter, section.endnotes { padding-right: ${MARGIN_COL}in; }
    environment around every chapter title. */
 header.chapter-head { margin-right: -${MARGIN_COL}in; }
 
-/* Sidenotes and hyperlink L-notes: 8/10, top-aligned with their calls,
-   stacked \\marginparpush (10 pt) apart. The floats bypass the footnote
-   area, so the markup carries baked superscript numbers (SIDENOTE_CALLS):
-   a \\tiny 5 pt call in the text, the same number before the note. */
+/* Sidenotes and hyperlink L-notes: 8/10, floated into the margin column
+   just after the block that cites them (hoist_margin_notes lifts each note
+   out to block level), so a note's top sits by the end of its block rather
+   than its exact call; successive notes stack \\marginparpush (10 pt) apart.
+   The floats bypass the footnote area, so the markup carries baked
+   superscript numbers (SIDENOTE_CALLS): a \\tiny 5 pt call in the text, the
+   same number before the note. */
 span.footnote, span.linknote {
   float: right; clear: right;
   width: ${SIDENOTE_W}in;
@@ -305,10 +308,6 @@ span.footnote, span.linknote {
   text-align: left;
   text-indent: 0;
   hyphens: none; -webkit-hyphens: none;
-}
-/* A note cited inside an indented quote still aligns with the column. */
-blockquote span.footnote, blockquote span.linknote {
-  margin-right: calc(-${MARGIN_COL}in - 1.2rem);
 }
 sup.sidenote-call { font-size: 0.5em; }
 span.footnote sup.sidenote-mark { font-size: 0.625em; margin-right: 0.17em; }
