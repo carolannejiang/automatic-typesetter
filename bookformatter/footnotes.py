@@ -125,6 +125,49 @@ def number_sidenote_calls(fragment: str) -> str:
     return htmldom.inner_html(root)
 
 
+_MARGIN_NOTE_CLASSES = ("footnote", "linknote")
+
+
+def hoist_margin_notes(fragment: str) -> str:
+    """Lift sidenote spans (``span.footnote``/``span.linknote``) out of the
+    text block that cites them, re-parenting each as a block-level sibling
+    right after that top-level block.
+
+    Margin-note themes (Tufte) float these notes into the margin column with a
+    negative margin wide enough to clear the text measure. As *inline* floats
+    inside a paragraph, WeasyPrint miscomputes ``clear`` once the float is
+    pulled fully past the content box, so two notes cited close together stack
+    on top of one another. Lifting them to block level — direct children of
+    the chapter section — restores reliable ``clear`` stacking while keeping
+    the full text measure. Notes already at the top level are left alone;
+    notes lifted from the same block keep their document order."""
+    root = htmldom.parse(fragment)
+    groups: list = []      # (top_block, [notes]) in first-seen order
+    index: dict = {}
+    for span in root.find_all("span"):
+        classes = (span.get("class") or "").split()
+        if not any(c in classes for c in _MARGIN_NOTE_CLASSES):
+            continue
+        top = span
+        while top.parent is not None and top.parent is not root:
+            top = top.parent
+        if top is span:    # already a top-level node — nothing to hoist
+            continue
+        slot = index.get(id(top))
+        if slot is None:
+            index[id(top)] = len(groups)
+            groups.append((top, [span]))
+        else:
+            groups[slot][1].append(span)
+    if not groups:
+        return fragment
+    for top, notes in groups:
+        for note in notes:
+            note.detach()
+        top.insert_after(*notes)
+    return htmldom.inner_html(root)
+
+
 # -- reference side ---------------------------------------------------------
 
 def _is_call(a: Node) -> bool:

@@ -1,6 +1,10 @@
 import unittest
 
-from bookformatter.footnotes import inline_footnotes, number_sidenote_calls
+from bookformatter.footnotes import (
+    hoist_margin_notes,
+    inline_footnotes,
+    number_sidenote_calls,
+)
 
 
 class TestInlineFootnotes(unittest.TestCase):
@@ -107,6 +111,58 @@ class TestNumberSidenoteCalls(unittest.TestCase):
     def test_no_notes_returns_input_unchanged(self):
         html = "<p>A plain paragraph.</p>"
         self.assertEqual(number_sidenote_calls(html), html)
+
+
+class TestHoistMarginNotes(unittest.TestCase):
+    def test_lifts_notes_after_paragraph_keeping_calls_inline(self):
+        html = ('<p>A claim<sup class="sidenote-call">1</sup>'
+                '<span class="footnote">First.</span> and another'
+                '<sup class="sidenote-call">2</sup>'
+                '<span class="footnote">Second.</span> here.</p>')
+        out = hoist_margin_notes(html)
+        # The calls stay inline; both notes move out, in order, after the <p>.
+        self.assertEqual(
+            out,
+            '<p>A claim<sup class="sidenote-call">1</sup> and another'
+            '<sup class="sidenote-call">2</sup> here.</p>'
+            '<span class="footnote">First.</span>'
+            '<span class="footnote">Second.</span>')
+
+    def test_lifts_linknotes_too(self):
+        html = ('<p>See<sub class="linknote-call">L1</sub>'
+                '<span class="linknote">url</span> it.</p>')
+        out = hoist_margin_notes(html)
+        self.assertEqual(
+            out,
+            '<p>See<sub class="linknote-call">L1</sub> it.</p>'
+            '<span class="linknote">url</span>')
+
+    def test_lifts_out_of_the_top_level_block_not_just_the_inline_parent(self):
+        html = ('<blockquote><p>Quoted'
+                '<span class="footnote">Note.</span> line.</p></blockquote>')
+        out = hoist_margin_notes(html)
+        # The note clears the whole blockquote, not merely its inner <p>.
+        self.assertEqual(
+            out,
+            '<blockquote><p>Quoted line.</p></blockquote>'
+            '<span class="footnote">Note.</span>')
+
+    def test_notes_from_different_blocks_stay_after_their_own_block(self):
+        html = ('<p>One<span class="footnote">A.</span>.</p>'
+                '<p>Two<span class="footnote">B.</span>.</p>')
+        out = hoist_margin_notes(html)
+        self.assertEqual(
+            out,
+            '<p>One.</p><span class="footnote">A.</span>'
+            '<p>Two.</p><span class="footnote">B.</span>')
+
+    def test_note_already_at_top_level_is_left_in_place(self):
+        html = '<p>Body.</p><span class="footnote">Loose note.</span>'
+        self.assertEqual(hoist_margin_notes(html), html)
+
+    def test_no_notes_returns_input_unchanged(self):
+        html = "<p>A plain paragraph.</p>"
+        self.assertEqual(hoist_margin_notes(html), html)
 
 
 if __name__ == "__main__":
