@@ -150,6 +150,25 @@ class MemoirCssTests(unittest.TestCase):
         self.assertEqual(themes.default_line_height("memoir"), "1.36")
         self.assertEqual(themes.default_trim("memoir"), "6x9")
 
+    def test_exposes_template_print_guidance(self):
+        specs = themes.print_specs("memoir")
+        self.assertEqual(specs["title"],
+                         "Recommended memoir template print setup")
+        guidance = " ".join(value for _, value in specs["items"])
+        # Faithful to the template's own settings, and only those.
+        self.assertIn("6 × 9 in (152 × 229 mm)", guidance)
+        self.assertIn("no bleed", guidance)
+        self.assertIn("0.75 in spine, 0.625 in fore-edge", guidance)
+        self.assertIn("12pt EB Garamond", guidance)
+        self.assertIn("per page with symbols", guidance)
+        # The template prescribes no stock/binding; the note says so
+        # rather than inventing figures.
+        self.assertIn("prescribes no paper stock", specs["note"])
+        self.assertNotIn("gsm", guidance + specs["note"])
+        # The panel cites the template it was transcribed from.
+        self.assertEqual(specs["source"]["url"],
+                         "https://www.overleaf.com/project/6a73ee79766a5d9bbca17c3e")
+
     def test_print_css_sets_outer_folios_and_italic_center_heads(self):
         css = themes.print_css(theme="memoir", book_title="Field Notes")
         # Folios in the top outer corners (fancyhead[LE,RO]{\thepage})...
@@ -221,29 +240,6 @@ class VsiCssTests(unittest.TestCase):
         css = themes.epub_css(theme="vsi")
         self.assertIn("vsi overrides", css)
         self.assertNotIn("@left-middle", css)
-
-
-class ShortIntroCssTests(unittest.TestCase):
-    def test_declares_the_pocket_page(self):
-        self.assertEqual(themes.default_trim("short intro"), "vsi")
-
-    def test_print_geometry_sets_the_specified_measure_and_grid(self):
-        css = themes.print_css(theme="short intro", trim="vsi")
-        self.assertIn("size: 4.37in 6.85in;", css)
-        # 0.477 in sides leave a 20.5-pica measure; 0.375/0.475 head and
-        # foot leave a 6 in column — 36 lines of the 12 pt grid.
-        self.assertIn("margin: 0.375in 0.477in 0.475in 0.477in;", css)
-
-    def test_body_sets_ragged_right(self):
-        css = themes.epub_css(theme="short intro")
-        # The override comes after the shared justification it replaces.
-        self.assertGreater(css.index("section.chapter { text-align: left; }"),
-                           css.index("text-align: justify"))
-
-    def test_block_paragraphs_open_a_blank_line(self):
-        css = themes.epub_css(theme="short intro", line_height="1.41")
-        self.assertIn("p + p { margin-top: 1.41em; }", css)
-        self.assertIn("text-indent: 0", css)
 
 
 class TufteCssTests(unittest.TestCase):
@@ -330,23 +326,6 @@ class TufteCssTests(unittest.TestCase):
         self.assertNotIn("sidenote-call", plain)
 
 
-class CrimsonCssTests(unittest.TestCase):
-    def test_sets_the_crimson_pro_body_and_sans_heads(self):
-        css = themes.print_css(theme="crimson")
-        self.assertIn('font-family: "Crimson Pro"', css)
-        self.assertIn('"Source Sans 3"', css)
-
-    def test_chapter_opener_is_flush_left_over_a_rule(self):
-        css = themes.print_css(theme="crimson")
-        self.assertIn("header.chapter-head { text-align: left; }", css)
-        self.assertIn("border-bottom: 2px solid #1a1a1a;", css)
-
-    def test_paragraphs_carry_a_first_line_indent(self):
-        css = themes.epub_css(theme="crimson")
-        self.assertIn("crimson overrides", css)
-        self.assertIn("text-indent: 1em", css)
-
-
 class ThemeBuildTests(unittest.TestCase):
     def test_print_html_classic_is_unchanged(self):
         page = printbook.build_print_html(_book(), theme="classic")
@@ -420,9 +399,8 @@ class TitleFitTests(unittest.TestCase):
 
 class DefaultTypeTests(unittest.TestCase):
     def test_pocket_themes_declare_their_design_setting(self):
-        for theme in ("vsi", "short intro"):
-            self.assertEqual(themes.default_font_size(theme), "8.5pt")
-            self.assertEqual(themes.default_line_height(theme), "1.41")
+        self.assertEqual(themes.default_font_size("vsi"), "8.5pt")
+        self.assertEqual(themes.default_line_height("vsi"), "1.41")
 
     def test_other_themes_default_to_house_setting(self):
         for theme in ("classic", "nonsense"):
@@ -441,6 +419,25 @@ class ThemeLabelTests(unittest.TestCase):
         for name in themes.THEME_NAMES:
             self.assertTrue(themes.theme_label(name), name)
             self.assertTrue(themes.theme_blurb(name), name)
+
+
+class ThemeSourceTests(unittest.TestCase):
+    def test_template_themes_cite_a_linked_source(self):
+        # The LaTeX-template themes carry their source in PRINT_SPECS.
+        for name in ("memoir", "classicthesis", "tufte"):
+            source = themes.theme_source(name)
+            self.assertTrue(source["name"], name)
+            self.assertTrue(source["url"].startswith("https://"), name)
+
+    def test_standalone_sourced_themes_cite_without_a_url(self):
+        self.assertEqual(themes.theme_source("classical"),
+                         {"name": "after WeasyPrint’s “book-classical” sample"})
+        self.assertEqual(themes.theme_source("vsi"),
+                         {"name": "Inspired by A Very Short Introduction series"})
+
+    def test_uncited_themes_have_no_source(self):
+        self.assertIsNone(themes.theme_source("classic"))
+        self.assertIsNone(themes.theme_source("modern"))
 
 
 class WriterThemeDefaultTests(unittest.TestCase):

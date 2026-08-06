@@ -34,12 +34,12 @@ Unknown theme names fall back to classic.
 
 from __future__ import annotations
 
-from . import (base, classic, classical, classicthesis, crimson, memoir,
-               modern, shortintro, tufte, vsi)
+from . import (base, classic, classical, classicthesis, memoir,
+               modern, tufte, vsi)
 from .base import TRIM_SIZES
 
-_THEME_MODULES = (classic, modern, crimson, classical, vsi, classicthesis,
-                  memoir, shortintro, tufte)
+_THEME_MODULES = (classic, modern, classical, vsi, classicthesis,
+                  memoir, tufte)
 _THEMES = {mod.NAME: mod for mod in _THEME_MODULES}
 
 THEME_NAMES = [mod.NAME for mod in _THEME_MODULES]
@@ -92,6 +92,19 @@ def theme_blurb(theme: str) -> str:
 def print_specs(theme: str):
     """Theme-specific production guidance, or None when none is declared."""
     return getattr(_theme(theme), "PRINT_SPECS", None)
+
+
+def theme_source(theme: str):
+    """The theme's cited origin as {"name": ..., "url"?: ...}, or None.
+
+    A theme carries it either inside PRINT_SPECS["source"] (the LaTeX
+    template themes, which have a full spec sheet) or as a standalone
+    module-level SOURCE (themes cited without a spec sheet)."""
+    mod = _theme(theme)
+    specs = getattr(mod, "PRINT_SPECS", None)
+    if specs and specs.get("source"):
+        return specs["source"]
+    return getattr(mod, "SOURCE", None)
 
 
 def sidenote_calls(theme: str) -> bool:
