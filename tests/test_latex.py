@@ -178,6 +178,136 @@ class WriteLatexTests(unittest.TestCase):
         self.assertIn("\\renewcommand{\\baselinestretch}{1.25}", tex)
         self.assertNotIn("{1.125}", tex)
 
+    def test_tufte_uses_real_class(self):
+        tex = render(theme="tufte")
+        self.assertTrue(tex.startswith("% !TEX program = pdflatex"))
+        self.assertIn("\\documentclass[nobib,twoside,openright]{tufte-book}",
+                      tex)
+        # Notes become margin sidenotes, not page-bottom footnotes.
+        self.assertIn("\\sidenote{The note text.}", tex)
+        self.assertNotIn("\\footnote{", tex)
+        # The class's own title page, set from the metadata; the subtitle
+        # shares the title's allcaps line (soul forbids the break).
+        self.assertIn("\\maketitlepage", tex)
+        self.assertIn("\\title{Test \\& Book : A sub<title>}", tex)
+        self.assertIn("\\author{A. Author <tester>}", tex)
+        # The class owns fonts, leading, and heads — no book-class dress.
+        self.assertNotIn("\\setmainfont", tex)
+        self.assertNotIn("\\frontmatter", tex)
+
+    def test_tufte_link_notes_become_sidenotes(self):
+        tex = render(theme="tufte")
+        self.assertIn(
+            "the reference\\sidenote{\\href{https://example.com/ref}"
+            "{https://example.com/ref}}", tex)
+
+    def test_tufte_trim_resizes_sheet(self):
+        tex = render(theme="tufte", trim="6x9")
+        self.assertIn("\\geometry{paperwidth=6in,paperheight=9in}", tex)
+
+    def test_polimi_uses_real_memoir_veelo(self):
+        tex = render(theme="polimi")
+        # The thesis's own setup: xelatex, 12pt A4 memoir on its untouched
+        # default page (no stock/margin lines), veelo chapters, and the
+        # companion-copied fancyheads page style.
+        self.assertTrue(tex.startswith("% !TEX program = xelatex"))
+        self.assertIn("\\documentclass[12pt, a4paper, twoside, openright, "
+                      "oldfontcommands]{memoir}", tex)
+        self.assertIn("\\chapterstyle{veelo}", tex)
+        self.assertIn("\\copypagestyle{fancyheads}{companion}", tex)
+        self.assertIn("\\makeoddhead{fancyheads}"
+                      "{\\sffamily\\rightmark}{}{\\thepage}", tex)
+        self.assertIn("\\pagestyle{fancyheads}", tex)
+        self.assertNotIn("\\setstocksize", tex)
+        # The TikZ section bar and the white-on-black caption boxes.
+        self.assertIn("\\titleformat{\\section}{\\large\\bfseries\\sffamily}"
+                      "{\\titlebar}{0.1cm}{}", tex)
+        self.assertIn("\\captionsetup{format=figure,labelfont=white,"
+                      "textfont=white,margin=0pt,font={bf,small,sf}}", tex)
+        # The thesis faces, falling back to TeX Gyre kin by file name.
+        self.assertIn("\\IfFontExistsTF{Minion Pro}", tex)
+        self.assertIn("texgyretermes", tex)
+        # The memoir-class front matter and the cover-voice title.
+        self.assertIn("\\begin{titlingpage}", tex)
+        self.assertIn("\\MakeTextUppercase{Test \\& Book}", tex)
+        self.assertIn("\\tableofcontents*", tex)
+        self.assertIn("\\frontmatter", tex)
+
+    def test_polimi_opens_chapters_with_the_start_lettrine(self):
+        tex = render(theme="polimi")
+        # The thesis's own command, verbatim, applied to each chapter's
+        # opening word (the same openings memoir2's lettrine declines
+        # stay plain — shared _lettrine_open machinery).
+        self.assertIn("\\newcommand{\\start}[2]"
+                      "{\\lettrine[lines=4]{\\color{BrickRed}#1}{#2}}", tex)
+        self.assertIn("\\usepackage[dvipsnames]{xcolor}", tex)
+        self.assertIn("\\start{F}{irst} chapter with an image.", tex)
+        self.assertIn("\\start{R}{ead} ", tex)
+        self.assertNotIn("\\lettrine{", tex)
+
+    def test_polimi_off_a4_imposes_the_scaled_adaptation(self):
+        tex = render(theme="polimi", trim="6x9")
+        self.assertIn("\\setstocksize{9in}{6in}", tex)
+        self.assertIn("\\setlrmarginsandblock{1.067in}{1.087in}{*}", tex)
+
+    def test_polimi_off_default_leading_computes_baselinestretch(self):
+        tex = render(theme="polimi", line_height="1.45")
+        self.assertIn("\\renewcommand{\\baselinestretch}{1.2}", tex)
+        self.assertNotIn("\\baselinestretch", render(theme="polimi"))
+
+    def test_polimi_no_chapter_numbers_lowers_maxsecnumdepth_too(self):
+        # memoir's \mainmatter restores secnumdepth from maxsecnumdepth,
+        # so -1 alone would be undone at the start of the body.
+        tex = render(theme="polimi", chapter_numbers=False)
+        self.assertIn("\\setcounter{secnumdepth}{-1}", tex)
+        self.assertIn("\\setcounter{maxsecnumdepth}{-1}", tex)
+
+    def test_polimi_openers_stay_recto_whatever_the_start_option(self):
+        # The one-sided source has recto openers only; openany would sink
+        # the veelo bar into the gutter on verso openers.
+        self.assertIn("openright", render(theme="polimi",
+                                          chapter_start="any"))
+
+    def test_memoir_leaves_the_full_dress_off(self):
+        tex = render(theme="memoir")
+        self.assertNotIn("\\usepackage{lettrine}", tex)
+        self.assertNotIn("\\lettrine{", tex)
+        self.assertNotIn("\\MakeUppercase", tex)
+
+    def test_memoir2_adds_the_template_full_dress(self):
+        tex = render(theme="memoir2")
+        # The same genuine memoir setup as --theme memoir...
+        self.assertTrue(tex.startswith("% !TEX program = pdflatex"))
+        self.assertIn("extrafontsizes]{memoir}", tex)
+        self.assertIn("\\setstocksize{9in}{6in}", tex)
+        self.assertIn("\\usepackage{ebgaramond}", tex)
+        self.assertIn("\\usepackage[symbol*]{footmisc}", tex)
+        # ...plus lettrine chapter openings on plain-word chapters,
+        self.assertIn("\\usepackage{lettrine}", tex)
+        self.assertIn("\\lettrine{F}{irst} chapter with an image.", tex)
+        self.assertIn("\\lettrine{R}{ead} ", tex)
+        # the flyleaf and half-title leaves,
+        self.assertEqual(tex.count("\\thispagestyle{empty}\\null\\clearpage"), 2)
+        self.assertIn("\\centerline{\\Huge\\MakeUppercase{Test \\& Book}}", tex)
+        # and the template's unstarred, self-listing contents.
+        self.assertIn("\\tableofcontents\n", tex)
+        self.assertNotIn("\\tableofcontents*", tex)
+
+    def test_memoir2_leaves_wordless_openings_plain(self):
+        # A chapter that opens with a list (no opening word) gets no
+        # lettrine, and neither does a one-letter opening word — the same
+        # openings the print pipeline's _bake_lettrine declines.
+        b = support.make_book([
+            Chapter(title="C", html=BRACKETS_HTML),
+            Chapter(title="D", html="<p>I remember the day it began.</p>"),
+        ])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "b.tex")
+            write_latex(b, path, theme="memoir2")
+            tex = open(path).read()
+        self.assertNotIn("\\lettrine{", tex)
+        self.assertIn("I remember the day it began.", tex)
+
     def test_mydiss_uses_extbook_and_transcribes_the_class(self):
         tex = render(theme="mydiss")
         self.assertTrue(tex.startswith("% !TEX program = pdflatex"))
@@ -308,8 +438,17 @@ class CompileTests(unittest.TestCase):
     def test_memoir_compiles(self):
         self._compile(theme="memoir")
 
+    def test_tufte_compiles(self):
+        self._compile(theme="tufte")
+
+    def test_memoir2_compiles(self):
+        self._compile(theme="memoir2")
+
     def test_mydiss_compiles(self):
         self._compile(theme="mydiss")
+
+    def test_polimi_compiles(self):
+        self._compile(theme="polimi")
 
     def test_error_reports_first_tex_error(self):
         with tempfile.TemporaryDirectory() as tmp:

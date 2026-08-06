@@ -15,6 +15,7 @@ import base64
 import glob
 import html
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -52,6 +53,42 @@ def _inline_assets(fragment: str, assets_by_name: dict) -> str:
         asset = assets_by_name.get(src)
         if asset is not None:
             img.attrs["src"] = _data_uri(asset.data, asset.media_type)
+    return htmldom.inner_html(root)
+
+
+# An opening word: optional opening quote plus a letter (together the
+# dropped initial), then the rest of the word for the small-caps run-in.
+_LETTRINE_LEAD = re.compile(
+    "^\\s*([\"'“‘]?[A-Za-z])([A-Za-z'’]*)")
+
+
+def _bake_lettrine(fragment: str) -> str:
+    """Split the chapter's opening word into the two lettrine spans — the
+    dropped initial (span.lettrine) and the small-caps run-in that follows
+    it (span.lettrine-run), the template's ``\\lettrine{L}{etterine}``.
+    Both are baked rather than styled via ::first-letter: CSS cannot
+    select the rest of the word at all, and WeasyPrint lays the opening
+    line before excluding a floated first-letter, so only a real element
+    float wraps correctly. Chapters that open with anything but a plain
+    word (markup, a bare initial, no paragraph) are left untouched."""
+    root = htmldom.parse(fragment)
+    para = next((n for n in root.children
+                 if not n.is_text and n.tag == "p"), None)
+    if para is None or not para.children or not para.children[0].is_text:
+        return fragment
+    first = para.children[0]
+    match = _LETTRINE_LEAD.match(first.text or "")
+    if not match or not match.group(2):
+        return fragment
+    initial = htmldom.Node("span", {"class": "lettrine"})
+    initial.append(htmldom.Node(text=match.group(1)))
+    run = htmldom.Node("span", {"class": "lettrine-run"})
+    run.append(htmldom.Node(text=match.group(2)))
+    pieces = [initial, run]
+    rest = (first.text or "")[match.end():]
+    if rest:
+        pieces.append(htmldom.Node(text=rest))
+    first.replace_with(*pieces)
     return htmldom.inner_html(root)
 
 
@@ -111,6 +148,10 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
         # to block level so WeasyPrint's clear stacks them without overlapping.
         if themes.sidenote_calls(theme):
             content = hoist_margin_notes(content)
+        # Lettrine themes (memoir2) open on a drop cap with the rest of
+        # the word in small caps; CSS can't select either, so bake both.
+        if themes.lettrine_run(theme):
+            content = _bake_lettrine(content)
         chapter_parts.append(f'<section class="chapter" id="chapter-{i}">')
         chapter_parts.append(
             frontmatter.chapter_head_html(theme, i, chapter.title, chapter_numbers))
@@ -149,11 +190,17 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
     parts.append("</section>")
 
     if toc and book.chapters:
+        # Chapter-numbered contents lines (memoir2's \chapternumberline
+        # look) when the theme asks and chapter numbers are on; the Notes
+        # and References lines stay unnumbered like LaTeX's \chapter*.
+        toc_nums = themes.toc_numbers(theme) and chapter_numbers
         parts.append('<nav class="print-toc frontmatter">')
         parts.append("<h1>Contents</h1>")
         parts.append("<ol>")
         for i, chapter in enumerate(book.chapters, 1):
-            parts.append(f'<li><a href="#chapter-{i}">{_esc(chapter.title)}</a></li>')
+            number = f'<span class="toc-number">{i}</span>' if toc_nums else ""
+            parts.append(
+                f'<li><a href="#chapter-{i}">{number}{_esc(chapter.title)}</a></li>')
         if endnotes:
             parts.append('<li><a href="#endnotes">Notes</a></li>')
         if ref_entries or ref_sources:

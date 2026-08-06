@@ -27,6 +27,12 @@ module supplies:
                    sidenote numbers (footnotes.number_sidenote_calls) for
                    margin-note designs that bypass the auto-numbered
                    page-bottom footnote machinery
+    LETTRINE_RUN   optional: True to have print markup wrap the rest of
+                   each chapter's opening word in span.lettrine-run, the
+                   small-caps run-in after a lettrine drop cap
+    TOC_NUMBERS    optional: True to have the print contents page open
+                   each chapter line with its span.toc-number chapter
+                   number (omitted when chapter numbers are off)
 
 To add a theme, write such a module and list it in `_THEME_MODULES` below.
 Unknown theme names fall back to classic.
@@ -34,12 +40,12 @@ Unknown theme names fall back to classic.
 
 from __future__ import annotations
 
-from . import (base, classic, classical, classicthesis, memoir,
-               modern, mydiss, tufte, vsi)
+from . import (base, classic, classical, classicthesis, memoir, memoir2,
+               modern, mydiss, polimi, tufte, vsi)
 from .base import TRIM_SIZES
 
 _THEME_MODULES = (classic, modern, classical, vsi, classicthesis,
-                  memoir, tufte, mydiss)
+                  memoir, memoir2, tufte, mydiss, polimi)
 _THEMES = {mod.NAME: mod for mod in _THEME_MODULES}
 
 THEME_NAMES = [mod.NAME for mod in _THEME_MODULES]
@@ -114,6 +120,20 @@ def sidenote_calls(theme: str) -> bool:
     return getattr(_theme(theme), "SIDENOTE_CALLS", False)
 
 
+def lettrine_run(theme: str) -> bool:
+    """Whether print markup should wrap the rest of each chapter's opening
+    word in span.lettrine-run — the small-caps run-in that follows a
+    lettrine drop cap, which CSS alone cannot select."""
+    return getattr(_theme(theme), "LETTRINE_RUN", False)
+
+
+def toc_numbers(theme: str) -> bool:
+    """Whether the print contents page opens each chapter line with its
+    chapter number (span.toc-number), as memoir's \\chapternumberline
+    does."""
+    return getattr(_theme(theme), "TOC_NUMBERS", False)
+
+
 def theme_params(theme: str, font_size: str, line_height: str) -> dict:
     """Public accessor for a theme's template parameters."""
     return _theme(theme).params(font_size, line_height)
@@ -147,6 +167,11 @@ def print_css(theme: str = "classic", trim: str = "6x9", font_size: str = "11pt"
     params.update(_geometry(trim, theme))
     params["LINK_NOTE_COLOR"] = link_note_color
     params["BOOK_TITLE_STRING"] = book_title.replace("\\", "").replace('"', "'")
+    # "Title : Subtitle" for themes whose verso head carries both (memoir2,
+    # after the template's "\booktitle : \subtitle" fancyhead).
+    subtitle = book_subtitle.replace("\\", "").replace('"', "'")
+    params["BOOK_TITLE_SUBTITLE_STRING"] = (
+        params["BOOK_TITLE_STRING"] + (" : " + subtitle if subtitle else ""))
     params["CHAPTER_BREAK"] = "right" if chapter_start == "right" else "page"
     params["CHAPTER_BREAK_LEGACY"] = "right" if chapter_start == "right" else "always"
     css = base.SHARED.substitute(params) + base.PRINT_EXTRA.substitute(params)
