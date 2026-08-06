@@ -206,6 +206,18 @@ class WriteLatexTests(unittest.TestCase):
         self.assertIn("\\tableofcontents*", tex)
         self.assertIn("\\frontmatter", tex)
 
+    def test_polimi_opens_chapters_with_the_start_lettrine(self):
+        tex = render(theme="polimi")
+        # The thesis's own command, verbatim, applied to each chapter's
+        # opening word (the same openings memoir2's lettrine declines
+        # stay plain — shared _lettrine_open machinery).
+        self.assertIn("\\newcommand{\\start}[2]"
+                      "{\\lettrine[lines=4]{\\color{BrickRed}#1}{#2}}", tex)
+        self.assertIn("\\usepackage[dvipsnames]{xcolor}", tex)
+        self.assertIn("\\start{F}{irst} chapter with an image.", tex)
+        self.assertIn("\\start{R}{ead} ", tex)
+        self.assertNotIn("\\lettrine{", tex)
+
     def test_polimi_off_a4_imposes_the_scaled_adaptation(self):
         tex = render(theme="polimi", trim="6x9")
         self.assertIn("\\setstocksize{9in}{6in}", tex)

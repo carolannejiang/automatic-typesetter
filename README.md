@@ -273,8 +273,9 @@ compiles on its own; keep the `images/` folder beside it).
 - `--theme polimi` likewise: `memoir` set up as the Polimi thesis's own
   `thesis_polimi.tex` — the veelo chapter style, the companion-copied
   running heads, titlesec's TikZ section bar, white-on-black caption
-  boxes — compiled with xelatex as the thesis directs, with Minion
-  Pro/Myriad Pro/Monaco when installed and TeX Gyre fallbacks when not.
+  boxes, the `\start` four-line BrickRed lettrine opening every chapter
+  — compiled with xelatex as the thesis directs, with Minion Pro/Myriad
+  Pro/Monaco when installed and TeX Gyre fallbacks when not.
 - every other theme becomes a standard LaTeX `book` matched to the
   theme's trim, margins, body size, leading, and nearest TeX Gyre face,
   compiled with LuaLaTeX (full Unicode). Heading dress beyond the book

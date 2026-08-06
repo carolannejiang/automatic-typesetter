@@ -25,6 +25,13 @@ rather than imitated. Two document shapes:
   the class's titlesec display chapter (a 96pt halfgray numeral over a
   bold title, both ragged right), titleps italic outer running heads, and
   a titletoc bullet-leader contents, compiled with pdflatex as the class is.
+* theme "polimi" likewise emits the genuine article: memoir set up as
+  the Polimi thesis's thesis_polimi.tex (the veelo chapter style, the
+  companion-copied fancyheads page style, titlesec's TikZ section bar,
+  white-on-black caption boxes, the \\start four-line BrickRed lettrine
+  opening every chapter), compiled with xelatex as the thesis directs,
+  its fontspec faces falling back to TeX Gyre where Minion Pro, Myriad
+  Pro, or Monaco are not installed.
 * every other theme emits a standard book-class document matched to the
   theme's page geometry, body size, leading, and nearest TeX Gyre face,
   compiled with lualatex so arbitrary web-ingested Unicode survives.
@@ -646,10 +653,11 @@ def _polimi_preamble(theme, trim, font_size, line_height, chapter_start,
     fancyheads page style, titlesec's TikZ section bar, and white-on-black
     caption boxes, under XeTeX as the thesis directs. The thesis is
     oneside; twoside serves book duplexing. Its commercial faces fall
-    back to TeX Gyre kin where they are not installed. Template-only
-    dress (pgfplots/TikZ diagrams, acronyms, the lettrine commands,
-    verbments listings) is not carried over — no such markup exists in
-    this pipeline."""
+    back to TeX Gyre kin where they are not installed. The \\start
+    lettrine (a four-line BrickRed initial) is defined verbatim and
+    applied to each chapter's opening word by write_latex. Template-only
+    dress (pgfplots/TikZ diagrams, acronyms, verbments listings) is not
+    carried over — no such markup exists in this pipeline."""
     body_pt = _pt_size(font_size, 12.0)
     class_pt = min((9, 10, 11, 12, 14, 17),
                    key=lambda opt: abs(opt - body_pt))
@@ -696,7 +704,9 @@ def _polimi_preamble(theme, trim, font_size, line_height, chapter_start,
             pass
     lines.extend([
         "\\usepackage{graphicx}",
-        "\\usepackage{xcolor}",
+        # dvipsnames for BrickRed, the \start lettrine's ink (the thesis
+        # passes the option through its document class).
+        "\\usepackage[dvipsnames]{xcolor}",
         # The thesis redefines its DarkGray to pure black.
         "\\definecolor{DarkGray}{RGB}{0,0,0}",
         "\\usepackage{fontspec}",
@@ -736,6 +746,12 @@ def _polimi_preamble(theme, trim, font_size, line_height, chapter_start,
         "{\\hspace{.1cm}#1#2#3}}}",
         "\\captionsetup{format=figure,labelfont=white,textfont=white,"
         "margin=0pt,font={bf,small,sf}}",
+        "\\usepackage{lettrine}",
+        # The thesis's chapter opening, verbatim: a four-line BrickRed
+        # initial (lettrine's default sets the rest of the opening word
+        # in small caps, as the published PDF shows).
+        "\\newcommand{\\start}[2]"
+        "{\\lettrine[lines=4]{\\color{BrickRed}#1}{#2}}",
         "\\usepackage[normalem]{ulem}",
         "\\usepackage{booktabs}",
         "\\usepackage{hyperref}",
@@ -865,10 +881,11 @@ def _front_matter(book: Book, toc: bool, style: str) -> list:
 _LETTRINE_OPEN = re.compile(r"^([A-Za-z])([A-Za-z'’]+)")
 
 
-def _lettrine_open(body: str) -> str:
-    """The template's chapter opening, \\lettrine{L}{etterine}: a two-line
-    drop cap on the first letter, the rest of the word in small caps."""
-    return _LETTRINE_OPEN.sub(r"\\lettrine{\1}{\2}", body, count=1)
+def _lettrine_open(body: str, command: str = "lettrine") -> str:
+    """The template's chapter opening, \\lettrine{L}{etterine}: a drop cap
+    on the first letter, the rest of the word in small caps. polimi passes
+    its thesis's own \\start (a four-line BrickRed \\lettrine)."""
+    return _LETTRINE_OPEN.sub(r"\\%s{\1}{\2}" % command, body, count=1)
 
 def _references_section(book, assets, link_citations) -> list:
     """An unnumbered References chapter: the cited links as an APA list, then
@@ -948,6 +965,8 @@ def write_latex(book: Book, path: str, theme: str = "classic",
         body = _TexConverter(assets).convert(root)
         if body and theme == "memoir2":
             body = _lettrine_open(body)
+        elif body and theme == "polimi":
+            body = _lettrine_open(body, command="start")
         if body:
             lines.append(body)
 
