@@ -89,8 +89,8 @@ def _copyright_body(book: Book) -> str:
 def write_epub(book: Book, path: str, theme: str = "classic",
                drop_caps: bool = False, chapter_numbers: bool = True,
                link_notes: bool = True, link_marker: str = "letter",
-               link_citations: dict = None,
-               references: bool = False) -> None:
+               link_citations: dict = None, references: bool = False,
+               link_note_color: str = "#555") -> None:
     meta = book.meta
     lang = meta.language or "en"
     book_id = "urn:uuid:" + str(
@@ -102,7 +102,8 @@ def write_epub(book: Book, path: str, theme: str = "classic",
     spine: list = []      # idrefs
     files: list = []      # (zip_path, bytes_or_str)
 
-    css = themes.epub_css(theme=theme, drop_caps=drop_caps)
+    css = themes.epub_css(theme=theme, drop_caps=drop_caps,
+                          link_note_color=link_note_color)
     files.append(("OEBPS/css/book.css", css))
     manifest.append(("css", "css/book.css", "text/css", None))
 

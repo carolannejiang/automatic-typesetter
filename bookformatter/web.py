@@ -118,6 +118,10 @@ def _first(params: dict, key: str, default: str = "") -> str:
 _FONT_SIZE_RE = re.compile(r"^\d{1,3}(\.\d+)?(pt|px|em|rem|%)$")
 _LINE_HEIGHT_RE = re.compile(r"^\d(\.\d+)?$")
 
+# Link-note color presets — the value lands inside a <style> block, so the
+# form only picks a name and the server maps it to a fixed, safe color.
+_LINK_NOTE_COLORS = {"grey": "#555", "black": "#1a1a1a", "blue": "#1a5fb4"}
+
 
 def _clean_size(value: str, default: str, pattern) -> str:
     """Values land inside a <style> block — accept only plain sizes."""
@@ -252,6 +256,8 @@ def run_build(params: dict, uploads: list, workdir: str,
     link_marker = _first(params, "link_marker", "letter")
     if link_marker not in ("letter", "bracket"):
         link_marker = "letter"
+    link_note_color = _LINK_NOTE_COLORS.get(
+        _first(params, "link_note_color", "grey"), "#555")
     link_citations = _first(params, "no_link_citations") != "on"
     references = _first(params, "references") == "on"
     font_size = _clean_size(_first(params, "font_size"), None, _FONT_SIZE_RE)
@@ -293,7 +299,7 @@ def run_build(params: dict, uploads: list, workdir: str,
         chapter_numbers=chapter_numbers, footnotes=footnotes,
         link_notes=link_notes, link_marker=link_marker,
         link_citations=citations, references=references,
-        pdf_engine=pdf_engine,
+        link_note_color=link_note_color, pdf_engine=pdf_engine,
         files=out.files, warnings=out.warnings, progress=progress,
     )
     return out
@@ -907,6 +913,12 @@ footer a { color: var(--link); }
             <select id="link_marker" name="link_marker">
               <option value="letter">L1, L2&hellip;</option>
               <option value="bracket">[1], [2]&hellip;</option>
+            </select></div>
+          <div><label for="link_note_color">Link note color</label>
+            <select id="link_note_color" name="link_note_color">
+              <option value="grey">Grey (default)</option>
+              <option value="black">Black</option>
+              <option value="blue">Blue</option>
             </select></div>
         </div>
         <div class="row">

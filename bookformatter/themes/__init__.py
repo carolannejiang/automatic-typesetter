@@ -125,9 +125,11 @@ def theme_margins(theme: str, width: float, height: float) -> dict:
 
 
 def epub_css(theme: str = "classic", font_size: str = "1em",
-             line_height: str = "1.5", drop_caps: bool = False) -> str:
+             line_height: str = "1.5", drop_caps: bool = False,
+             link_note_color: str = "#555") -> str:
     mod = _theme(theme)
     params = mod.params(font_size, line_height)
+    params["LINK_NOTE_COLOR"] = link_note_color
     css = base.SHARED.substitute(params) + base.EPUB_EXTRA.substitute(params)
     if mod.EXTRA is not None:
         css += mod.EXTRA.substitute(params)
@@ -139,10 +141,11 @@ def epub_css(theme: str = "classic", font_size: str = "1em",
 def print_css(theme: str = "classic", trim: str = "6x9", font_size: str = "11pt",
               line_height: str = "1.45", book_title: str = "",
               book_subtitle: str = "", chapter_start: str = "right",
-              drop_caps: bool = False) -> str:
+              drop_caps: bool = False, link_note_color: str = "#555") -> str:
     mod = _theme(theme)
     params = mod.params(font_size, line_height)
     params.update(_geometry(trim, theme))
+    params["LINK_NOTE_COLOR"] = link_note_color
     params["BOOK_TITLE_STRING"] = book_title.replace("\\", "").replace('"', "'")
     params["CHAPTER_BREAK"] = "right" if chapter_start == "right" else "page"
     params["CHAPTER_BREAK_LEGACY"] = "right" if chapter_start == "right" else "always"
