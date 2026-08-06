@@ -9,6 +9,7 @@ from . import docx as docx_writer
 from . import epub as epub_writer
 from . import icml as icml_writer
 from . import idml as idml_writer
+from . import latex as latex_writer
 from . import printbook
 from .indesign import extract_link_assets
 
@@ -85,7 +86,40 @@ def write_outputs(book, formats, out_dir: str, name: str, *,
             "relink them."
         )
 
-    if "pdf" in formats or "html" in formats:
+    latex_pdf = "pdf" in formats and pdf_engine == "latex"
+    if "tex" in formats or latex_pdf:
+        progress("Writing LaTeX source…")
+        tex_path = os.path.join(out_dir, f"{name}.tex")
+        latex_writer.write_latex(
+            book, tex_path, theme=theme, trim=trim, font_size=font_size,
+            line_height=line_height, chapter_start=chapter_start, toc=toc,
+            chapter_numbers=chapter_numbers, footnotes=footnotes,
+            link_notes=link_notes != "off", link_citations=link_citations)
+        if "tex" in formats:
+            files[f"{name}.tex"] = tex_path
+        if book.assets:
+            for path in extract_link_assets(book, out_dir):
+                files[os.path.relpath(path, out_dir).replace(os.sep, "/")] = path
+            if "tex" in formats:
+                warnings.append(
+                    "The LaTeX source references images by path — keep the "
+                    "images/ folder beside the .tex when compiling elsewhere."
+                )
+        if latex_pdf:
+            progress("Typesetting PDF with LaTeX…")
+            try:
+                latex_writer.compile_pdf(tex_path)
+                files[f"{name}.pdf"] = os.path.join(out_dir, f"{name}.pdf")
+                progress("Rendered PDF with latexmk.")
+            except latex_writer.LatexError as exc:
+                files[f"{name}.tex"] = tex_path
+                warnings.append(
+                    f"LaTeX could not render a PDF ({exc}). Kept the .tex "
+                    "source — fix or compile it with latexmk."
+                )
+
+    want_print_pdf = "pdf" in formats and pdf_engine != "latex"
+    if want_print_pdf or "html" in formats:
         progress("Typesetting pages…")
         html_path = os.path.join(out_dir, f"{name}.html")
         page = printbook.build_print_html(
@@ -100,13 +134,13 @@ def write_outputs(book, formats, out_dir: str, name: str, *,
         if "html" in formats:
             files[f"{name}.html"] = html_path
 
-        if "pdf" in formats and pdf_engine == "none":
+        if want_print_pdf and pdf_engine == "none":
             files[f"{name}.html"] = html_path
             warnings.append(
                 "PDF engine 'none': open the print HTML in a browser and "
                 "print it to PDF."
             )
-        elif "pdf" in formats:
+        elif want_print_pdf:
             progress("Rendering PDF…")
             pdf_path = os.path.join(out_dir, f"{name}.pdf")
             try:
