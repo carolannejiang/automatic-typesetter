@@ -31,7 +31,8 @@ class AnnotateLinksInlineTests(unittest.TestCase):
         out, nxt = annotate_links(html)
         self.assertEqual(nxt, 2)
         self.assertNotIn("<a href=", out.split("linknote")[0])
-        self.assertIn('the spec<sub class="linknote-call">L1</sub>', out)
+        self.assertIn('<span class="linknote-text">the spec</span>'
+                      '<sub class="linknote-call">L1</sub>', out)
         self.assertIn('<span class="linknote">'
                       '<span class="linknote-label">L1</span> '
                       '<a class="linknote-url" href="https://example.com/a">'
@@ -53,12 +54,14 @@ class AnnotateLinksInlineTests(unittest.TestCase):
     def test_inner_markup_survives(self):
         html = '<p><a href="https://x.example"><em>styled</em> label</a>.</p>'
         out, _ = annotate_links(html)
-        self.assertIn("<em>styled</em> label<sub", out)
+        self.assertIn('<span class="linknote-text"><em>styled</em> label</span>'
+                      '<sub', out)
 
     def test_call_hugs_text_before_trailing_space(self):
         html = '<p><a href="https://x.example">text </a>rest</p>'
         out, _ = annotate_links(html)
-        self.assertIn('text<sub class="linknote-call">L1</sub>', out)
+        self.assertIn('<span class="linknote-text">text</span>'
+                      '<sub class="linknote-call">L1</sub>', out)
         self.assertIn("</span> rest", out)
 
     def test_non_web_links_left_alone(self):
@@ -204,7 +207,8 @@ class AnnotateLinksModesTests(unittest.TestCase):
         out, nxt = annotate_links(html, mode="endnote", notes=notes)
         self.assertEqual(nxt, 2)
         self.assertEqual(notes, [(1, "https://example.com/a")])
-        self.assertIn('the spec<sub class="linknote-call" id="lnref-1">'
+        self.assertIn('<span class="linknote-text">the spec</span>'
+                      '<sub class="linknote-call" id="lnref-1">'
                       '<a href="#ln-1">L1</a></sub> now.', out)
         # The URL lives only in the collected note, not in the fragment.
         self.assertNotIn("linknote-url", out)
@@ -220,9 +224,11 @@ class AnnotateLinksModesTests(unittest.TestCase):
         self.assertEqual(nxt, 2)
         # First call owns the back-target id; the repeat points at the same
         # note without a duplicate id, and both read L1.
-        self.assertIn('first<sub class="linknote-call" id="lnref-1">'
+        self.assertIn('<span class="linknote-text">first</span>'
+                      '<sub class="linknote-call" id="lnref-1">'
                       '<a href="#ln-1">L1</a></sub>', out)
-        self.assertIn('again<sub class="linknote-call">'
+        self.assertIn('<span class="linknote-text">again</span>'
+                      '<sub class="linknote-call">'
                       '<a href="#ln-1">L1</a></sub>', out)
         self.assertEqual(out.count('id="lnref-1"'), 1)
 
@@ -242,7 +248,7 @@ class AnnotateLinksModesTests(unittest.TestCase):
     def test_endnote_mode_reruns_cleanly(self):
         html = '<p><a href="https://x.example">text </a>rest</p>'
         once, nxt = annotate_links(html, mode="endnote", notes=[])
-        self.assertIn('>text<sub class="linknote-call" id="lnref-1">', once)
+        self.assertIn('>text</span><sub class="linknote-call" id="lnref-1">', once)
         notes = []
         twice, nxt2 = annotate_links(once, start=nxt, mode="endnote", notes=notes)
         self.assertEqual(once, twice)
@@ -449,6 +455,16 @@ class MarkerStyleTests(unittest.TestCase):
         self.assertIn('<sub class="linknote-call">[1]</sub>', out)
         self.assertIn('<span class="linknote-label">[1]</span>', out)
         self.assertNotIn("L1", out)
+
+    def test_inline_bracket_marker_holds_across_multiple_links(self):
+        # The inline branch builds a local label span; its name must not
+        # shadow the marker parameter, or the 2nd link falls back to "L2".
+        html = ('<p><a href="https://a.example">a</a> and '
+                '<a href="https://b.example">b</a></p>')
+        out, _ = annotate_links(html, marker="bracket")
+        self.assertIn('class="linknote-call">[1]</sub>', out)
+        self.assertIn('class="linknote-call">[2]</sub>', out)
+        self.assertNotIn("L2", out)
 
     def test_letter_marker_is_the_default(self):
         html = '<p>See <a href="https://a.example">a</a>.</p>'
