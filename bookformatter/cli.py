@@ -58,6 +58,10 @@ def build_parser() -> argparse.ArgumentParser:
                              "genuine classicthesis.sty for --theme classicthesis, "
                              "the genuine memoir class for --theme memoir, "
                              "memoir2, or polimi, "
+                             "the genuine tufte-book class for --theme tufte "
+                             "(which fixes its own 10/14 leading and letter "
+                             "geometry, so --font-size, --line-height, and "
+                             "non-letter --trim have limited effect), "
                              "the mydiss dissertation class for --theme mydiss, "
                              "a standard LaTeX book otherwise")
 

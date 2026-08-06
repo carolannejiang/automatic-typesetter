@@ -120,7 +120,11 @@ PRINT_SPECS = {
     ),
     "note": (
         "The Tufte-LaTeX classes also ship b5 and a4 variants; on other "
-        "trims this theme scales the page and margin column linearly."
+        "trims this theme scales the page and margin column linearly. Its "
+        "LaTeX render (--pdf-engine latex) instead uses the genuine "
+        "tufte-book class, which fixes 10/14 Palatino on a letter sheet: "
+        "the font-size and line-height options don't apply there, and other "
+        "trims resize only the sheet, not the sidenote column."
     ),
     "source": {
         "name": "Book design inspired by Edward Tufte (Overleaf)",
