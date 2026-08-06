@@ -20,7 +20,7 @@ import subprocess
 import tempfile
 
 from . import apacite, frontmatter, htmldom, themes
-from .footnotes import inline_footnotes, number_sidenote_calls
+from .footnotes import hoist_margin_notes, inline_footnotes, number_sidenote_calls
 from .linknotes import annotate_links, endnote_html
 from .models import Book
 
@@ -105,6 +105,10 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
             content, next_link_note = annotate_links(
                 content, start=next_link_note, citations=link_citations,
                 marker=link_marker)
+        # Margin-note themes (Tufte) float notes into the side column; lift them
+        # to block level so WeasyPrint's clear stacks them without overlapping.
+        if themes.sidenote_calls(theme):
+            content = hoist_margin_notes(content)
         chapter_parts.append(f'<section class="chapter" id="chapter-{i}">')
         chapter_parts.append(
             frontmatter.chapter_head_html(theme, i, chapter.title, chapter_numbers))
