@@ -178,6 +178,41 @@ class WriteLatexTests(unittest.TestCase):
         self.assertIn("\\renewcommand{\\baselinestretch}{1.25}", tex)
         self.assertNotIn("{1.125}", tex)
 
+    def test_memoir_leaves_the_full_dress_off(self):
+        tex = render(theme="memoir")
+        self.assertNotIn("\\usepackage{lettrine}", tex)
+        self.assertNotIn("\\lettrine{", tex)
+        self.assertNotIn("\\MakeUppercase", tex)
+
+    def test_memoir2_adds_the_template_full_dress(self):
+        tex = render(theme="memoir2")
+        # The same genuine memoir setup as --theme memoir...
+        self.assertTrue(tex.startswith("% !TEX program = pdflatex"))
+        self.assertIn("extrafontsizes]{memoir}", tex)
+        self.assertIn("\\setstocksize{9in}{6in}", tex)
+        self.assertIn("\\usepackage{ebgaramond}", tex)
+        self.assertIn("\\usepackage[symbol*]{footmisc}", tex)
+        # ...plus lettrine chapter openings on plain-word chapters,
+        self.assertIn("\\usepackage{lettrine}", tex)
+        self.assertIn("\\lettrine{F}{irst} chapter with an image.", tex)
+        self.assertIn("\\lettrine{R}{ead} ", tex)
+        # the flyleaf and half-title leaves,
+        self.assertEqual(tex.count("\\thispagestyle{empty}\\null\\clearpage"), 2)
+        self.assertIn("\\centerline{\\Huge\\MakeUppercase{Test \\& Book}}", tex)
+        # and the template's unstarred, self-listing contents.
+        self.assertIn("\\tableofcontents\n", tex)
+        self.assertNotIn("\\tableofcontents*", tex)
+
+    def test_memoir2_leaves_wordless_openings_plain(self):
+        # A chapter that opens with a list (no opening word) gets no
+        # lettrine; the command never wraps markup.
+        b = support.make_book([Chapter(title="C", html=BRACKETS_HTML)])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "b.tex")
+            write_latex(b, path, theme="memoir2")
+            tex = open(path).read()
+        self.assertNotIn("\\lettrine{", tex)
+
     def test_no_chapter_numbers(self):
         tex = render(chapter_numbers=False)
         self.assertIn("\\setcounter{secnumdepth}{-1}", tex)
@@ -277,6 +312,9 @@ class CompileTests(unittest.TestCase):
 
     def test_memoir_compiles(self):
         self._compile(theme="memoir")
+
+    def test_memoir2_compiles(self):
+        self._compile(theme="memoir2")
 
     def test_error_reports_first_tex_error(self):
         with tempfile.TemporaryDirectory() as tmp:
