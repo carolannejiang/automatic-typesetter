@@ -40,6 +40,12 @@ python3 -m bookformatter chapters/ -t "Essays" --theme classical
 # numbers, letterspaced small-cap heads, and dot-leaderless contents
 python3 -m bookformatter chapters/ -t "Essays" --theme classicthesis
 
+# Have TeX itself typeset that theme (the genuine classicthesis.sty, not
+# the CSS transcription) — or any theme as a standard LaTeX book; needs a
+# TeX installation (MacTeX/TeX Live). -f tex keeps the .tex source too.
+python3 -m bookformatter chapters/ -t "Essays" --theme classicthesis \
+    -f tex,pdf --pdf-engine latex
+
 # Oxford Very Short Introduction pocket design (see themes/vsi.py for the
 # measured spec): gray sans openers over a deep sink, block paragraphs,
 # rotated running heads riding the outer margins; these settings match
@@ -208,7 +214,7 @@ Paged Media:
 - `* * *` scene-break ornaments for `---`/`<hr>`, styled blockquotes,
   tables, figures with captions, code blocks
 
-Rendering engines (`--pdf-engine auto|weasyprint|chrome|none`):
+Rendering engines (`--pdf-engine auto|weasyprint|chrome|latex|none`):
 
 | Feature | WeasyPrint | Headless Chrome | Any browser (manual print) |
 |---|---|---|---|
@@ -220,6 +226,32 @@ Rendering engines (`--pdf-engine auto|weasyprint|chrome|none`):
 | Foot-of-page link notes (`L1`, `L2` …) | ✓ | — (URL falls back to inline text) | — |
 
 \* recent Chromium-based browsers.
+
+## LaTeX
+
+`--pdf-engine latex` skips CSS entirely and hands the book to TeX via
+`latexmk` (any TeX Live/MacTeX installation), so the TeX-only niceties —
+Knuth–Plass paragraph-wide line breaking, microtype protrusion and font
+expansion, TeX hyphenation — are real rather than approximated. `-f tex`
+writes the `.tex` source itself (with a `% !TEX program` comment, so it
+compiles on its own; keep the `images/` folder beside it).
+
+- `--theme classicthesis` emits the genuine article: `scrreprt` +
+  Miede's `classicthesis.sty` from your TeX installation — the package
+  the CSS theme transcribes — compiled with pdflatex as the reference
+  ClassicThesis.pdf was. pdflatex covers Latin-script text; a chapter
+  with e.g. Greek or CJK characters fails with a warning naming the
+  character (the `.tex` is kept to fix or compile by hand).
+- every other theme becomes a standard LaTeX `book` matched to the
+  theme's trim, margins, body size, leading, and nearest TeX Gyre face,
+  compiled with LuaLaTeX (full Unicode). Heading dress beyond the book
+  class's own is deliberately not imitated — this output follows TeX's
+  native conventions (numbered chapters and sections, LaTeX's own
+  chapter openers).
+
+Content footnotes become real `\footnote`s; with link notes on, each
+external link's URL (or APA citation) is set as an auto-numbered
+footnote, InDesign-style, rather than the `L` series.
 
 ## InDesign
 
@@ -260,6 +292,7 @@ web UI (…web)  ──────┘        │  readability-style extraction,
                               ├──► EPUB 3 writer (stdlib zipfile; polyglot XHTML)
                               ├──► DOCX writer (editable Word manuscript)
                               ├──► ICML / IDML writers (InDesign handoff)
+                              ├──► LaTeX writer (.tex) ──► latexmk ──► PDF
                               └──► print HTML (CSS Paged Media) ──► WeasyPrint / Chrome ──► PDF
 ```
 
