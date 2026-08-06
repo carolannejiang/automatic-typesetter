@@ -45,6 +45,13 @@ PRINT_SPECS = {
         "books, or 90–100 gsm for a shorter/premium copy. Confirm the gutter "
         "with the printer and supply the cover/spine separately."
     ),
+    "source": {
+        "name": "Book template using the ClassicThesis package (Overleaf)",
+        "url": ("https://www.overleaf.com/project/new/template/12369?"
+                "id=36197038&latexEngine=pdflatex&mainFile="
+                "classicthesis-book.tex&templateName=Book+template+using+"
+                "the+ClassicThesis+package&texImage=texlive-full%3A2025.1"),
+    },
 }
 
 # Longest title (chars) the title page holds at full size, measured on
