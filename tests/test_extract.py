@@ -241,6 +241,15 @@ class ExtractTests(unittest.TestCase):
         out = clean_fragment('<p><a href="/rel">link</a></p>', base_url="https://b.example/post/1")
         self.assertIn('href="https://b.example/rel"', out)
 
+    def test_link_underline_unwrapped_prose_underline_kept(self):
+        # Underline inside a link is the source's link styling — the themes
+        # render links grey with no underline — but prose underline stays.
+        frag = ('<p>See <a href="https://a.example/"><u>this site</u></a>'
+                ' and <u>emphatic prose</u>.</p>')
+        out = clean_fragment(frag)
+        self.assertIn('<a href="https://a.example/">this site</a>', out)
+        self.assertIn("<u>emphatic prose</u>", out)
+
     def test_social_icon_links_dropped_from_feed_fragment(self):
         # The feed path (clean_fragment) never runs class-name noise removal,
         # so social icons must be stripped by href regardless of container.

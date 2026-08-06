@@ -88,7 +88,7 @@ class RoundTripTests(unittest.TestCase):
         self.assertIn("<hr />", second)
 
 
-def _mini_docx(path, document, styles="", numbering=""):
+def _mini_docx(path, document, styles="", numbering="", doc_rels=""):
     """A hand-assembled Word-ish package (not this tool's own output)."""
     ct = [
         '<?xml version="1.0"?>'
@@ -115,6 +115,8 @@ def _mini_docx(path, document, styles="", numbering=""):
             zf.writestr("word/styles.xml", styles)
         if numbering:
             zf.writestr("word/numbering.xml", numbering)
+        if doc_rels:
+            zf.writestr("word/_rels/document.xml.rels", doc_rels)
 
 
 _WORDISH_DOCUMENT = f"""<?xml version="1.0"?>
@@ -203,6 +205,43 @@ class WordAuthoredTests(unittest.TestCase):
             zf.writestr("hello.txt", "hi")
         with self.assertRaises(DocxError):
             read_docx(empty)
+
+
+_LINKED_DOCUMENT = f"""<?xml version="1.0"?>
+<w:document xmlns:w="{W_NS}"
+ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<w:body>
+<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Alpha</w:t></w:r></w:p>
+<w:p><w:r><w:t xml:space="preserve">See </w:t></w:r>
+<w:hyperlink r:id="rId9"><w:r><w:rPr><w:u w:val="single"/><w:color w:val="1155CC"/></w:rPr>
+<w:t>this site</w:t></w:r></w:hyperlink>
+<w:r><w:t xml:space="preserve"> and </w:t></w:r>
+<w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>emphatic prose</w:t></w:r></w:p>
+</w:body></w:document>"""
+
+_LINKED_RELS = (
+    '<?xml version="1.0"?>'
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    '<Relationship Id="rId9" Type="http://schemas.openxmlformats.org/'
+    'officeDocument/2006/relationships/hyperlink" '
+    'Target="https://example.com/" TargetMode="External"/>'
+    "</Relationships>"
+)
+
+
+class UnderlinedLinkTests(unittest.TestCase):
+    """Google Docs exports write hyperlinks as directly underlined runs; the
+    underline is link styling, not emphasis, and must not survive ingest —
+    the themes render links grey with no underline."""
+
+    def test_link_underline_dropped_prose_underline_kept(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "linked.docx")
+            _mini_docx(path, _LINKED_DOCUMENT, _WORDISH_STYLES,
+                       doc_rels=_LINKED_RELS)
+            html = read_docx(path).html
+        self.assertIn('<a href="https://example.com/">this site</a>', html)
+        self.assertIn("<u>emphatic prose</u>", html)
 
 
 class FullCircleTests(unittest.TestCase):
