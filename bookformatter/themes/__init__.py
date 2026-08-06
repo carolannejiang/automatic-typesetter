@@ -94,6 +94,19 @@ def print_specs(theme: str):
     return getattr(_theme(theme), "PRINT_SPECS", None)
 
 
+def theme_source(theme: str):
+    """The theme's cited origin as {"name": ..., "url"?: ...}, or None.
+
+    A theme carries it either inside PRINT_SPECS["source"] (the LaTeX
+    template themes, which have a full spec sheet) or as a standalone
+    module-level SOURCE (themes cited without a spec sheet)."""
+    mod = _theme(theme)
+    specs = getattr(mod, "PRINT_SPECS", None)
+    if specs and specs.get("source"):
+        return specs["source"]
+    return getattr(mod, "SOURCE", None)
+
+
 def sidenote_calls(theme: str) -> bool:
     """Whether print markup should bake superscript sidenote numbers —
     themes that float notes into a margin column instead of the page foot

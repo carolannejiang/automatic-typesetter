@@ -99,6 +99,9 @@ NAME = "vsi"
 LABEL = "VSI"
 BLURB = "Oxford pocket style, gray sans openers"
 
+# Cited origin, shown in the web UI's theme panel.
+SOURCE = {"name": "Inspired by A Very Short Introduction series"}
+
 # Longest title (chars) the title page holds at full size, measured on
 # the calibration page (TITLE_FIT_TRIM / TITLE_FIT_SIZE, default 5x8 at
 # 11pt); longer titles are scaled down to fit (see themes.print_css).

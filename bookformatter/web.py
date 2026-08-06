@@ -1107,27 +1107,29 @@ def _theme_specs_html() -> str:
     panels = []
     for theme in themes.THEME_NAMES:
         specs = themes.print_specs(theme)
-        if not specs:
+        source = themes.theme_source(theme)
+        if not specs and not source:
             continue
-        items = "".join(
-            "<dt>%s</dt><dd>%s</dd>" % (html.escape(label), html.escape(value))
-            for label, value in specs.get("items", ())
-        )
-        note = specs.get("note")
-        note_html = "<p>%s</p>" % html.escape(note) if note else ""
-        source = specs.get("source")
+        specs_html = ""
+        if specs:
+            items = "".join(
+                "<dt>%s</dt><dd>%s</dd>" % (html.escape(label), html.escape(value))
+                for label, value in specs.get("items", ())
+            )
+            note = specs.get("note")
+            note_html = "<p>%s</p>" % html.escape(note) if note else ""
+            specs_html = "<h3>%s</h3><dl>%s</dl>%s" % (
+                html.escape(specs["title"]), items, note_html)
         source_html = ""
         if source:
-            source_html = (
-                '<p class="theme-source">Source: '
-                '<a href="%s" target="_blank" rel="noopener noreferrer">%s</a></p>'
-                % (html.escape(source["url"], quote=True),
-                   html.escape(source["name"]))
-            )
+            name = html.escape(source["name"])
+            url = source.get("url")
+            cite = ('<a href="%s" target="_blank" rel="noopener noreferrer">%s</a>'
+                    % (html.escape(url, quote=True), name)) if url else name
+            source_html = '<p class="theme-source">Source: %s</p>' % cite
         panels.append(
-            '<section data-theme-spec="%s" hidden><h3>%s</h3><dl>%s</dl>%s%s</section>'
-            % (html.escape(theme, quote=True), html.escape(specs["title"]),
-               items, note_html, source_html)
+            '<section data-theme-spec="%s" hidden>%s%s</section>'
+            % (html.escape(theme, quote=True), specs_html, source_html)
         )
     return "".join(panels)
 

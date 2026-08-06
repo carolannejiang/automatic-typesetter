@@ -421,6 +421,25 @@ class ThemeLabelTests(unittest.TestCase):
             self.assertTrue(themes.theme_blurb(name), name)
 
 
+class ThemeSourceTests(unittest.TestCase):
+    def test_template_themes_cite_a_linked_source(self):
+        # The LaTeX-template themes carry their source in PRINT_SPECS.
+        for name in ("memoir", "classicthesis", "tufte"):
+            source = themes.theme_source(name)
+            self.assertTrue(source["name"], name)
+            self.assertTrue(source["url"].startswith("https://"), name)
+
+    def test_standalone_sourced_themes_cite_without_a_url(self):
+        self.assertEqual(themes.theme_source("classical"),
+                         {"name": "after WeasyPrint’s “book-classical” sample"})
+        self.assertEqual(themes.theme_source("vsi"),
+                         {"name": "Inspired by A Very Short Introduction series"})
+
+    def test_uncited_themes_have_no_source(self):
+        self.assertIsNone(themes.theme_source("classic"))
+        self.assertIsNone(themes.theme_source("modern"))
+
+
 class WriterThemeDefaultTests(unittest.TestCase):
     def test_writers_resolve_their_theme_defaults(self):
         # A direct caller passing only a theme gets that theme's own page,

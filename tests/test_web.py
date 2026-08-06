@@ -112,6 +112,13 @@ class WebTests(unittest.TestCase):
         self.assertIn("Memoir Book Template, 6×9 (Overleaf)", page)
         self.assertIn("Book design inspired by Edward Tufte (Overleaf)", page)
         self.assertIn("Book template using the ClassicThesis package (Overleaf)", page)
+        # Themes cited without a URL show the attribution as plain text.
+        self.assertIn('<section data-theme-spec="classical" hidden>'
+                      '<p class="theme-source">Source: '
+                      'after WeasyPrint’s “book-classical” sample</p>', page)
+        self.assertIn('<section data-theme-spec="vsi" hidden>'
+                      '<p class="theme-source">Source: '
+                      'Inspired by A Very Short Introduction series</p>', page)
 
     def test_build_from_pasted_text_with_options(self):
         form = urllib.parse.urlencode(
