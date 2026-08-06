@@ -141,6 +141,55 @@ class ClassicthesisCssTests(unittest.TestCase):
         self.assertNotIn("left: calc(100% + 0.278in);", css)
 
 
+class MemoirCssTests(unittest.TestCase):
+    def test_chapter_label_spells_out_chapter(self):
+        self.assertEqual(themes.chapter_label("memoir", 3), "Chapter 3")
+
+    def test_declares_the_template_type_setting(self):
+        self.assertEqual(themes.default_font_size("memoir"), "12pt")
+        self.assertEqual(themes.default_line_height("memoir"), "1.36")
+        self.assertEqual(themes.default_trim("memoir"), "6x9")
+
+    def test_print_css_sets_outer_folios_and_italic_center_heads(self):
+        css = themes.print_css(theme="memoir", book_title="Field Notes")
+        # Folios in the top outer corners (fancyhead[LE,RO]{\thepage})...
+        self.assertIn("@top-left { content: counter(page)", css)
+        self.assertIn("@top-right { content: counter(page)", css)
+        # ...the verso center carries the book title, the recto center
+        # "Chapter N. Title", both italic...
+        self.assertIn("string-set: chapter-label content() \". \";", css)
+        self.assertIn("content: string(chapter-label, first-except) "
+                      "string(chapter-title, first-except);", css)
+        self.assertIn("font-style: italic", css)
+        # ...and the theme block comes after the shared furniture it
+        # replaces (bottom-center folio, small-cap top-center heads).
+        furniture = css.index("memoir print furniture")
+        self.assertGreater(furniture, css.index("string(book-title, first-except)"))
+        self.assertGreater(furniture, css.index("content: counter(page)"))
+        self.assertGreater(furniture, css.index('leader(". ")'))
+        # The contents page drops its dot leaders for a plain space.
+        self.assertNotIn('leader(". ")', css[furniture:])
+        self.assertIn('leader(" ")', css[furniture:])
+        self.assertIn("EB Garamond", css)
+
+    def test_print_css_openers_take_a_plain_folio(self):
+        css = themes.print_css(theme="memoir")
+        self.assertIn("header.chapter-head { page: clean; }", css)
+        self.assertIn("section.chapter { page: auto; }", css)
+        clean = css.index("@page clean")
+        self.assertIn("@bottom-center { content: counter(page)", css[clean:])
+
+    def test_print_geometry_matches_the_template(self):
+        css = themes.print_css(theme="memoir", trim="6x9")
+        self.assertIn("margin: 0.75in 0.625in 0.75in 0.75in;", css)
+
+    def test_epub_css_restyles_without_paged_furniture(self):
+        css = themes.epub_css(theme="memoir")
+        self.assertIn("memoir overrides", css)
+        self.assertNotIn("@top-left", css)
+        self.assertNotIn("page: clean", css)
+
+
 class VsiCssTests(unittest.TestCase):
     def test_chapter_label_spells_out_chapter(self):
         self.assertEqual(themes.chapter_label("vsi", 3), "Chapter 3")

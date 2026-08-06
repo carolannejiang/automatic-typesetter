@@ -9,6 +9,11 @@ rather than imitated. Two document shapes:
   Miede's classicthesis.sty from the local TeX installation — the very
   package the CSS theme transcribes — compiled with pdflatex, the engine
   the reference ClassicThesis.pdf was made with.
+* theme "memoir" emits the genuine article as well: the memoir class set
+  up as the reference 6×9 novel template's main.tex / options.sty
+  (12pt EB Garamond, titlesec's centered small-caps chapters, fancyhdr
+  italic running heads, per-page symbol footnotes), compiled with
+  pdflatex as the template is.
 * every other theme emits a standard book-class document matched to the
   theme's page geometry, body size, leading, and nearest TeX Gyre face,
   compiled with lualatex so arbitrary web-ingested Unicode survives.
@@ -173,8 +178,10 @@ class _TexConverter:
         if not text:
             return []
         # Content must not close the environment early; the space inside
-        # \end breaks the token while staying readable.
-        text = text.replace("\\end{verbatim}", "\\end {verbatim}")
+        # the braces breaks the delimiter while staying readable. (Inside
+        # the braces, not after \end: memoir's verbatim tolerates space
+        # between \end and its argument.)
+        text = text.replace("\\end{verbatim}", "\\end{verbatim }")
         return ["\\begin{verbatim}\n%s\n\\end{verbatim}" % text]
 
     def _list(self, node, depth: int) -> str:
@@ -425,34 +432,148 @@ def _classicthesis_preamble(theme, trim, font_size, chapter_start,
     return lines
 
 
+def _memoir_preamble(theme, trim, font_size, line_height, chapter_start,
+                     chapter_numbers, language, meta) -> list:
+    """The reference 6×9 memoir novel template's setup (main.tex /
+    options.sty): memoir class, 12pt EB Garamond on a 1.125
+    baselinestretch, titlesec [center,sc] chapter heads, fancyhdr italic
+    running heads with outer folios, per-page symbol footnotes.
+    Template-only dress (chapter art, color names, CJK, lettrine) is not
+    carried over, and footmisc's symbol* option swaps in numbers when a
+    page outruns the symbol list. The template's tocloft load and
+    \\numberline{} renewal are dropped: memoir carries the cft commands
+    natively and numbers its chapter entries with \\chapternumberline."""
+    width, height = TRIM_SIZES.get(trim, TRIM_SIZES["6x9"])
+    margins = themes.theme_margins(theme, width, height)
+    body_pt = _pt_size(font_size, 12.0)
+    class_pt = min((9, 10, 11, 12, 14, 17),
+                   key=lambda opt: abs(opt - body_pt))
+    lines = [
+        "% !TEX program = pdflatex",
+        "\\documentclass[%dpt,twoside,onecolumn,%s,extrafontsizes]{memoir}"
+        % (class_pt, "openright" if chapter_start == "right" else "openany"),
+        "\\usepackage[utf8]{inputenc}",
+        "\\usepackage[T1]{fontenc}",
+    ]
+    babel = _babel_line(language)
+    if babel:
+        lines.append(babel)
+    lines.extend([
+        "\\usepackage[activate={true,nocompatibility},final,tracking=true,"
+        "kerning=true,spacing=true,factor=1100,stretch=10,shrink=10]"
+        "{microtype}",
+        "\\usepackage{graphicx}",
+        # Stock/media settings: the trim as the stock, untrimmed.
+        "\\setstocksize{%gin}{%gin}" % (height, width),
+        "\\settrimmedsize{\\stockheight}{\\stockwidth}{*}",
+        "\\setlrmarginsandblock{%sin}{%sin}{*}"
+        % (margins["M_IN"], margins["M_OUT"]),
+        "\\setulmarginsandblock{%sin}{%sin}{*}"
+        % (margins["M_TOP"], margins["M_BOTTOM"]),
+        "\\checkandfixthelayout",
+        "\\usepackage{ebgaramond}",
+    ])
+    if line_height == themes.default_line_height(theme):
+        lines.append("\\renewcommand{\\baselinestretch}{1.125}")
+    else:
+        try:
+            lines.append("\\renewcommand{\\baselinestretch}{%.4g}"
+                         % (float(line_height) / 1.2))
+        except (TypeError, ValueError):
+            pass
+    lines.extend([
+        "\\setlength{\\parskip}{0pt}",
+        "\\setlength{\\parindent}{1em}",
+        "\\frenchspacing",
+        "\\sloppy",
+        "\\clubpenalty=10000",
+        "\\widowpenalty=10000",
+        "\\raggedbottom",
+        # Contents: chapter folios in roman, not memoir's bold.
+        "\\renewcommand{\\cftchapterpagefont}{\\normalfont}",
+        "\\usepackage[center,sc]{titlesec}",
+        "\\usepackage{fancyhdr}",
+        "\\pagestyle{fancy}",
+        "\\fancyhf{}",
+        "\\fancyhead[LE,RO]{\\thepage}",
+        "\\fancyhead[CE]{\\itshape %s}" % _memoir_verso_head(meta),
+        "\\fancyhead[CO]{\\itshape\\leftmark}",
+        "\\renewcommand{\\chaptermark}[1]{\\markboth{%s#1}{}}"
+        % ("Chapter \\thechapter. " if chapter_numbers else ""),
+        "\\renewcommand{\\headrulewidth}{0pt}",
+        "\\renewcommand*{\\headwidth}{\\hsize}",
+        # Footnotes: symbols, reset every page.
+        "\\usepackage[symbol*]{footmisc}",
+        "\\usepackage{perpage}",
+        "\\MakePerPage{footnote}",
+        "\\usepackage[normalem]{ulem}",
+        "\\usepackage{booktabs}",
+        "\\usepackage[hidelinks]{hyperref}",
+        "\\urlstyle{same}",
+        _MAXWIDTH,
+    ])
+    if not chapter_numbers:
+        lines.append("\\setcounter{secnumdepth}{-1}")
+    return lines
+
+
+def _memoir_verso_head(meta) -> str:
+    """The verso running head, "\\booktitle : \\subtitle" as the template
+    composes it (the subtitle only when there is one)."""
+    head = escape(htmldom.normalize_ws(meta.title or "Untitled"))
+    if meta.description:
+        head += " : " + escape(htmldom.normalize_ws(meta.description))
+    return head
+
+
 # -- front matter ------------------------------------------------------------
 
-def _front_matter(book: Book, toc: bool, classicthesis: bool) -> list:
+def _front_matter(book: Book, toc: bool, style: str) -> list:
+    classicthesis = style == "classicthesis"
+    memoir = style == "memoir"
+    # memoir's title-page environment is titlingpage; titlepage is the
+    # standard classes'.
+    titlepage = "titlingpage" if memoir else "titlepage"
     meta = book.meta
     lines = ["\\pagenumbering{roman}" if classicthesis else "\\frontmatter",
-             "\\begin{titlepage}", "\\centering", "\\vspace*{0.18\\textheight}"]
+             "\\begin{%s}" % titlepage, "\\centering",
+             # The template opens its title just below the head margin.
+             "\\vspace*{24pt}" if memoir else "\\vspace*{0.18\\textheight}"]
     title = escape(htmldom.normalize_ws(meta.title or "Untitled"))
     if classicthesis:
         lines.append("{\\Huge\\spacedallcaps{%s}\\par}" % title)
+    elif memoir:
+        lines.append("{\\scshape\\Huge %s\\par}" % title)
     else:
         lines.append("{\\Huge %s\\par}" % title)
     if meta.description:
-        lines.append("\\vspace{1.5em}")
-        lines.append("{\\Large\\itshape %s\\par}"
-                     % escape(htmldom.normalize_ws(meta.description)))
+        lines.append("\\vspace{6pt}" if memoir else "\\vspace{1.5em}")
+        if memoir:
+            lines.append("{\\scshape\\large %s\\par}"
+                         % escape(htmldom.normalize_ws(meta.description)))
+        else:
+            lines.append("{\\Large\\itshape %s\\par}"
+                         % escape(htmldom.normalize_ws(meta.description)))
     if meta.author:
         author = escape(htmldom.normalize_ws(meta.author))
-        lines.append("\\vspace{3em}")
         if classicthesis:
+            lines.append("\\vspace{3em}")
             lines.append("{\\large\\spacedlowsmallcaps{%s}\\par}" % author)
+        elif memoir:
+            # The template's stretch drops the byline toward the foot.
+            lines.extend(["\\vspace{\\stretch{1.25}}",
+                          "{\\itshape\\large by\\par}",
+                          "\\vspace{6pt}",
+                          "{\\itshape\\Large %s\\par}" % author])
         else:
+            lines.append("\\vspace{3em}")
             lines.append("{\\large %s\\par}" % author)
     lines.append("\\vfill")
     if meta.publisher:
         lines.append("{\\large %s\\par}"
                      % escape(htmldom.normalize_ws(meta.publisher)))
         lines.append("\\vspace*{0.08\\textheight}")
-    lines.append("\\end{titlepage}")
+    lines.append("\\end{%s}" % titlepage)
 
     lines.extend(["\\thispagestyle{empty}", "\\null\\vfill",
                   "{\\footnotesize\\noindent"])
@@ -461,7 +582,11 @@ def _front_matter(book: Book, toc: bool, classicthesis: bool) -> list:
     lines.append("\\par}")
 
     if toc:
-        lines.extend(["\\cleardoublepage", "\\tableofcontents"])
+        # memoir's plain \tableofcontents lists itself; the starred form
+        # doesn't.
+        lines.extend(["\\cleardoublepage",
+                      "\\tableofcontents*" if memoir
+                      else "\\tableofcontents"])
     lines.extend(["\\cleardoublepage",
                   "\\pagenumbering{arabic}" if classicthesis
                   else "\\mainmatter"])
@@ -481,17 +606,21 @@ def write_latex(book: Book, path: str, theme: str = "classic",
                  else themes.default_font_size(theme))
     line_height = (line_height if line_height is not None
                    else themes.default_line_height(theme))
-    classicthesis = theme == "classicthesis"
     language = book.meta.language or "en"
 
-    if classicthesis:
+    if theme == "classicthesis":
         lines = _classicthesis_preamble(theme, trim, font_size, chapter_start,
                                         chapter_numbers, line_height, language)
+    elif theme == "memoir":
+        lines = _memoir_preamble(theme, trim, font_size, line_height,
+                                 chapter_start, chapter_numbers, language,
+                                 book.meta)
     else:
         lines = _book_preamble(theme, trim, font_size, line_height,
                                chapter_start, chapter_numbers, language)
     lines.append("\\begin{document}")
-    lines.extend(_front_matter(book, toc, classicthesis))
+    lines.extend(_front_matter(
+        book, toc, theme if theme in ("classicthesis", "memoir") else ""))
 
     assets = {a.filename: a for a in book.assets}
     next_note = 1

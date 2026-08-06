@@ -108,7 +108,7 @@ class WriteLatexTests(unittest.TestCase):
     def test_verbatim_cannot_close_early(self):
         tex = render()
         self.assertIn("code_block %raw&", tex)
-        self.assertIn("\\end {verbatim}", tex)  # the guarded content
+        self.assertIn("\\end{verbatim }", tex)  # the guarded content
         self.assertEqual(tex.count("\\end{verbatim}"), 1)
 
     def test_table_booktabs(self):
@@ -146,6 +146,37 @@ class WriteLatexTests(unittest.TestCase):
         tex = render(theme="classicthesis", trim="6x9")
         self.assertIn("paper=a4", tex)  # class option stays canonical
         self.assertIn("paperwidth=6in,paperheight=9in", tex)
+
+    def test_memoir_uses_real_class(self):
+        tex = render(theme="memoir")
+        self.assertTrue(tex.startswith("% !TEX program = pdflatex"))
+        self.assertIn("\\documentclass[12pt,twoside,onecolumn,openright,"
+                      "extrafontsizes]{memoir}", tex)
+        # The template's stock, margins, face, and leading.
+        self.assertIn("\\setstocksize{9in}{6in}", tex)
+        self.assertIn("\\setlrmarginsandblock{0.75in}{0.625in}{*}", tex)
+        self.assertIn("\\setulmarginsandblock{0.75in}{0.75in}{*}", tex)
+        self.assertIn("\\usepackage{ebgaramond}", tex)
+        self.assertIn("\\renewcommand{\\baselinestretch}{1.125}", tex)
+        # Centered small-caps chapters, fancyhdr heads, symbol footnotes.
+        self.assertIn("\\usepackage[center,sc]{titlesec}", tex)
+        self.assertIn("\\fancyhead[LE,RO]{\\thepage}", tex)
+        self.assertIn("\\fancyhead[CE]{\\itshape Test \\& Book :"
+                      " A sub<title>}", tex)
+        self.assertIn("\\markboth{Chapter \\thechapter. #1}{}", tex)
+        self.assertIn("\\usepackage[symbol*]{footmisc}", tex)
+        self.assertIn("\\MakePerPage{footnote}", tex)
+        # memoir's own title-page environment and starred contents.
+        self.assertIn("\\begin{titlingpage}", tex)
+        self.assertIn("{\\scshape\\Huge Test \\& Book\\par}", tex)
+        self.assertIn("{\\itshape\\large by\\par}", tex)
+        self.assertIn("\\tableofcontents*", tex)
+        self.assertIn("\\frontmatter", tex)
+
+    def test_memoir_off_default_leading_computes_linespread(self):
+        tex = render(theme="memoir", line_height="1.5")
+        self.assertIn("\\renewcommand{\\baselinestretch}{1.25}", tex)
+        self.assertNotIn("{1.125}", tex)
 
     def test_no_chapter_numbers(self):
         tex = render(chapter_numbers=False)
@@ -191,6 +222,9 @@ class CompileTests(unittest.TestCase):
 
     def test_classicthesis_compiles(self):
         self._compile(theme="classicthesis")
+
+    def test_memoir_compiles(self):
+        self._compile(theme="memoir")
 
     def test_error_reports_first_tex_error(self):
         with tempfile.TemporaryDirectory() as tmp:
