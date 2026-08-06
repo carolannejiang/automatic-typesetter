@@ -13,11 +13,14 @@ outer edge; the contents page uses a bullet leader rather than dots.
 
 That reference was typeset with the class's `fedra` option — Peter Bilak's
 Fedra Serif B, with oldstyle figures throughout. Fedra is a commercial
-Typotheque face, so this theme stands in Charter (XCharter in the LaTeX
-path): a low-contrast humanist book serif with oldstyle figures that
-carries the reference's warmth far better than the class's Latin Modern
-default. Dissertation-only machinery (theorems, indexing, complexity
-classes) is not part of the book design.
+Typotheque face, so nothing is bundled; the CSS/WeasyPrint path draws it
+from the reader's own install (the @font-face block below matches it by
+name) and, where it isn't installed, falls back to Charter — a
+low-contrast humanist serif with oldstyle figures that carries the
+reference's warmth far better than the class's Latin Modern default. The
+native LaTeX path stays on XCharter (Fedra there would need a
+lualatex/fontspec switch). Dissertation-only machinery (theorems,
+indexing, complexity classes) is not part of the book design.
 """
 
 from __future__ import annotations
@@ -28,7 +31,7 @@ from . import base
 
 NAME = "mydiss"
 LABEL = "Dissertation"
-BLURB = "Charter, oversized grey chapter numerals"
+BLURB = "Fedra Serif B or Charter, oversized grey numerals"
 
 # The class loads extbook at 9pt (size9.clo sets an 11pt baseline) and
 # applies \setstretch{1.25}, spreading the baseline to about 13.75pt — a
@@ -39,17 +42,17 @@ DEFAULT_LINE_HEIGHT = "1.53"
 
 # Production guidance drawn strictly from the class's own settings
 # (mydiss.cls \geometry and \setstretch): the 156 × 234 mm page, the four
-# margins as \geometry gives them, and 9pt Charter at the 1.25 spread.
-# The class prescribes nothing about paper stock or binding, so the note
-# says so rather than inventing numbers.
+# margins as \geometry gives them, and 9pt Fedra Serif B where installed
+# (else Charter) at the 1.25 spread. The class prescribes nothing about
+# paper stock or binding, so the note says so rather than inventing numbers.
 PRINT_SPECS = {
     "title": "Recommended mydiss print setup",
     "items": (
         ("Interior", "156 × 234 mm (6.14 × 9.21 in); no bleed or crop marks"),
         ("Margins", "20.8 mm spine, 31.2 mm fore-edge (a wide outer margin), "
                     "20.2 mm head, 36.8 mm foot"),
-        ("Type", "9pt Charter with oldstyle figures (standing in for the "
-                 "class's Fedra Serif) at about 13.75pt leading (1.25 line spread)"),
+        ("Type", "9pt Fedra Serif B where installed, otherwise Charter — both "
+                 "with oldstyle figures — at about 13.75pt leading (1.25 line spread)"),
         ("Printing", "Two-sided (duplex); flip on the long edge"),
         ("Color", "Black or grayscale interior"),
     ),
@@ -64,11 +67,15 @@ PRINT_SPECS = {
     },
 }
 
-# Charter stands in for the reference's commercial Fedra Serif: a
-# low-contrast humanist book serif with oldstyle figures, on macOS as the
-# "Charter" system font, in TeX as XCharter, and common on the web.
-SERIF_STACK = ('Charter, "XCharter", "Bitstream Charter", "Charter BT", '
-               'Georgia, "Palatino Linotype", Palatino, serif')
+# The reference was set in Fedra Serif B (Typotheque, commercial); the
+# @font-face block in EXTRA maps its per-weight families to weight/style
+# axes under one "Fedra Serif B" name, drawn from the reader's own install
+# (local() only — no font is bundled). Where Fedra isn't installed the
+# stack falls through to Charter, a low-contrast humanist serif with
+# oldstyle figures that carries the reference's warmth (the macOS "Charter"
+# system font, XCharter in TeX, common on the web).
+SERIF_STACK = ('"Fedra Serif B", Charter, "XCharter", "Bitstream Charter", '
+               '"Charter BT", Georgia, "Palatino Linotype", Palatino, serif')
 MONO_STACK = base.MONO_STACK
 
 # Overrides transcribed from the class's \titleformat directives: the
@@ -78,6 +85,31 @@ MONO_STACK = base.MONO_STACK
 EXTRA = Template(
     """
 /* ---- mydiss overrides (after Michael Ummels's mydiss dissertation class) ---- */
+/* Fedra Serif B (the reference face), assembled from the reader's own
+   install: Typotheque ships each weight as its own family, so remap Book
+   and Bold to the normal/bold axes under one name. local() only — nothing
+   is bundled; absent the font the stack falls through to Charter. */
+@font-face {
+  font-family: "Fedra Serif B";
+  src: local("Fedra Serif B Pro Book"), local("FedraSerifBPro-Book");
+  font-weight: normal; font-style: normal;
+}
+@font-face {
+  font-family: "Fedra Serif B";
+  src: local("Fedra Serif B Pro Book Italic"), local("FedraSerifBPro-BookItalic");
+  font-weight: normal; font-style: italic;
+}
+@font-face {
+  font-family: "Fedra Serif B";
+  src: local("Fedra Serif B Pro Bold"), local("FedraSerifBPro-Bold");
+  font-weight: bold; font-style: normal;
+}
+@font-face {
+  font-family: "Fedra Serif B";
+  src: local("Fedra Serif B Pro Bold Italic"), local("FedraSerifBPro-BoldItalic");
+  font-weight: bold; font-style: italic;
+}
+
 /* Oldstyle figures throughout, as the reference's Fedra Serif sets them. */
 body { font-variant-numeric: oldstyle-nums; }
 
@@ -94,6 +126,8 @@ header.chapter-head .chapter-number {
   color: #b3b3b3;
   letter-spacing: 0;
   text-transform: none;
+  /* The class sets the numeral in lining figures (its -LF family). */
+  font-variant-numeric: lining-nums;
   margin-bottom: 0.05em;
 }
 header.chapter-head h1.chapter-title {

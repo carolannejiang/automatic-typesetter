@@ -463,6 +463,18 @@ class TufteCssTests(unittest.TestCase):
         self.assertIn('content: "\\2003\\2003" target-counter(attr(href url), page)',
                       css[furniture:])
 
+    def test_body_pins_bembo_by_face_to_dodge_the_small_cap_sibling(self):
+        # Bembo's family carries SC/Expert/OsF siblings that otherwise
+        # capture the plain roman; pin the faces by PostScript name and lead
+        # the stack with the assembled family, ET Book as the fallback.
+        css = themes.epub_css(theme="tufte")
+        self.assertIn('font-family: "Tufte Bembo";', css)
+        self.assertIn('local("Bembo"), local("ETBembo-RomanOSF")', css)
+        self.assertIn('local("Bembo-Italic")', css)
+        self.assertIn('"Tufte Bembo", "URW Palladio L"', css)
+        # The ambiguous bare family entries that grabbed the small caps are gone.
+        self.assertNotIn('"Bembo Book"', css)
+
     def test_epub_css_restyles_without_paged_furniture(self):
         css = themes.epub_css(theme="tufte")
         self.assertIn("tufte overrides", css)
@@ -605,7 +617,7 @@ class MydissCssTests(unittest.TestCase):
         self.assertEqual(specs["title"], "Recommended mydiss print setup")
         guidance = " ".join(value for _, value in specs["items"])
         self.assertIn("156 × 234 mm", guidance)
-        self.assertIn("9pt Charter", guidance)
+        self.assertIn("9pt Fedra Serif B", guidance)
         # The class prescribes no stock/binding; the note says so.
         self.assertIn("prescribes no paper stock", specs["note"])
         self.assertNotIn("gsm", guidance + specs["note"])
@@ -623,12 +635,15 @@ class MydissCssTests(unittest.TestCase):
         self.assertIn("font-size: 10.67em;", css)
         self.assertIn("header.chapter-head { text-align: right; }", css)
 
-    def test_body_sets_charter_with_oldstyle_figures(self):
-        # Charter (with oldstyle figures) stands in for the reference's
-        # commercial Fedra Serif.
+    def test_body_prefers_fedra_with_charter_fallback_and_oldstyle_figures(self):
+        # Fedra Serif B (the reference face) is preferred where installed —
+        # assembled by @font-face from the reader's own copy — with Charter
+        # as the fallback, both showing oldstyle figures.
         css = themes.epub_css(theme="mydiss")
         self.assertIn("font-variant-numeric: oldstyle-nums;", css)
-        self.assertIn("Charter", css)
+        self.assertIn('font-family: "Fedra Serif B";', css)
+        self.assertIn('local("Fedra Serif B Pro Book")', css)
+        self.assertIn('"Fedra Serif B", Charter', css)
 
     def test_print_css_sets_italic_outer_heads_and_a_bullet_toc(self):
         css = themes.print_css(theme="mydiss", book_title="Field Notes")
