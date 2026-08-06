@@ -89,9 +89,13 @@ class Job:
 def _register_job(job: Job) -> None:
     with _jobs_lock:
         _jobs[job.id] = job
-        # Evict the oldest jobs (and their temp dirs) beyond the cap.
+        # Evict the oldest *finished* jobs (and their temp dirs) beyond the
+        # cap; never a queued/running build, whose workdir is still in use.
         if len(_jobs) > MAX_JOBS:
-            for old_id in sorted(_jobs, key=lambda j: _jobs[j].created)[: len(_jobs) - MAX_JOBS]:
+            finished = sorted(
+                (j for j in _jobs if _jobs[j].status in ("done", "error")),
+                key=lambda j: _jobs[j].created)
+            for old_id in finished[: len(_jobs) - MAX_JOBS]:
                 old = _jobs.pop(old_id)
                 shutil.rmtree(old.workdir, ignore_errors=True)
 
@@ -543,6 +547,10 @@ class Handler(BaseHTTPRequestHandler):
         error, params, uploads = read_form_body(
             self.headers.get("Content-Length"), self.headers.get("Content-Type"),
             self.rfile, MAX_BODY)
+        if error == 413:
+            self._json(413, {"error": f"Upload too large — the limit here is "
+                                      f"{MAX_BODY // (1024 * 1024)} MB."})
+            return
         if error:
             self._json(error, {"error": "bad request body"})
             return

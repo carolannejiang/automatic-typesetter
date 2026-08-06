@@ -108,6 +108,44 @@ class IngestTests(unittest.TestCase):
         self.assertEqual(result.assets, [])
         self.assertNotIn("<img", result.chapters[0].html)
 
+    def test_strip_prunes_orphaned_figure_caption(self):
+        # An <img> inside a <figure> takes the <figcaption> with it when
+        # stripped — otherwise the caption typesets with no picture.
+        prose = "A long paragraph, with commas, to score as an article. " * 4
+        page = ('<html><body><article><h1>T</h1><p>%s</p>'
+                '<figure><img src="https://x.example/p.png">'
+                '<figcaption>Lonely caption</figcaption></figure>'
+                '<p>%s</p></article></body></html>' % (prose, prose))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, "page.html", page)
+            result = ingest([path], IngestOptions(images="strip"))
+        html = result.chapters[0].html
+        self.assertNotIn("Lonely caption", html)
+        self.assertNotIn("<figure", html)
+
+    def test_detach_image_preserves_figures_wrapping_other_content(self):
+        # An incidental <img> (an avatar in the caption, a badge) must not
+        # take a figure's real content — a pull-quote or embed — with it.
+        from bookformatter import htmldom
+        from bookformatter.ingest import _detach_image
+
+        def prune(fragment):
+            root = htmldom.parse(fragment)
+            for img in list(root.find_all("img")):
+                _detach_image(img)
+            return htmldom.inner_html(root)
+
+        kept = prune('<figure><blockquote>Great quote.</blockquote>'
+                     '<figcaption>Author <img src="a.png"></figcaption></figure>')
+        self.assertIn("Great quote.", kept)
+        self.assertIn("<figure", kept)
+        self.assertNotIn("a.png", kept)
+
+        orphan = prune('<figure><img src="p.png">'
+                       '<figcaption>Lonely</figcaption></figure>')
+        self.assertNotIn("Lonely", orphan)
+        self.assertNotIn("<figure", orphan)
+
     def test_remote_images_download_into_assets(self):
         html = """<html><body><article><p>%s</p>
         <img src="https://imgs.example/pic.png"></article></body></html>""" % PROSE

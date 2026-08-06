@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 
 from . import docx as docx_writer
 from . import epub as epub_writer
@@ -10,6 +11,8 @@ from . import icml as icml_writer
 from . import idml as idml_writer
 from . import printbook
 from .indesign import extract_link_assets
+
+_REMOTE_IMG = re.compile(r'<img[^>]+src=["\']https?://', re.I)
 
 
 def write_outputs(book, formats, out_dir: str, name: str, *,
@@ -32,6 +35,11 @@ def write_outputs(book, formats, out_dir: str, name: str, *,
 
     if "epub" in formats:
         progress("Writing EPUB…")
+        if any(_REMOTE_IMG.search(ch.html) for ch in book.chapters):
+            warnings.append(
+                "EPUB readers can't load remote images, so this file points at "
+                "images that aren't inside it and won't validate — rebuild with "
+                "images downloaded (the default) to embed them.")
         epub_path = os.path.join(out_dir, f"{name}.epub")
         epub_writer.write_epub(book, epub_path, theme=theme, drop_caps=drop_caps,
                                chapter_numbers=chapter_numbers,

@@ -118,6 +118,37 @@ class ServerlessTests(unittest.TestCase):
         code, _, _ = call("GET", "/build")
         self.assertEqual(code, 405)
 
+    def test_oversize_body_reports_the_limit(self):
+        from bookformatter import serverless
+        original = serverless.MAX_BODY
+        serverless.MAX_BODY = 2 * 1024 * 1024
+        try:
+            code, _, body = call("POST", "/build", b"x" * (2 * 1024 * 1024 + 1),
+                                 "application/x-www-form-urlencoded")
+            self.assertEqual(code, 413)
+            err = json.loads(body)["error"]
+            self.assertIn("too large", err.lower())
+            self.assertIn("MB", err)
+        finally:
+            serverless.MAX_BODY = original
+
+    def test_failed_build_surfaces_warnings(self):
+        # An unsupported upload is skipped with a warning, then the build
+        # fails with no input — the warning must ride along in the 400 so a
+        # cloud user (who can't poll a job) learns why.
+        boundary = "B"
+        body = (
+            f'--{boundary}\r\nContent-Disposition: form-data; name="files"; '
+            f'filename="notes.xyz"\r\nContent-Type: application/octet-stream'
+            f"\r\n\r\nhello\r\n--{boundary}--\r\n"
+        ).encode()
+        code, _, resp = call("POST", "/build", body,
+                             f"multipart/form-data; boundary={boundary}")
+        self.assertEqual(code, 400)
+        payload = json.loads(resp)
+        self.assertTrue(any("notes.xyz" in w for w in payload.get("warnings", [])),
+                        payload)
+
 
 if __name__ == "__main__":
     unittest.main()
