@@ -26,7 +26,9 @@ from bookformatter import themes  # noqa: E402
 
 SAMPLE = os.path.join(ROOT, "examples", "field-notes")
 THUMBS = os.path.join(ROOT, "bookformatter", "thumbs")
-OPENER_MARKER = "Nobody reads"  # first line of chapter 1's body
+# First line of chapter 1's body, sans its initial letter: a lettrine
+# theme (polimi) extracts the initial apart from the word.
+OPENER_MARKER = "obody reads"
 HEIGHT = 440
 
 
