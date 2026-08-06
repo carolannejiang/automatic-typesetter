@@ -35,7 +35,7 @@ import re
 import shutil
 import subprocess
 
-from . import htmldom, themes
+from . import apacite, htmldom, themes
 from .footnotes import inline_footnotes
 from .frontmatter import copyright_lines
 from .linknotes import annotate_links
@@ -147,7 +147,12 @@ class _TexConverter:
             return [text] if text else []
         if tag in _SECTION_FOR:
             text = _tidy(self._inline(node.children))
-            return ["\\%s{%s}" % (_SECTION_FOR[tag], text)] if text else []
+            if not text:
+                return []
+            # A footnote in a sectioning command's moving argument is fragile;
+            # \protect keeps it from erroring in the ToC / running head.
+            text = text.replace("\\footnote", "\\protect\\footnote")
+            return ["\\%s{%s}" % (_SECTION_FOR[tag], text)]
         if tag == "blockquote":
             inner = self._blocks(node.children)
             if not inner:
@@ -595,12 +600,41 @@ def _front_matter(book: Book, toc: bool, style: str) -> list:
 
 # -- writer ------------------------------------------------------------------
 
+def _references_section(book, assets, link_citations) -> list:
+    """An unnumbered References chapter: the cited links as an APA list, then
+    the web-ingested chapters' own sources — each a hanging-indent paragraph
+    (the ref-entry HTML fragments apacite emits, converted inline)."""
+    entries = apacite.reference_entries(link_citations)
+    sources = apacite.chapter_source_entries(book.chapters)
+    if not (entries or sources):
+        return []
+    conv = _TexConverter(assets)
+
+    def paras(frags):
+        out = []
+        for frag in frags:
+            node = htmldom.parse(frag).find("p")
+            inner = _tidy(conv._inline(node.children)) if node is not None else ""
+            if inner:
+                out.append("\\par\\noindent\\hangindent=1.5em\\hangafter=1\n"
+                           "%s\\par" % inner)
+        return out
+
+    lines = ["\\chapter*{References}",
+             "\\addcontentsline{toc}{chapter}{References}"]
+    lines.extend(paras(entries))
+    if sources:
+        lines.append("\\section*{Chapter sources}")
+        lines.extend(paras(sources))
+    return lines
+
+
 def write_latex(book: Book, path: str, theme: str = "classic",
                 trim: str = None, font_size: str = None,
                 line_height: str = None, chapter_start: str = "right",
                 toc: bool = True, chapter_numbers: bool = True,
                 footnotes: bool = True, link_notes: bool = True,
-                link_citations: dict = None) -> None:
+                link_citations: dict = None, references: bool = False) -> None:
     trim = trim if trim is not None else themes.default_trim(theme)
     font_size = (font_size if font_size is not None
                  else themes.default_font_size(theme))
@@ -636,6 +670,9 @@ def write_latex(book: Book, path: str, theme: str = "classic",
         body = _TexConverter(assets).convert(root)
         if body:
             lines.append(body)
+
+    if references:
+        lines.extend(_references_section(book, assets, link_citations))
 
     lines.append("\\end{document}")
     parent = os.path.dirname(os.path.abspath(path))
