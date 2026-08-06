@@ -45,6 +45,11 @@ python3 -m bookformatter chapters/ -t "Essays" --theme classicthesis
 # corners, and a leaderless contents page
 python3 -m bookformatter chapters/ -t "Essays" --theme memoir
 
+# The same template in full dress — lettrine drop caps opening each
+# chapter, per-chapter symbol footnotes († ‡ §), numbered bold contents
+# lines, and the byline and copyright dropped to the page foot
+python3 -m bookformatter chapters/ -t "Essays" --theme memoir2
+
 # Or the Cerberus Polimi thesis design (memoir's veelo chapter style):
 # 12pt Minion Pro on memoir's A4 page, huge chapter numerals beside black
 # bars bleeding off the fore-edge, white-on-black section numbers hung in
@@ -262,7 +267,9 @@ compiles on its own; keep the `images/` folder beside it).
   class set up as the reference 6×9 novel template — 12pt EB Garamond,
   titlesec's centered small-caps chapters, fancyhdr italic running
   heads, per-page symbol footnotes — compiled with pdflatex like the
-  template itself.
+  template itself. `--theme memoir2` adds the template's full dress:
+  `lettrine` drop caps on every chapter, the flyleaf and half-title
+  front matter, and the self-listing unstarred contents.
 - `--theme polimi` likewise: `memoir` set up as the Polimi thesis's own
   `thesis_polimi.tex` — the veelo chapter style, the companion-copied
   running heads, titlesec's TikZ section bar, white-on-black caption

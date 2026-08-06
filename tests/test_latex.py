@@ -229,6 +229,76 @@ class WriteLatexTests(unittest.TestCase):
         self.assertIn("openright", render(theme="polimi",
                                           chapter_start="any"))
 
+    def test_memoir_leaves_the_full_dress_off(self):
+        tex = render(theme="memoir")
+        self.assertNotIn("\\usepackage{lettrine}", tex)
+        self.assertNotIn("\\lettrine{", tex)
+        self.assertNotIn("\\MakeUppercase", tex)
+
+    def test_memoir2_adds_the_template_full_dress(self):
+        tex = render(theme="memoir2")
+        # The same genuine memoir setup as --theme memoir...
+        self.assertTrue(tex.startswith("% !TEX program = pdflatex"))
+        self.assertIn("extrafontsizes]{memoir}", tex)
+        self.assertIn("\\setstocksize{9in}{6in}", tex)
+        self.assertIn("\\usepackage{ebgaramond}", tex)
+        self.assertIn("\\usepackage[symbol*]{footmisc}", tex)
+        # ...plus lettrine chapter openings on plain-word chapters,
+        self.assertIn("\\usepackage{lettrine}", tex)
+        self.assertIn("\\lettrine{F}{irst} chapter with an image.", tex)
+        self.assertIn("\\lettrine{R}{ead} ", tex)
+        # the flyleaf and half-title leaves,
+        self.assertEqual(tex.count("\\thispagestyle{empty}\\null\\clearpage"), 2)
+        self.assertIn("\\centerline{\\Huge\\MakeUppercase{Test \\& Book}}", tex)
+        # and the template's unstarred, self-listing contents.
+        self.assertIn("\\tableofcontents\n", tex)
+        self.assertNotIn("\\tableofcontents*", tex)
+
+    def test_memoir2_leaves_wordless_openings_plain(self):
+        # A chapter that opens with a list (no opening word) gets no
+        # lettrine, and neither does a one-letter opening word — the same
+        # openings the print pipeline's _bake_lettrine declines.
+        b = support.make_book([
+            Chapter(title="C", html=BRACKETS_HTML),
+            Chapter(title="D", html="<p>I remember the day it began.</p>"),
+        ])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "b.tex")
+            write_latex(b, path, theme="memoir2")
+            tex = open(path).read()
+        self.assertNotIn("\\lettrine{", tex)
+        self.assertIn("I remember the day it began.", tex)
+
+    def test_mydiss_uses_extbook_and_transcribes_the_class(self):
+        tex = render(theme="mydiss")
+        self.assertTrue(tex.startswith("% !TEX program = pdflatex"))
+        self.assertIn("\\documentclass[9pt,twoside,openright]{extbook}", tex)
+        # Charter (XCharter, oldstyle figures) stands in for Fedra Serif.
+        self.assertIn("\\usepackage[osf]{XCharter}", tex)
+        # The class's page and 1.25 spread.
+        self.assertIn("paperwidth=6.14173in,paperheight=9.2126in", tex)
+        self.assertIn("\\setstretch{1.25}", tex)
+        self.assertIn("\\setlength{\\parindent}{1.5em}", tex)
+        # The signature display chapter: a 96pt halfgray numeral ragged
+        # right over a 24pt bold title.
+        self.assertIn("\\definecolor{chaptergrey}{rgb}{0.7,0.7,0.7}", tex)
+        self.assertIn("\\color{chaptergrey}\\raggedleft\\fontseries{bx}"
+                      "\\fontsize{96}{96}\\selectfont\\thechapter", tex)
+        self.assertIn("\\fontsize{24}{24}\\selectfont", tex)
+        # \Large upright section heads and titleps outer running heads.
+        self.assertIn("\\titleformat{\\section}[hang]{\\normalfont\\Large}", tex)
+        self.assertIn("\\newpagestyle{main}{", tex)
+        self.assertIn("\\chaptertitle][][]{}{}{\\small\\itshape", tex)
+        # A titletoc bullet-leader contents, and the generic title page.
+        self.assertIn("\\nolinebreak\\dissbullet\\nolinebreak", tex)
+        self.assertIn("\\frontmatter", tex)
+        self.assertIn("{\\Huge Test \\& Book\\par}", tex)
+
+    def test_mydiss_off_default_leading_computes_setstretch(self):
+        tex = render(theme="mydiss", line_height="1.5")
+        self.assertIn("\\setstretch{1.227}", tex)
+        self.assertNotIn("\\setstretch{1.25}", tex)
+
     def test_no_chapter_numbers(self):
         tex = render(chapter_numbers=False)
         self.assertIn("\\setcounter{secnumdepth}{-1}", tex)
@@ -328,6 +398,12 @@ class CompileTests(unittest.TestCase):
 
     def test_memoir_compiles(self):
         self._compile(theme="memoir")
+
+    def test_memoir2_compiles(self):
+        self._compile(theme="memoir2")
+
+    def test_mydiss_compiles(self):
+        self._compile(theme="mydiss")
 
     def test_polimi_compiles(self):
         self._compile(theme="polimi")

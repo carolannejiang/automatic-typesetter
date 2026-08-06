@@ -209,6 +209,172 @@ class MemoirCssTests(unittest.TestCase):
         self.assertNotIn("page: clean", css)
 
 
+class Memoir2CssTests(unittest.TestCase):
+    """The same template as memoir, in full dress."""
+
+    def test_chapter_label_spells_out_chapter(self):
+        self.assertEqual(themes.chapter_label("memoir2", 3), "Chapter 3")
+
+    def test_declares_the_template_type_setting(self):
+        self.assertEqual(themes.default_font_size("memoir2"), "12pt")
+        self.assertEqual(themes.default_line_height("memoir2"), "1.36")
+        self.assertEqual(themes.default_trim("memoir2"), "6x9")
+
+    def test_asks_for_baked_lettrine_and_toc_numbers(self):
+        self.assertTrue(themes.lettrine_run("memoir2"))
+        self.assertTrue(themes.toc_numbers("memoir2"))
+        # The plainer memoir theme and the rest stay unbaked.
+        self.assertFalse(themes.lettrine_run("memoir"))
+        self.assertFalse(themes.toc_numbers("memoir"))
+        self.assertFalse(themes.lettrine_run("nonsense"))
+        self.assertFalse(themes.toc_numbers("classic"))
+
+    def test_exposes_template_print_guidance(self):
+        specs = themes.print_specs("memoir2")
+        self.assertEqual(specs["title"],
+                         "Recommended memoir template print setup")
+        guidance = " ".join(value for _, value in specs["items"])
+        self.assertIn("6 × 9 in (152 × 229 mm)", guidance)
+        self.assertIn("0.75 in spine, 0.625 in fore-edge", guidance)
+        self.assertIn("12pt EB Garamond", guidance)
+        # The symbols as the template actually prints them: dagger first.
+        self.assertIn("symbols († ‡ § …)", guidance)
+        self.assertEqual(specs["source"]["url"],
+                         "https://www.overleaf.com/project/6a73ee79766a5d9bbca17c3e")
+
+    def test_print_css_keeps_the_memoir_furniture(self):
+        css = themes.print_css(theme="memoir2", book_title="Field Notes")
+        # Outer-corner folios, italic center heads, "Chapter N. " label.
+        self.assertIn("@top-left { content: counter(page)", css)
+        self.assertIn("@top-right { content: counter(page)", css)
+        self.assertIn("string-set: chapter-label content() \". \";", css)
+        self.assertIn("content: string(chapter-label, first-except) "
+                      "string(chapter-title, first-except);", css)
+        self.assertIn("font-style: italic", css)
+        self.assertIn("header.chapter-head { page: clean; }", css)
+        self.assertIn("section.chapter { page: auto; }", css)
+        self.assertIn("EB Garamond", css)
+        furniture = css.index("memoir2 print furniture")
+        self.assertGreater(furniture, css.index("string(book-title, first-except)"))
+        self.assertGreater(furniture, css.index('leader(". ")'))
+
+    def test_verso_head_carries_title_and_subtitle(self):
+        # The template's fancyhead[CE] sets "\booktitle : \subtitle".
+        css = themes.print_css(theme="memoir2", book_title="Field Notes",
+                               book_subtitle="A Study")
+        self.assertIn('string-set: book-title "Field Notes : A Study";', css)
+        # Without a subtitle the head is the bare title.
+        css = themes.print_css(theme="memoir2", book_title="Field Notes")
+        self.assertIn('string-set: book-title "Field Notes";',
+                      css.split("memoir2 print furniture")[1])
+
+    def test_print_css_sets_the_lettrine_opening(self):
+        css = themes.print_css(theme="memoir2")
+        lettrine = css.index("span.lettrine {")
+        self.assertIn("float: left", css[lettrine:lettrine + 120])
+        self.assertIn("span.lettrine-run { font-variant: small-caps", css)
+        # A redundant --drop-caps must not enlarge the letter after the
+        # baked initial: the theme's higher-specificity rule disarms it.
+        self.assertIn("float: none; font-size: 1em;", css)
+
+    def test_print_css_marks_footnotes_with_the_template_symbols(self):
+        css = themes.print_css(theme="memoir2")
+        self.assertIn("@counter-style memoir2-fnsymbols", css)
+        # Dagger first — the sequence the template's perpage bookkeeping
+        # actually prints — and numbers past the list like symbol*.
+        self.assertIn('symbols: "\\2020" "\\2021" "\\A7"', css)
+        self.assertIn("fallback: decimal;", css)
+        self.assertIn("section.chapter { counter-reset: footnote 0; }", css)
+        self.assertIn("content: counter(footnote, memoir2-fnsymbols);", css)
+        self.assertIn('content: counter(footnote, memoir2-fnsymbols) "\\2009";', css)
+
+    def test_print_css_anchors_the_front_matter_feet(self):
+        css = themes.print_css(theme="memoir2", trim="6x9")
+        # The byline drops to the title page's foot, above any publisher.
+        self.assertIn("section.titlepage { position: relative; }", css)
+        self.assertIn("position: absolute; bottom: 0; left: 0; right: 0;", css)
+        self.assertIn(".book-author:not(:last-child) { bottom: 2.6em; }", css)
+        # The copyright text bottom-aligns inside a full-height flex column
+        # (a table cell would shed the frontmatter page group).
+        copyright = css.index("section.copyrightpage {\n  display: flex;")
+        self.assertIn("justify-content: flex-end;", css[copyright:copyright + 160])
+        self.assertIn("height: 7.5in;", css[copyright:copyright + 160])
+
+    def test_print_css_openers_take_a_plain_folio(self):
+        css = themes.print_css(theme="memoir2")
+        clean = css.index("@page clean")
+        self.assertIn("@bottom-center { content: counter(page)", css[clean:])
+
+    def test_print_geometry_matches_the_template(self):
+        css = themes.print_css(theme="memoir2", trim="6x9")
+        self.assertIn("margin: 0.75in 0.625in 0.75in 0.75in;", css)
+
+    def test_toc_is_bold_left_aligned_and_leaderless(self):
+        css = themes.print_css(theme="memoir2")
+        self.assertIn("text-align: left; font-size: 2em; font-weight: bold;", css)
+        self.assertIn("nav.print-toc li { font-weight: bold;", css)
+        self.assertIn("nav.print-toc span.toc-number", css)
+        furniture = css.index("memoir2 print furniture")
+        self.assertNotIn('leader(". ")', css[furniture:])
+        self.assertIn('leader(" ")', css[furniture:])
+
+    def test_epub_css_restyles_without_paged_furniture(self):
+        css = themes.epub_css(theme="memoir2")
+        self.assertIn("memoir2 overrides", css)
+        self.assertNotIn("@top-left", css)
+        self.assertNotIn("span.lettrine", css)
+        self.assertNotIn("@counter-style", css)
+
+    def test_print_html_bakes_the_lettrine_spans(self):
+        book = Book(
+            meta=BookMeta(title="Field Notes", author="Jane Doe"),
+            chapters=[
+                Chapter(title="Plain", html="<p>Letterine example runs.</p>"),
+                Chapter(title="Quoted", html="<p>“Quoted openings keep the mark.</p>"),
+                Chapter(title="Marked", html="<p><em>Italic</em> openings stay.</p>"),
+                Chapter(title="Bare", html="<p>A one-letter word stays.</p>"),
+            ],
+        )
+        page = printbook.build_print_html(book, theme="memoir2")
+        self.assertIn('<span class="lettrine">L</span>'
+                      '<span class="lettrine-run">etterine</span> example', page)
+        # An opening quotation mark drops with the initial.
+        self.assertIn('<span class="lettrine">“Q</span>'
+                      '<span class="lettrine-run">uoted</span>', page)
+        # Markup-led and one-letter openings are left untouched.
+        self.assertIn("<p><em>Italic</em> openings stay.</p>", page)
+        self.assertIn("<p>A one-letter word stays.</p>", page)
+        # Other themes bake nothing.
+        self.assertNotIn("lettrine", printbook.build_print_html(book, theme="memoir"))
+
+    def test_print_toc_numbers_follow_the_chapter_numbers_flag(self):
+        book = _book()
+        page = printbook.build_print_html(book, theme="memoir2")
+        self.assertIn('<span class="toc-number">1</span>The Shape of a Page', page)
+        self.assertIn('<span class="toc-number">2</span>Rivers and Widows', page)
+        # Off with the chapter numbers, off in the contents. (The style
+        # rule stays in the sheet; the markup carries no number spans.)
+        page = printbook.build_print_html(book, theme="memoir2",
+                                          chapter_numbers=False)
+        self.assertNotIn('<span class="toc-number">', page)
+        # Other themes keep their plain contents lines.
+        page = printbook.build_print_html(book, theme="memoir")
+        self.assertNotIn('<span class="toc-number">', page)
+
+    def test_print_toc_leaves_the_notes_line_unnumbered(self):
+        # Book-end link notes add a Notes section; like LaTeX's \chapter*
+        # it gets no number in the contents.
+        book = Book(
+            meta=BookMeta(title="Field Notes", author="Jane Doe"),
+            chapters=[Chapter(title="One", html=(
+                '<p>See <a href="https://example.com/">the site</a>.</p>'))],
+        )
+        page = printbook.build_print_html(book, theme="memoir2",
+                                          link_notes="end")
+        self.assertIn('<span class="toc-number">1</span>One', page)
+        self.assertIn('<li><a href="#endnotes">Notes</a></li>', page)
+
+
 class VsiCssTests(unittest.TestCase):
     def test_chapter_label_spells_out_chapter(self):
         self.assertEqual(themes.chapter_label("vsi", 3), "Chapter 3")
@@ -425,6 +591,83 @@ class PolimiCssTests(unittest.TestCase):
         self.assertIn("content: counter(section);", css)
 
 
+class MydissCssTests(unittest.TestCase):
+    def test_chapter_label_is_the_bare_number(self):
+        self.assertEqual(themes.chapter_label("mydiss", 3), "3")
+
+    def test_declares_the_class_page_and_type(self):
+        self.assertEqual(themes.default_trim("mydiss"), "mydiss")
+        self.assertEqual(themes.default_font_size("mydiss"), "9pt")
+        self.assertEqual(themes.default_line_height("mydiss"), "1.53")
+
+    def test_exposes_class_print_guidance(self):
+        specs = themes.print_specs("mydiss")
+        self.assertEqual(specs["title"], "Recommended mydiss print setup")
+        guidance = " ".join(value for _, value in specs["items"])
+        self.assertIn("156 × 234 mm", guidance)
+        self.assertIn("9pt Charter", guidance)
+        # The class prescribes no stock/binding; the note says so.
+        self.assertIn("prescribes no paper stock", specs["note"])
+        self.assertNotIn("gsm", guidance + specs["note"])
+
+    def test_print_geometry_matches_the_class(self):
+        css = themes.print_css(theme="mydiss", trim="mydiss")
+        self.assertIn("size: 6.14173in 9.2126in;", css)
+        self.assertIn("margin: 0.795in 1.228in 1.449in 0.819in;", css)
+
+    def test_chapter_opener_is_an_oversized_grey_numeral(self):
+        css = themes.print_css(theme="mydiss", book_title="Field Notes")
+        self.assertIn("mydiss overrides", css)
+        # The signature: a huge halfgray numeral, the head ragged right.
+        self.assertIn("color: #b3b3b3;", css)
+        self.assertIn("font-size: 10.67em;", css)
+        self.assertIn("header.chapter-head { text-align: right; }", css)
+
+    def test_body_sets_charter_with_oldstyle_figures(self):
+        # Charter (with oldstyle figures) stands in for the reference's
+        # commercial Fedra Serif.
+        css = themes.epub_css(theme="mydiss")
+        self.assertIn("font-variant-numeric: oldstyle-nums;", css)
+        self.assertIn("Charter", css)
+
+    def test_print_css_sets_italic_outer_heads_and_a_bullet_toc(self):
+        css = themes.print_css(theme="mydiss", book_title="Field Notes")
+        # Chapter (number + title) verso, section title recto, small italic...
+        self.assertIn("string-set: section-title content();", css)
+        # The number carries its own trailing space (unnumbered chapters add
+        # nothing), and the head resets section-title so it can't go stale.
+        self.assertIn('string-set: chapter-num content() "\\2002";', css)
+        self.assertIn("string-set: chapter-title content(), section-title \"\";", css)
+        self.assertIn("content: string(chapter-num, first-except) "
+                      "string(chapter-title, first-except);", css)
+        self.assertIn("content: string(section-title);", css)
+        self.assertIn("font-style: italic;", css)
+        # ...the theme block comes after the shared furniture it replaces...
+        furniture = css.index("mydiss print furniture")
+        self.assertGreater(furniture, css.index("string(book-title, first-except)"))
+        self.assertGreater(furniture, css.index("content: counter(page)"))
+        self.assertGreater(furniture, css.index('leader(". ")'))
+        # ...and the contents page drops dot leaders for a bullet.
+        self.assertNotIn("leader(", css[furniture:])
+        self.assertIn('content: "\\2002\\2022\\2002" target-counter(attr(href url), page)',
+                      css[furniture:])
+
+    def test_print_css_openers_take_a_plain_folio(self):
+        css = themes.print_css(theme="mydiss")
+        self.assertIn("header.chapter-head { page: clean; }", css)
+        self.assertIn("section.chapter { page: auto; }", css)
+        clean = css.index("@page clean")
+        self.assertIn("@bottom-right { content: counter(page)", css[clean:])
+        # The Chrome fallback neutralizer keeps named-page pagination intact.
+        self.assertIn("@supports (page: auto) {\n  header.chapter-head { page: auto; }\n}", css)
+
+    def test_epub_css_restyles_without_paged_furniture(self):
+        css = themes.epub_css(theme="mydiss")
+        self.assertIn("mydiss overrides", css)
+        self.assertNotIn("@top-left", css)
+        self.assertNotIn("page: clean", css)
+
+
 class ThemeBuildTests(unittest.TestCase):
     def test_print_html_classic_is_unchanged(self):
         page = printbook.build_print_html(_book(), theme="classic")
@@ -523,7 +766,7 @@ class ThemeLabelTests(unittest.TestCase):
 class ThemeSourceTests(unittest.TestCase):
     def test_template_themes_cite_a_linked_source(self):
         # The LaTeX-template themes carry their source in PRINT_SPECS.
-        for name in ("memoir", "classicthesis", "tufte"):
+        for name in ("memoir", "memoir2", "classicthesis", "tufte", "mydiss"):
             source = themes.theme_source(name)
             self.assertTrue(source["name"], name)
             self.assertTrue(source["url"].startswith("https://"), name)
