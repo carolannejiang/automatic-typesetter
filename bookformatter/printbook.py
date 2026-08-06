@@ -20,7 +20,7 @@ import subprocess
 import tempfile
 
 from . import frontmatter, htmldom, themes
-from .footnotes import inline_footnotes
+from .footnotes import inline_footnotes, number_sidenote_calls
 from .linknotes import annotate_links, endnote_html
 from .models import Book
 
@@ -91,6 +91,8 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
         content = _inline_assets(content, assets_by_name)
         if footnotes:
             content = inline_footnotes(content)
+            if themes.sidenote_calls(theme):
+                content = number_sidenote_calls(content)
         if link_notes == "end":
             content, next_link_note = annotate_links(
                 content, start=next_link_note, mode="endnote",
