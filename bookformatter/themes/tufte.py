@@ -130,10 +130,15 @@ PRINT_SPECS = {
     },
 }
 
-# Tufte's books are set in Bembo; the classes fall back to Palatino. ET
-# Book is the free Bembo digitization Tufte commissioned — prefer it and
-# real Bembos, then the Palladio/Palatino chain the reference PDF embeds.
-SERIF_STACK = ('"ET Book", "Bembo Book", Bembo, "URW Palladio L", P052, '
+# Tufte's books are set in Bembo. The @font-face block in EXTRA assembles a
+# "Tufte Bembo" family from the reader's install, per style, so we get a
+# genuine roman/italic/bold rather than a synthesized one — and, critically,
+# pin Monotype Bembo by its PostScript name, since that family also carries
+# SC/Expert/OsF siblings that otherwise capture the plain roman (rendering
+# body copy in small caps). ET Book, the free Bembo digitization Tufte
+# commissioned, is the per-style fallback; absent both, the stack drops to
+# the Palladio/Palatino chain the reference PDF embeds.
+SERIF_STACK = ('"Tufte Bembo", "URW Palladio L", P052, '
                '"TeX Gyre Pagella", Palatino, "Palatino Linotype", '
                '"Book Antiqua", Georgia, serif')
 # The title page of Beautiful Evidence is Gill Sans (macOS ships it); the
@@ -153,6 +158,33 @@ _DARKGRAY = "#404040"
 EXTRA = Template(
     """
 /* ---- tufte overrides (after the Tufte-LaTeX classes) ---- */
+/* Bembo — Tufte's face — assembled from the reader's install. Monotype
+   Bembo is pinned by PostScript name (its family carries SC/Expert/OsF
+   siblings that otherwise capture the roman as small caps); ET Book (the
+   free digitization, its OSF cuts carrying old-style figures) is the
+   per-style fallback. local() only — nothing bundled; absent both the
+   serif stack drops to Palatino. */
+@font-face {
+  font-family: "Tufte Bembo";
+  src: local("Bembo"), local("ETBembo-RomanOSF"), local("ETBembo-RomanLF");
+  font-weight: normal; font-style: normal;
+}
+@font-face {
+  font-family: "Tufte Bembo";
+  src: local("Bembo-Italic"), local("Bembo Italic"), local("ETBembo-DisplayItalic");
+  font-weight: normal; font-style: italic;
+}
+@font-face {
+  font-family: "Tufte Bembo";
+  src: local("Bembo-Bold"), local("Bembo Bold"), local("ETBembo-BoldLF");
+  font-weight: bold; font-style: normal;
+}
+@font-face {
+  font-family: "Tufte Bembo";
+  src: local("Bembo-BoldItalic"), local("Bembo BoldItalic");
+  font-weight: bold; font-style: italic;
+}
+
 body { font-variant-numeric: oldstyle-nums; }
 
 /* \\RaggedRight body — hyphenation stays on, as ragged2e sets it. */

@@ -297,6 +297,18 @@ class TufteCssTests(unittest.TestCase):
         self.assertIn('content: "\\2003\\2003" target-counter(attr(href url), page)',
                       css[furniture:])
 
+    def test_body_pins_bembo_by_face_to_dodge_the_small_cap_sibling(self):
+        # Bembo's family carries SC/Expert/OsF siblings that otherwise
+        # capture the plain roman; pin the faces by PostScript name and lead
+        # the stack with the assembled family, ET Book as the fallback.
+        css = themes.epub_css(theme="tufte")
+        self.assertIn('font-family: "Tufte Bembo";', css)
+        self.assertIn('local("Bembo"), local("ETBembo-RomanOSF")', css)
+        self.assertIn('local("Bembo-Italic")', css)
+        self.assertIn('"Tufte Bembo", "URW Palladio L"', css)
+        # The ambiguous bare family entries that grabbed the small caps are gone.
+        self.assertNotIn('"Bembo Book"', css)
+
     def test_epub_css_restyles_without_paged_furniture(self):
         css = themes.epub_css(theme="tufte")
         self.assertIn("tufte overrides", css)
