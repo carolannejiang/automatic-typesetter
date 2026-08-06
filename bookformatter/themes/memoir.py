@@ -28,6 +28,34 @@ BLURB = "Garamond, centered small caps"
 DEFAULT_FONT_SIZE = "12pt"
 DEFAULT_LINE_HEIGHT = "1.36"
 
+# Production guidance drawn strictly from the reference template's own
+# settings (main.tex / options.sty): the 6x9 stock set equal to the trim
+# (\setstocksize / \settrimmedsize, so no bleed), the four margins as
+# \setlrmarginsandblock / \setulmarginsandblock give them, 12pt EB
+# Garamond at the \baselinestretch{1.125} leading, and per-page
+# symbol-marked footnotes. The template prescribes nothing about paper
+# stock or binding, so the note says so rather than inventing numbers.
+PRINT_SPECS = {
+    "title": "Recommended memoir template print setup",
+    "items": (
+        ("Interior", "6 × 9 in (152 × 229 mm); stock equals trim, so no bleed or crop marks"),
+        ("Margins", "0.75 in spine, 0.625 in fore-edge, 0.75 in head and foot"),
+        ("Type", "12pt EB Garamond at about 16.3pt leading"),
+        ("Footnotes", "Set at the foot of the page, numbered per page with symbols"),
+        ("Printing", "Two-sided (duplex)"),
+        ("Color", "Black interior"),
+    ),
+    "note": (
+        "The template specifies only the 6 × 9 page and the type above; it "
+        "prescribes no paper stock, binding correction, or cover. Confirm "
+        "the gutter with your printer and supply the cover/spine separately."
+    ),
+    "source": {
+        "name": "Memoir Book Template, 6×9 (Overleaf)",
+        "url": "https://www.overleaf.com/project/6a73ee79766a5d9bbca17c3e",
+    },
+}
+
 # The template loads the ebgaramond package; fall back to kindred
 # Garamonds where EB Garamond isn't installed.
 SERIF_STACK = ('"EB Garamond", "Garamond Premier Pro", '

@@ -121,6 +121,12 @@ PRINT_SPECS = {
         "the font-size and line-height options don't apply there, and other "
         "trims resize only the sheet, not the sidenote column."
     ),
+    "source": {
+        "name": "Book design inspired by Edward Tufte (Overleaf)",
+        "url": ("https://www.overleaf.com/project/new/template/112?id=180814"
+                "&mainFile=main.tex&templateName=Book+design+inspired+by+"
+                "Edward+Tufte&texImage=texlive-full%3A2025.1"),
+    },
 }
 
 # Tufte's books are set in Bembo; the classes fall back to Palatino. ET

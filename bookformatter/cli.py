@@ -77,12 +77,12 @@ def build_parser() -> argparse.ArgumentParser:
                              "6x9 otherwise)")
     design.add_argument("--font-size", default=None,
                         help="print body size (default: the theme's design size — "
-                             "8.5pt for vsi and short intro, 12pt for memoir, "
+                             "8.5pt for vsi, 12pt for memoir, "
                              "11pt otherwise)")
     design.add_argument("--line-height", default=None,
                         help="body leading (default: the theme's design leading — "
                              "1.30 for classicthesis, 1.36 for memoir, "
-                             "1.41 for vsi and short intro, 1.45 otherwise)")
+                             "1.41 for vsi, 1.45 otherwise)")
     design.add_argument("--chapter-start", default="right", choices=["right", "any"],
                         help="print: chapters open on a recto page or any page (default: right)")
     design.add_argument("--drop-caps", action="store_true", help="drop cap on each chapter's first paragraph")

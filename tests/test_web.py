@@ -95,10 +95,10 @@ class WebTests(unittest.TestCase):
     def test_theme_picker_cards_with_thumbnails(self):
         code, body = self._get("/")
         page = body.decode()
-        for value in ("classic", "modern", "crimson", "classical", "vsi",
-                      "classicthesis", "memoir", "short intro", "tufte"):
+        for value in ("classic", "modern", "classical", "vsi",
+                      "classicthesis", "memoir", "tufte"):
             self.assertIn(f'name="theme" value="{value}"', page)
-        self.assertEqual(page.count("data:image/webp;base64,"), 9)
+        self.assertEqual(page.count("data:image/webp;base64,"), 7)
         # data-trim is driven by themes.default_trim so it can't drift.
         self.assertIn('value="classic" data-trim="6x9" checked', page)
         self.assertIn('value="classicthesis" data-trim="a4"', page)
@@ -107,6 +107,18 @@ class WebTests(unittest.TestCase):
         self.assertIn("Recommended ClassicThesis print setup", page)
         self.assertIn("80–90 gsm uncoated stock", page)
         self.assertIn("updateThemeSpecs(ev.target.value)", page)
+        # Each template-derived spec panel cites its source template.
+        self.assertIn('<p class="theme-source">Source: <a href="https://www.overleaf.com/project/6a73ee79766a5d9bbca17c3e"', page)
+        self.assertIn("Memoir Book Template, 6×9 (Overleaf)", page)
+        self.assertIn("Book design inspired by Edward Tufte (Overleaf)", page)
+        self.assertIn("Book template using the ClassicThesis package (Overleaf)", page)
+        # Themes cited without a URL show the attribution as plain text.
+        self.assertIn('<section data-theme-spec="classical" hidden>'
+                      '<p class="theme-source">Source: '
+                      'after WeasyPrint’s “book-classical” sample</p>', page)
+        self.assertIn('<section data-theme-spec="vsi" hidden>'
+                      '<p class="theme-source">Source: '
+                      'Inspired by A Very Short Introduction series</p>', page)
 
     def test_build_from_pasted_text_with_options(self):
         form = urllib.parse.urlencode(
