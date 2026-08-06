@@ -35,10 +35,20 @@ CHAPTER_TWO_HTML = (
 )
 
 
+# Leading "[" traps: after \item, and in a table's first column following
+# \toprule and a row's \\ — all of which accept an optional [argument].
+BRACKETS_HTML = (
+    "<ul><li>[sic] an item</li></ul>"
+    "<table><tr><td>[a]</td><td>x</td></tr>"
+    "<tr><td>[b]</td><td>y</td></tr></table>"
+)
+
+
 def book():
     return support.make_book([
         Chapter(title="One & Only", html=CHAPTER_ONE_HTML),
         Chapter(title="Two", html=CHAPTER_TWO_HTML),
+        Chapter(title="Three", html=BRACKETS_HTML),
     ])
 
 
@@ -148,6 +158,17 @@ class WriteLatexTests(unittest.TestCase):
     def test_chapter_start_any(self):
         tex = render(chapter_start="any")
         self.assertIn("openany", tex)
+
+    def test_leading_brackets_cannot_read_as_optional_args(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "book.tex")
+            write_latex(support.make_book([Chapter(
+                title="Brackets", html=BRACKETS_HTML)]), path)
+            with open(path, encoding="utf-8") as fh:
+                tex = fh.read()
+        self.assertIn("\\item {[}sic] an item", tex)
+        self.assertIn("{[}a] & x \\\\", tex)
+        self.assertIn("{[}b] & y \\\\", tex)
 
 
 @unittest.skipUnless(shutil.which("latexmk"), "latexmk not installed")
