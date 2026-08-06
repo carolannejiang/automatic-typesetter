@@ -202,6 +202,49 @@ class WriteLatexTests(unittest.TestCase):
         self.assertIn("{[}b] & y \\\\", tex)
 
 
+class ReferencesTests(unittest.TestCase):
+    def _cited(self):
+        import datetime
+        from bookformatter import apacite
+        return {"https://example.com/ref": apacite.Citation(
+            url="https://example.com/ref", title="The Reference",
+            author="Jane Q. Doe", date=datetime.datetime(2024, 6, 3),
+            site_name="Ref Site")}
+
+    def test_references_section_emitted(self):
+        tex = render(references=True, link_citations=self._cited())
+        self.assertIn(r"\chapter*{References}", tex)
+        self.assertIn(r"\addcontentsline{toc}{chapter}{References}", tex)
+        self.assertIn(r"\emph{The Reference}", tex)   # APA italic title
+        self.assertIn("Doe, J. Q.", tex)
+        self.assertIn(r"\hangindent", tex)            # APA hanging indent
+
+    def test_chapter_sources_listed_for_web_chapters(self):
+        b = support.make_book([Chapter(
+            title="From the web", html="<p>Body.</p>",
+            source="https://blog.example/post", author="Web Writer")])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "b.tex")
+            write_latex(b, path, references=True)
+            tex = open(path).read()
+        self.assertIn(r"\section*{Chapter sources}", tex)
+        self.assertIn("blog.example", tex)
+
+    def test_no_references_when_disabled(self):
+        tex = render(references=False, link_citations=self._cited())
+        self.assertNotIn(r"\chapter*{References}", tex)
+
+    def test_footnote_in_heading_is_protected(self):
+        # \footnote in a sectioning command's moving argument is fragile.
+        b = support.make_book([Chapter(
+            title="C", html='<h2>Head<span class="footnote">n</span></h2><p>x</p>')])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "b.tex")
+            write_latex(b, path)
+            tex = open(path).read()
+        self.assertIn(r"\protect\footnote", tex)
+
+
 @unittest.skipUnless(shutil.which("latexmk"), "latexmk not installed")
 class CompileTests(unittest.TestCase):
     def _compile(self, **kwargs):
@@ -219,6 +262,15 @@ class CompileTests(unittest.TestCase):
 
     def test_generic_compiles(self):
         self._compile()
+
+    def test_references_page_compiles(self):
+        import datetime
+        from bookformatter import apacite
+        self._compile(references=True, link_citations={
+            "https://example.com/ref": apacite.Citation(
+                url="https://example.com/ref", title="The Reference",
+                author="Jane Q. Doe", date=datetime.datetime(2024, 6, 3),
+                site_name="Ref Site")})
 
     def test_classicthesis_compiles(self):
         self._compile(theme="classicthesis")

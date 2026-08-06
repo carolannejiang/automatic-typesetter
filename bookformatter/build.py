@@ -99,7 +99,8 @@ def write_outputs(book, formats, out_dir: str, name: str, *,
             book, tex_path, theme=theme, trim=trim, font_size=font_size,
             line_height=line_height, chapter_start=chapter_start, toc=toc,
             chapter_numbers=chapter_numbers, footnotes=footnotes,
-            link_notes=link_notes != "off", link_citations=link_citations)
+            link_notes=link_notes != "off", link_citations=link_citations,
+            references=references)
         if "tex" in formats:
             files[f"{name}.tex"] = tex_path
         if book.assets:
