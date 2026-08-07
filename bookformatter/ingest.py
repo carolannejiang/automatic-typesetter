@@ -15,14 +15,15 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 from urllib.parse import urljoin, urlparse, unquote
 
-from . import docxread, extract, feeds, fetch, htmldom, mini_markdown
+from . import docxread, extract, feeds, fetch, htmldom, mini_markdown, pdfread
 from .models import Asset, Chapter, prettify_name
 
 MARKDOWN_EXTS = {".md", ".markdown", ".mdown", ".mkd"}
 HTML_EXTS = {".html", ".htm", ".xhtml"}
 TEXT_EXTS = {".txt", ".text"}
 DOCX_EXTS = {".docx"}
-ALL_EXTS = MARKDOWN_EXTS | HTML_EXTS | TEXT_EXTS | DOCX_EXTS
+PDF_EXTS = {".pdf"}
+ALL_EXTS = MARKDOWN_EXTS | HTML_EXTS | TEXT_EXTS | DOCX_EXTS | PDF_EXTS
 
 
 @dataclass
@@ -133,6 +134,26 @@ def _ingest_file(path: str, opts: IngestOptions, result: IngestResult) -> None:
             result.author_hint = doc.author
         return
 
+    if ext in PDF_EXTS:  # binary — must not go through the text read below
+        _log(opts, f"pdf: {path}")
+        try:
+            doc = pdfread.read_pdf(path)
+        except pdfread.PdfError as exc:
+            result.warn(f"{path}: {exc}")
+            return
+        for message in doc.warnings:
+            result.warn(f"{path}: {message}")
+        chapters = _chapters_from_markup(doc.html, doc.title or fallback, path, opts)
+        if doc.author:
+            for chapter in chapters:
+                chapter.author = chapter.author or doc.author
+        result.chapters.extend(chapters)
+        if doc.title and not result.title_hint:
+            result.title_hint = doc.title
+        if doc.author and not result.author_hint:
+            result.author_hint = doc.author
+        return
+
     with open(path, "r", encoding="utf-8", errors="replace") as fh:
         text = fh.read()
 
@@ -163,7 +184,7 @@ def _ingest_dir(path: str, opts: IngestOptions, result: IngestResult) -> None:
         and not e.startswith(".")
     )
     if not entries:
-        result.warn(f"{path}: no .md/.txt/.html/.docx files found")
+        result.warn(f"{path}: no .md/.txt/.html/.docx/.pdf files found")
         return
     for entry in entries:
         _ingest_file(os.path.join(path, entry), opts, result)

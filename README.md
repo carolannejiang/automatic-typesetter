@@ -128,6 +128,7 @@ See **[docs/DEPLOY.md](docs/DEPLOY.md)** for both recipes.
 | `.txt` files | Blank-line-separated paragraphs; filename becomes the chapter title |
 | `.html` files | Readability-style article extraction; local images are pulled in |
 | `.docx` files | Word manuscripts — including books this tool made that you then edited in Word. Heading 1s split into chapters, footnotes/endnotes, lists, tables, images, and links all come back in; tracked changes import as accepted; a bookformatter title page becomes metadata again |
+| `.pdf` files | Text is extracted with layout heuristics (stdlib only, no OCR): lines regroup into paragraphs, hyphenated breaks heal, running heads and folios are dropped, oversized lines become headings (and chapter-split points), a one-off largest line on page 1 becomes the title. Encrypted and image-only scanned PDFs are refused with an explanation |
 | Directories | All of the above, sorted by filename — one file per chapter |
 | Page URLs | Fetched and extracted: boilerplate (nav, sidebars, share buttons, comments) is scored away, the article kept |
 | Feed URLs (RSS 2.0 / Atom / RDF) | Each post becomes a chapter, ordered oldest-first by default (`--order`); items that look truncated (summary-only feeds) are fetched from their pages automatically, `--fetch-full` forces that for every item, and `--no-fetch-full` turns it off; `--max-items N` keeps the N most recent |
