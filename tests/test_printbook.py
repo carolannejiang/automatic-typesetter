@@ -54,6 +54,41 @@ class WritePdfLadderTests(unittest.TestCase):
                 printbook._pdf_chrome("in.html", "out.pdf")
         self.assertIn("No space left", str(ctx.exception))
 
+    def test_chrome_hang_after_writing_pdf_still_succeeds(self):
+        # Chrome 151 on macOS can write a complete PDF and then hang instead
+        # of exiting. The finished file (%%EOF trailer) must count as success,
+        # with the hung process killed — not a 3x180s timeout ladder.
+        with tempfile.TemporaryDirectory() as tmp:
+            pdf_path = os.path.join(tmp, "out.pdf")
+            fake_chrome = os.path.join(tmp, "chrome.sh")
+            with open(fake_chrome, "w") as fh:
+                fh.write("#!/bin/sh\n"
+                         f"printf '%%PDF-1.7 body %%%%EOF' > '{pdf_path}'\n"
+                         "sleep 600\n")
+            os.chmod(fake_chrome, 0o755)
+            with mock.patch.object(printbook, "find_chrome",
+                                   return_value=fake_chrome):
+                printbook._pdf_chrome("in.html", pdf_path)  # must not raise
+            self.assertTrue(printbook._pdf_complete(pdf_path))
+
+    def test_stale_pdf_from_earlier_run_is_not_accepted(self):
+        # build.py renders to a stable out_dir/{name}.pdf path, so a complete
+        # PDF left by an earlier run must not satisfy the completion check
+        # before this run's Chrome has drawn anything.
+        with tempfile.TemporaryDirectory() as tmp:
+            pdf_path = os.path.join(tmp, "out.pdf")
+            with open(pdf_path, "wb") as fh:
+                fh.write(b"%PDF-1.7 stale %%EOF")
+            fake_chrome = os.path.join(tmp, "chrome.sh")
+            with open(fake_chrome, "w") as fh:
+                fh.write("#!/bin/sh\nexit 1\n")  # renders nothing
+            os.chmod(fake_chrome, 0o755)
+            with mock.patch.object(printbook, "find_chrome",
+                                   return_value=fake_chrome):
+                with self.assertRaises(printbook.PdfError):
+                    printbook._pdf_chrome("in.html", pdf_path)
+            self.assertFalse(os.path.exists(pdf_path))
+
     def test_weasyprint_render_error_becomes_pdferror(self):
         # A render-time failure (not just an import/load error) must surface
         # as PdfError so the ladder degrades instead of crashing the build.
