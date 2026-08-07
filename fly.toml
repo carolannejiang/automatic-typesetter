@@ -22,4 +22,6 @@ primary_region = "iad"
 
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "512mb"
+  # WeasyPrint peaks near 500 MB on a ~75k-word book (measured with the
+  # Neel Nanda mini-posts collection); 512 MB starves the render.
+  memory = "1024mb"
