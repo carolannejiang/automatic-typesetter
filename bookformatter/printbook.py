@@ -278,6 +278,14 @@ def _pdf_complete(pdf_path: str) -> bool:
         return False
 
 
+def _log_tail(path: str) -> str:
+    try:
+        with open(path, "r", errors="replace") as fh:
+            return fh.read().strip()[-500:]
+    except OSError:
+        return ""
+
+
 def _pdf_chrome(html_path: str, pdf_path: str) -> None:
     chrome = find_chrome()
     if not chrome:
@@ -298,13 +306,25 @@ def _pdf_chrome(html_path: str, pdf_path: str) -> None:
     except OSError as exc:
         # Stay inside the engine ladder so auto/fallback semantics hold.
         raise PdfError(f"could not create a Chrome profile dir: {exc}") from exc
+    # Log to files, not pipes: nothing drains the pipes while we watch for
+    # the PDF, so a chatty Chrome would fill the ~64 KB pipe buffer and
+    # deadlock mid-render.
+    out_log = os.path.join(profile, "chrome-stdout.log")
+    err_log = os.path.join(profile, "chrome-stderr.log")
     try:
+        # A finished PDF from an earlier run at the same path must not
+        # count as this render succeeding.
+        try:
+            os.remove(pdf_path)
+        except OSError:
+            pass
         for cmd in attempts:
             try:
-                proc = subprocess.Popen(
-                    cmd + ["--user-data-dir=" + profile],
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                )
+                with open(out_log, "w") as out_fh, open(err_log, "w") as err_fh:
+                    proc = subprocess.Popen(
+                        cmd + ["--user-data-dir=" + profile],
+                        stdout=out_fh, stderr=err_fh,
+                    )
             except OSError as exc:
                 last_err = str(exc)
                 continue
@@ -319,15 +339,11 @@ def _pdf_chrome(html_path: str, pdf_path: str) -> None:
                 time.sleep(0.5)
             if proc.poll() is None:
                 proc.kill()
-            try:
-                # Surviving Chrome helper processes can keep the pipes open;
-                # don't let them turn the reap into a second hang.
-                out_text, err_text = proc.communicate(timeout=10)
-            except subprocess.TimeoutExpired:
-                out_text = err_text = ""
+                proc.wait()
             if _pdf_complete(pdf_path):
                 return
-            last_err = (err_text or out_text or "").strip()[-500:] or "timed out"
+            last_err = (_log_tail(err_log) or _log_tail(out_log)
+                        or "timed out")
     finally:
         # Chrome may still be flushing profile files as it exits; a strict
         # cleanup races that and can crash an otherwise-successful render.
