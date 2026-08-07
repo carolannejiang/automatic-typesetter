@@ -804,8 +804,8 @@ footer a { color: var(--link); }
       <h2>I &middot; Source material</h2>
       <label for="urls">Links — an article, or a blog&rsquo;s RSS/Atom feed (one per line)</label>
       <textarea id="urls" name="urls" rows="3" placeholder="https://example.com/essay&#10;https://myblog.com/feed.xml"></textarea>
-      <label for="files">&hellip;or files (.md, .txt, .html, .docx — each becomes a chapter; Word files split at Heading&nbsp;1)</label>
-      <input type="file" id="files" name="files" multiple accept=".md,.markdown,.mdown,.mkd,.txt,.text,.html,.htm,.xhtml,.docx">
+      <label for="files">&hellip;or files (.md, .txt, .html, .docx, .pdf — each becomes a chapter; Word and PDF files split at chapter headings)</label>
+      <input type="file" id="files" name="files" multiple accept=".md,.markdown,.mdown,.mkd,.txt,.text,.html,.htm,.xhtml,.docx,.pdf">
       <label for="pasted">&hellip;or paste text / Markdown directly</label>
       <textarea id="pasted" name="pasted" rows="5" placeholder="# Chapter One&#10;&#10;It was a dark and stormy night&hellip;"></textarea>
     </div>
