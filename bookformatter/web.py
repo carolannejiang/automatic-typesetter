@@ -799,7 +799,7 @@ footer a { color: var(--link); }
   <header class="masthead">
     <h1>Typesetting tool</h1>
     <p>Turn blogs / rss feeds / manuscripts into printable book format.</p>
-    <p>If you intend on using this for serious purposes, you should probably export the docx file version first, ask an LLM to proofread the manuscript (and to provide you a document for your final review before implementation), and feed the edited docx file manuscript back to this typesetter for formatting.</p>
+    <p>If you intend on using this for serious purposes, you should probably export the docx file version first, ask an LLM to proofread the manuscript (and to provide you a document for your final review before implementation), and feed the edited docx file manuscript back to this typesetter for formatting. I tell my Claude something like <a href="https://carolannejiang.com/proofread">this</a>.</p>
   </header>
 
   <form id="form">
