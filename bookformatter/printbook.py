@@ -19,6 +19,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 
 from . import apacite, frontmatter, htmldom, themes
 from .footnotes import hoist_margin_notes, inline_footnotes, number_sidenote_calls
@@ -265,6 +266,18 @@ def _pdf_weasyprint(html_path: str, pdf_path: str) -> None:
         raise PdfError(f"weasyprint failed to render: {exc}") from exc
 
 
+def _pdf_complete(pdf_path: str) -> bool:
+    """True when Chrome has finished writing pdf_path: the %%EOF trailer
+    sits in the file's final bytes."""
+    try:
+        with open(pdf_path, "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            fh.seek(max(0, fh.tell() - 32))
+            return b"%%EOF" in fh.read()
+    except OSError:
+        return False
+
+
 def _pdf_chrome(html_path: str, pdf_path: str) -> None:
     chrome = find_chrome()
     if not chrome:
@@ -288,16 +301,33 @@ def _pdf_chrome(html_path: str, pdf_path: str) -> None:
     try:
         for cmd in attempts:
             try:
-                proc = subprocess.run(
+                proc = subprocess.Popen(
                     cmd + ["--user-data-dir=" + profile],
-                    capture_output=True, text=True, timeout=180,
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                 )
-            except (subprocess.TimeoutExpired, OSError) as exc:
+            except OSError as exc:
                 last_err = str(exc)
                 continue
-            if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0:
+            # Chrome can hang after writing the PDF instead of exiting
+            # (seen with Chrome 151 on macOS), so watch for the finished
+            # file rather than trusting the process to quit: a PDF is
+            # complete once its tail carries the %%EOF trailer.
+            deadline = time.monotonic() + 180
+            while proc.poll() is None and time.monotonic() < deadline:
+                if _pdf_complete(pdf_path):
+                    break
+                time.sleep(0.5)
+            if proc.poll() is None:
+                proc.kill()
+            try:
+                # Surviving Chrome helper processes can keep the pipes open;
+                # don't let them turn the reap into a second hang.
+                out_text, err_text = proc.communicate(timeout=10)
+            except subprocess.TimeoutExpired:
+                out_text = err_text = ""
+            if _pdf_complete(pdf_path):
                 return
-            last_err = (proc.stderr or proc.stdout or "").strip()[-500:]
+            last_err = (err_text or out_text or "").strip()[-500:] or "timed out"
     finally:
         # Chrome may still be flushing profile files as it exits; a strict
         # cleanup races that and can crash an otherwise-successful render.
