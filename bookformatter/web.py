@@ -799,6 +799,7 @@ footer a { color: var(--link); }
   <header class="masthead">
     <h1>Typesetting tool</h1>
     <p>Turn blogs / rss feeds / manuscripts into printable book format.</p>
+    <p>For serious work, export the Word (.docx) version first, ask an LLM to proofread the manuscript (and to hand you a document for your final review before you apply its edits), then feed the edited .docx back into this typesetter for formatting.</p>
   </header>
 
   <form id="form">
