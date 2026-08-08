@@ -153,6 +153,34 @@ class WriteLatexTests(unittest.TestCase):
         self.assertNotIn("\\chapter*", tex)
         self.assertNotIn("\\Roman{chapter}", tex)
 
+    def _raw_matter_book(self):
+        return support.make_book([
+            Chapter(title="Silicon Shadows",
+                    html='<div align="center"><h1>Silicon Shadows</h1>'
+                         '<p>An essay by <strong>X</strong></p></div>',
+                    numbered=False, raw=True),
+            Chapter(title="One", html="<p>Body.</p>"),
+        ])
+
+    def test_raw_matter_no_generated_head_and_no_duplicate_toc(self):
+        for chapter_numbers in (True, False):
+            with tempfile.TemporaryDirectory() as tmp:
+                path = os.path.join(tmp, "book.tex")
+                write_latex(self._raw_matter_book(), path,
+                            chapter_numbers=chapter_numbers)
+                with open(path, encoding="utf-8") as fh:
+                    tex = fh.read()
+            # No generated \chapter head for raw matter (would double the title)
+            self.assertNotIn("\\chapter{Silicon Shadows}", tex)
+            self.assertNotIn("\\chapter*{Silicon Shadows}", tex)
+            # Body heading stars, so it adds no second (section-level) TOC line;
+            # the chapter-level entry comes from \addcontentsline.
+            self.assertIn("\\section*{Silicon Shadows}", tex)
+            self.assertIn("\\addcontentsline{toc}{chapter}{Silicon Shadows}", tex)
+            # Author's center alignment is honored, opening on a recto.
+            self.assertIn("\\begin{center}", tex)
+            self.assertIn("\\cleardoublepage", tex)
+
     def test_verbatim_cannot_close_early(self):
         tex = render()
         self.assertIn("code_block %raw&", tex)

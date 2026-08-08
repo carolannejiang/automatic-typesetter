@@ -135,13 +135,28 @@ _INLINE_CMDS = {
 }
 
 
+def _is_centered(node) -> bool:
+    """Whether a container asks to center its contents (legacy align="center",
+    a <center> tag, or a text-align:center style)."""
+    if node.tag == "center":
+        return True
+    if (node.get("align") or "").strip().lower() == "center":
+        return True
+    style = (node.get("style") or "").lower().replace(" ", "")
+    return "text-align:center" in style
+
+
 class _TexConverter:
-    def __init__(self, assets: dict, sidenotes: bool = False):
+    def __init__(self, assets: dict, sidenotes: bool = False,
+                 star_headings: bool = False):
         self.assets = assets
         # The tufte class makes every note a margin sidenote; captions are
         # margin material too.
         self.sidenotes = sidenotes
         self.note_cmd = "sidenote" if sidenotes else "footnote"
+        # Raw front/back matter carries its own head and a chapter-level
+        # contents entry, so its body headings star to avoid a duplicate.
+        self.star_headings = star_headings
 
     def convert(self, root) -> str:
         return "\n\n".join(self._blocks(root.children))
@@ -179,7 +194,8 @@ class _TexConverter:
             # A footnote in a sectioning command's moving argument is fragile;
             # \protect keeps it from erroring in the ToC / running head.
             text = text.replace("\\footnote", "\\protect\\footnote")
-            return ["\\%s{%s}" % (_SECTION_FOR[tag], text)]
+            star = "*" if self.star_headings else ""
+            return ["\\%s%s{%s}" % (_SECTION_FOR[tag], star, text)]
         if tag == "blockquote":
             inner = self._blocks(node.children)
             if not inner:
@@ -197,8 +213,13 @@ class _TexConverter:
             return self._figure(node)
         if tag == "hr":
             return ["\\begin{center}* * *\\end{center}"]
-        # Containers (div, section, …) and unknown blocks alike: recurse.
-        return self._blocks(node.children)
+        # Containers (div, section, …) and unknown blocks alike: recurse,
+        # honoring a center alignment so a typed title block matches the
+        # centered print/epub output.
+        inner = self._blocks(node.children)
+        if inner and _is_centered(node):
+            return ["\\begin{center}\n%s\n\\end{center}" % "\n\n".join(inner)]
+        return inner
 
     def _verbatim(self, node) -> list:
         parts = []
@@ -1049,10 +1070,13 @@ def write_latex(book: Book, path: str, theme: str = "classic",
     if chapter_numbers and any(ch.number and not ch.number.isdigit()
                                for ch in book.chapters):
         lines.append("\\renewcommand{\\thechapter}{\\Roman{chapter}}")
-    if chapter_numbers and any(not ch.numbered for ch in book.chapters):
+    if any((not ch.numbered) and (chapter_numbers or ch.raw)
+           for ch in book.chapters):
         # Holds the theme's secnumdepth while an unnumbered chapter's own
         # sections go unnumbered too (a ".1" with an empty chapter part
-        # would otherwise head an Introduction's first section).
+        # would otherwise head an Introduction's first section). Declared
+        # whenever a chapter takes the starred branch below — including raw
+        # matter when chapter numbers are off.
         lines.append("\\newcounter{savedsecnumdepth}")
     # Footnote numbering: "continuous" runs the count book-wide,
     # "per-chapter" restarts it at 1 each chapter (the starred form resets
@@ -1079,14 +1103,25 @@ def write_latex(book: Book, path: str, theme: str = "classic",
                 citations=link_citations)
         root = htmldom.parse(markup)
         title = escape(htmldom.normalize_ws(chapter.title))
-        starred = chapter_numbers and not chapter.numbered
+        # Raw matter always stars (its own head lives in the body), even when
+        # chapter numbers are off — otherwise it would take a generated
+        # \chapter head and render the title twice.
+        starred = (not chapter.numbered) and (chapter_numbers or chapter.raw)
         if starred:
             # Its sections must not number either — secnumdepth off for
             # the chapter's span, restored to the theme's depth after.
             lines.append(
                 "\\setcounter{savedsecnumdepth}{\\value{secnumdepth}}")
             lines.append("\\setcounter{secnumdepth}{-1}")
-            lines.append("\\chapter*{%s}" % title)
+            if chapter.raw:
+                # Author-typed matter carries its own head; keep only the page
+                # break and contents entry (anchored by phantomsection). Open
+                # on a recto like the generated \chapter* / indesign paths do.
+                lines.append("\\cleardoublepage" if chapter_start == "right"
+                             else "\\clearpage")
+                lines.append("\\phantomsection")
+            else:
+                lines.append("\\chapter*{%s}" % title)
             lines.append("\\addcontentsline{toc}{chapter}{%s}" % title)
             # \chapter* doesn't step the chapter counter, so \counterwithin*
             # won't restart footnotes here — reset by hand so an unnumbered
@@ -1098,7 +1133,8 @@ def write_latex(book: Book, path: str, theme: str = "classic",
             # With numbering globally off, secnumdepth already suppresses
             # the figure; the plain form keeps the contents entry free.
             lines.append("\\chapter{%s}" % title)
-        body = _TexConverter(assets, sidenotes=theme == "tufte").convert(root)
+        body = _TexConverter(assets, sidenotes=theme == "tufte",
+                             star_headings=chapter.raw).convert(root)
         # Front/back matter opens plainly — no lettrine drop cap.
         if body and theme == "memoir2" and chapter.numbered:
             body = _lettrine_open(body)

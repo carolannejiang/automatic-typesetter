@@ -54,6 +54,12 @@ body {
   font-variant-ligatures: common-ligatures;
 }
 section.chapter { text-align: justify; hyphens: auto; -webkit-hyphens: auto; }
+/* Honor the legacy align attribute authors type in front/back matter
+   (WeasyPrint doesn't map it on its own). */
+[align="center"] { text-align: center; }
+[align="right"] { text-align: right; }
+[align="left"] { text-align: left; }
+[align="justify"] { text-align: justify; }
 
 p { margin: 0; text-indent: $INDENT; orphans: 2; widows: 2; }
 $PARA_EXTRA

@@ -203,6 +203,22 @@ class ChapterNumberingTests(unittest.TestCase):
         self.assertIn('<a href="#chapter-1">INTRODUCTION</a>', html)
         self.assertIn('<a href="#chapter-4">REFERENCES</a>', html)
 
+    def test_raw_matter_renders_verbatim_without_chapter_head(self):
+        book = Book(meta=BookMeta(title="T", author="A"), chapters=[
+            Chapter(title="Silicon Shadows",
+                    html='<div align="center"><h1>Silicon Shadows</h1>'
+                         '<p>An essay</p></div>',
+                    numbered=False, raw=True),
+            Chapter(title="One", html="<p>Body.</p>"),
+        ])
+        html = printbook.build_print_html(book)
+        matter = html[html.index('id="chapter-1"'):html.index('id="chapter-2"')]
+        self.assertNotIn("chapter-head", matter)  # no generated header
+        self.assertIn('<div align="center">', matter)  # author markup kept
+        self.assertIn("<h1>Silicon Shadows</h1>", matter)
+        # Still labels the contents page.
+        self.assertIn('<a href="#chapter-1">Silicon Shadows</a>', html)
+
     def test_position_numbering_skips_front_matter(self):
         book = Book(meta=BookMeta(title="T", author="A"), chapters=[
             Chapter(title="Introduction", html="<p>a</p>", numbered=False),

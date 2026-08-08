@@ -640,6 +640,14 @@ def book_to_story_items(book: Book, theme: str = "classic",
                 markup, start=next_link_note, mode=link_note_mode,
                 citations=link_citations, marker=link_marker)
         root = htmldom.parse(markup)
+        converter = (converter_cls or _Converter)(assets)
+        content = converter.convert(root)
+        if chapter.raw:
+            # Author-typed matter carries its own head; keep the page break.
+            if content and hasattr(content[0], "start"):
+                content[0].start = "NextOddPage"
+            items.extend(content)
+            continue
         opener: list = []
         title_attrs = None
         if chapter_numbers and chapter.numbered:
@@ -651,8 +659,7 @@ def book_to_story_items(book: Book, theme: str = "classic",
                            attrs=title_attrs))
         opener[0].start = "NextOddPage"
         items.extend(opener)
-        converter = (converter_cls or _Converter)(assets)
-        items.extend(converter.convert(root))
+        items.extend(content)
 
     if references:
         cited = apacite.reference_entries(link_citations)
