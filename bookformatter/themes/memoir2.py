@@ -10,13 +10,8 @@ bottom-folio openers), this theme carries over:
   opening word run in small caps (the template's ``\\lettrine{L}{etterine}``
   on every chapter). Both spans are baked by the print pipeline
   (LETTRINE_RUN); see printbook._bake_lettrine.
-* per-page symbol footnotes (footmisc ``[symbol]`` + perpage) — calls and
-  markers run † ‡ § ¶ ‖ (the sequence the template actually prints: its
-  perpage bookkeeping consumes the asterisk on chapter-opener pages, so
-  the reference PDF's first note is a dagger), falling back to numbers
-  past the list just as footmisc's ``symbol*`` does. CSS cannot reset a
-  counter per page, so the counter resets per chapter, the nearest
-  expressible boundary.
+* footnotes numbered 1, 2, 3 continuously through the book, rather than the
+  template's per-page symbols.
 * the template's own contents page — memoir's left-aligned bold Contents
   title, bold chapter lines opened by ``\\chapternumberline`` numbers
   (TOC_NUMBERS), roman folios set right without leaders.
@@ -40,7 +35,7 @@ from . import base
 
 NAME = "memoir2"
 LABEL = "Memoir 2"
-BLURB = "The memoir template in full dress: drop caps, symbol notes"
+BLURB = "The memoir template in full dress: drop caps, numbered notes"
 
 # The template fixes 12pt type; memoir's 12pt \normalsize baselineskip is
 # 14.5pt, and \renewcommand{\baselinestretch}{1.125} spreads it to about
@@ -61,7 +56,7 @@ PRINT_SPECS = {
         ("Interior", "6 × 9 in (152 × 229 mm); stock equals trim, so no bleed or crop marks"),
         ("Margins", "0.75 in spine, 0.625 in fore-edge, 0.75 in head and foot"),
         ("Type", "12pt EB Garamond at about 16.3pt leading"),
-        ("Footnotes", "Set at the foot of the page, marked with symbols († ‡ § …)"),
+        ("Footnotes", "Set at the foot of the page, numbered 1, 2, 3 …"),
         ("Printing", "Two-sided (duplex)"),
         ("Color", "Black interior"),
     ),
@@ -144,7 +139,7 @@ section.copyrightpage p { margin-bottom: 1em; }
 # italic across the verso center, "Chapter N. Title" italic across the
 # recto center, no head rule, empty foot, plain bottom-folio openers —
 # plus the dress only the paged output can wear: the lettrine opening,
-# symbol footnotes, and the template's foot-anchored front matter.
+# numbered footnotes, and the template's foot-anchored front matter.
 PRINT_EXTRA = Template(
     """
 /* ---- memoir2 print furniture: outer-corner folios, italic center heads ---- */
@@ -207,22 +202,12 @@ section.chapter:not(.references) > p:first-of-type::first-letter {
   padding: 0; margin: 0;
 }
 
-/* Footnotes marked with footmisc's symbols as the template prints them —
-   its first note on a chapter opener is a dagger — numbered past the
-   list as the symbol* option does. The counter resets with each chapter:
-   CSS offers no per-page reset (the template's \\MakePerPage), and a
-   chapter is the nearest boundary. */
-@counter-style memoir2-fnsymbols {
-  system: fixed;
-  symbols: "\\2020" "\\2021" "\\A7" "\\B6" "\\2016" "**" "\\2020\\2020" "\\2021\\2021";
-  fallback: decimal;
-}
-section.chapter { counter-reset: footnote 0; }
+/* Footnotes numbered 1, 2, 3 continuously through the book. */
 span.footnote::footnote-call {
-  content: counter(footnote, memoir2-fnsymbols);
+  content: counter(footnote, decimal);
 }
 span.footnote::footnote-marker {
-  content: counter(footnote, memoir2-fnsymbols) "\\2009";
+  content: counter(footnote, decimal) "\\2009";
 }
 
 /* Title page: the byline drops to the foot (\\vspace{\\stretch{1.25}}),

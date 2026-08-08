@@ -237,8 +237,8 @@ class Memoir2CssTests(unittest.TestCase):
         self.assertIn("6 × 9 in (152 × 229 mm)", guidance)
         self.assertIn("0.75 in spine, 0.625 in fore-edge", guidance)
         self.assertIn("12pt EB Garamond", guidance)
-        # The symbols as the template actually prints them: dagger first.
-        self.assertIn("symbols († ‡ § …)", guidance)
+        # Numbered footnotes rather than the template's symbols.
+        self.assertIn("numbered 1, 2, 3", guidance)
         self.assertEqual(specs["source"]["url"],
                          "https://www.overleaf.com/project/6a73ee79766a5d9bbca17c3e")
 
@@ -277,16 +277,13 @@ class Memoir2CssTests(unittest.TestCase):
         # baked initial: the theme's higher-specificity rule disarms it.
         self.assertIn("float: none; font-size: 1em;", css)
 
-    def test_print_css_marks_footnotes_with_the_template_symbols(self):
+    def test_print_css_numbers_footnotes(self):
         css = themes.print_css(theme="memoir2")
-        self.assertIn("@counter-style memoir2-fnsymbols", css)
-        # Dagger first — the sequence the template's perpage bookkeeping
-        # actually prints — and numbers past the list like symbol*.
-        self.assertIn('symbols: "\\2020" "\\2021" "\\A7"', css)
-        self.assertIn("fallback: decimal;", css)
-        self.assertIn("section.chapter { counter-reset: footnote 0; }", css)
-        self.assertIn("content: counter(footnote, memoir2-fnsymbols);", css)
-        self.assertIn('content: counter(footnote, memoir2-fnsymbols) "\\2009";', css)
+        # Numbered 1, 2, 3 continuously — no per-chapter reset.
+        self.assertNotIn("@counter-style memoir2-fnsymbols", css)
+        self.assertNotIn("counter-reset: footnote", css)
+        self.assertIn("content: counter(footnote, decimal);", css)
+        self.assertIn('content: counter(footnote, decimal) "\\2009";', css)
 
     def test_print_css_anchors_the_front_matter_feet(self):
         css = themes.print_css(theme="memoir2", trim="6x9")

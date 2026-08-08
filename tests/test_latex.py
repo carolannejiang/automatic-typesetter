@@ -281,7 +281,11 @@ class WriteLatexTests(unittest.TestCase):
         self.assertIn("extrafontsizes]{memoir}", tex)
         self.assertIn("\\setstocksize{9in}{6in}", tex)
         self.assertIn("\\usepackage{ebgaramond}", tex)
-        self.assertIn("\\usepackage[symbol*]{footmisc}", tex)
+        # ...but footnotes numbered continuously rather than per-page symbols,
+        self.assertIn("\\usepackage{footmisc}", tex)
+        self.assertNotIn("\\usepackage[symbol*]{footmisc}", tex)
+        self.assertIn("\\counterwithout{footnote}{chapter}", tex)
+        self.assertNotIn("\\MakePerPage{footnote}", tex)
         # ...plus lettrine chapter openings on plain-word chapters,
         self.assertIn("\\usepackage{lettrine}", tex)
         self.assertIn("\\lettrine{F}{irst} chapter with an image.", tex)
