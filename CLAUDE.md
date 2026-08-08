@@ -96,3 +96,36 @@ Invariants that span files and won't be obvious from any single one.
   on `chapter.numbered` alone.
 - Theme `chapter_label(number)` implementations must interpolate the number
   (str or int), not do arithmetic on it — typed figures arrive as strings.
+
+### Author-supplied front/back matter (models.Chapter.raw)
+
+- `raw=True` marks a chapter whose author typed the whole section
+  (a title page, dedication, colophon). Its `html` is emitted **verbatim,
+  with no generated chapter head** — the author's own markup (a
+  `<div align="center">` title block, a typed `# heading`) stands as the
+  section. `ingest.ingest_matter()` builds these: it ingests like
+  `ingest()` but forces `promote_title=False` (keep the lone leading h1 in
+  the body, don't hoist it to the title) and sets `raw=True`,
+  `numbered=False`, `number=None`. The web/CLI front-back-matter fields
+  prepend/append the result to `book.chapters`.
+- Every writer must skip its generated chapter head when `chapter.raw`,
+  while still listing the chapter in the contents (print/epub omit the
+  `chapter_head_html`; indesign skips the head paragraph; latex stars the
+  head and adds `\addcontentsline`). A new writer that emits a head
+  unconditionally will double the title. Because raw implies
+  `numbered=False`, raw chapters also inherit the matter dress rules
+  (no drop cap/lettrine).
+- LaTeX raw chapters additionally: star their body headings
+  (`_TexConverter(star_headings=True)`) so a typed h1 doesn't add a second,
+  section-level TOC line; open on a recto (`\cleardoublepage` when
+  `chapter_start == "right"`); and wrap `align="center"` containers in a
+  `center` environment (WeasyPrint/epub get centering from the theme's
+  `[align]` CSS instead). The `starred` branch runs for raw matter even
+  when `chapter_numbers` is off, so the `savedsecnumdepth` counter guard
+  must stay in sync with it.
+- `mini_markdown` renders Markdown **inside** semantic wrapper tags
+  (`div`, `section`, `center`, …) rather than passing the block through
+  raw, so headings/bold/`<br>` work inside a wrapper; `figure`/`table`/
+  `pre` and lone `<img>`/other `_HTML_BLOCK_RE` tags still pass through
+  verbatim. The paragraph loop breaks on a wrapper tag, so a `</div>`
+  directly after prose (no blank line) closes the wrapper.
