@@ -19,6 +19,8 @@ class Chapter:
     numbered: bool = True  # False: front/back matter (Introduction, Appendix)
     number: Optional[str] = None  # display number typed by the author ("I",
                                   # "2"); None numbers the chapter by position
+    is_source_toc: bool = False  # a contents page carried in from the source,
+                                 # which would duplicate the generated one
 
     def word_count(self) -> int:
         text = re.sub(r"<[^>]+>", " ", self.html)

@@ -34,6 +34,8 @@ class IngestOptions:
     max_items: int = 0           # 0 = no limit (feeds)
     fetch_full: Optional[bool] = None  # None: fetch truncated items' pages;
                                        # True: every item; False: never
+    drop_source_toc: bool = False  # remove a contents page found in the source
+                                   # (default: keep it, but warn about the dup)
     verbose: bool = False
     progress: Optional[Callable] = None  # called with status messages (web UI)
 
@@ -143,6 +145,48 @@ def _is_furniture_title(title: str) -> bool:
     text = (title or "").strip().lower()
     return (text in _UNNUMBERED_TITLES
             or text.startswith(("appendix ", "appendix:")))
+
+
+# Titles a source's own table-of-contents page tends to carry.
+_TOC_TITLES = frozenset(("contents", "table of contents", "toc"))
+
+
+def _is_source_toc(chapter) -> bool:
+    """Whether a chapter reproduces the source's own contents page.
+
+    Requires a contents-like title AND a body that reads like a contents
+    list — leader dots running into a page number ("Chapter One .... 12"),
+    or several links into the document's own sections — so a real chapter
+    merely titled "Contents" is not mistaken for furniture.
+    """
+    if (chapter.title or "").strip().lower() not in _TOC_TITLES:
+        return False
+    html = chapter.html or ""
+    text = re.sub(r"<[^>]+>", " ", html)
+    if re.search(r"\.{3,}\s*\d", text):  # dot leaders into a page number
+        return True
+    return len(re.findall(r'<a\b[^>]*href="#', html, re.I)) >= 3
+
+
+def handle_source_toc(result, drop: bool) -> None:
+    """Flag chapters that reproduce the source's contents page, then either
+    remove them (``drop``) or warn that they may duplicate the generated
+    table of contents."""
+    flagged = [ch for ch in result.chapters if _is_source_toc(ch)]
+    for chapter in flagged:
+        chapter.is_source_toc = True
+    if not flagged:
+        return
+    if drop:
+        result.chapters = [ch for ch in result.chapters if not ch.is_source_toc]
+        for chapter in flagged:
+            result.warn(f"removed the source's contents page ({chapter.title!r}); "
+                        "the generated table of contents replaces it")
+    else:
+        for chapter in flagged:
+            result.warn(f"the source contains a contents page ({chapter.title!r}) "
+                        "that may duplicate the generated one — enable 'Drop the "
+                        "source's contents page' to remove it")
 
 
 def classify_chapters(chapters: list) -> None:
@@ -948,6 +992,7 @@ def ingest(inputs: list, opts: Optional[IngestOptions] = None) -> IngestResult:
             result.warn(f"input not found: {raw}")
     process_images(result, opts)
     classify_chapters(result.chapters)
+    handle_source_toc(result, opts.drop_source_toc)
     if not result.title_hint and len(result.chapters) == 1:
         result.title_hint = result.chapters[0].title
     return result
