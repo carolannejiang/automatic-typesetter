@@ -542,20 +542,16 @@ def chapter_label(number: int) -> str:
 
 
 def params(font_size: str, line_height: str) -> dict:
-    return {
-        "THEME_NAME": NAME,
-        "BODY_FONT": SERIF_STACK,
-        "HEADING_FONT": SERIF_STACK,
-        "MONO_FONT": MONO_STACK,
-        "HEADING_WEIGHT": "bold",
-        "HEADING_ALIGN": "left",
-        "FONT_SIZE": font_size,
-        "LINE_HEIGHT": line_height,
-        "INDENT": "1.47em",
-        "PARA_EXTRA": "",
-        "TITLE_EXTRA": "",
-        "CHAPTER_DROP": "0.55in",
-        "TITLE_DROP": "2.2in",
-        "POLIMI_SANS": SANS_STACK,
-        "POLIMI_BRICKRED": _BRICKRED,
-    }
+    return base.params(
+        NAME, font_size, line_height,
+        BODY_FONT=SERIF_STACK,
+        HEADING_FONT=SERIF_STACK,
+        MONO_FONT=MONO_STACK,
+        HEADING_WEIGHT="bold",
+        HEADING_ALIGN="left",
+        INDENT="1.47em",
+        CHAPTER_DROP="0.55in",
+        TITLE_DROP="2.2in",
+        POLIMI_SANS=SANS_STACK,
+        POLIMI_BRICKRED=_BRICKRED,
+    )
