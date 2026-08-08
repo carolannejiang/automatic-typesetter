@@ -191,6 +191,46 @@ class WordAuthoredTests(unittest.TestCase):
     def test_italic_run(self):
         self.assertIn("<em>second chapter</em>", self.result.chapters[1].html)
 
+    def test_table_title_heading_folds_into_caption(self):
+        # A "Table N:" heading Word placed just above a table is the table's
+        # title; it must ride inside the table as <caption> so it can't be
+        # stranded on its own page when the table breaks across pages.
+        doc = f"""<?xml version="1.0"?>
+<w:document xmlns:w="{W_NS}"><w:body>
+<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Appendix</w:t></w:r></w:p>
+<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Table 1: Codes</w:t></w:r></w:p>
+<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Code</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
+<w:sectPr/></w:body></w:document>"""
+        styles = f"""<?xml version="1.0"?>
+<w:styles xmlns:w="{W_NS}">
+<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/></w:style>
+<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/></w:style>
+</w:styles>"""
+        path = os.path.join(self.tmp.name, "captioned.docx")
+        _mini_docx(path, doc, styles)
+        html = read_docx(path).html
+        self.assertIn("<table><caption>Table 1: Codes</caption>", html)
+        self.assertNotIn("<h2>Table 1", html)
+
+    def test_table_intro_sentence_is_not_swallowed_as_caption(self):
+        # A narrative paragraph that merely mentions the table ("Table 1
+        # shows ...") must stay prose, not be pulled in as its caption.
+        doc = f"""<?xml version="1.0"?>
+<w:document xmlns:w="{W_NS}"><w:body>
+<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Appendix</w:t></w:r></w:p>
+<w:p><w:r><w:t>Table 1 shows the coding scheme.</w:t></w:r></w:p>
+<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Code</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
+<w:sectPr/></w:body></w:document>"""
+        styles = f"""<?xml version="1.0"?>
+<w:styles xmlns:w="{W_NS}">
+<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/></w:style>
+</w:styles>"""
+        path = os.path.join(self.tmp.name, "prose.docx")
+        _mini_docx(path, doc, styles)
+        html = read_docx(path).html
+        self.assertIn("<p>Table 1 shows the coding scheme.</p>", html)
+        self.assertNotIn("<caption>", html)
+
     def test_not_a_docx_is_a_warning_not_a_crash(self):
         bogus = os.path.join(self.tmp.name, "bogus.docx")
         with open(bogus, "wb") as fh:

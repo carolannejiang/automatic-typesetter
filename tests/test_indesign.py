@@ -188,6 +188,21 @@ class IcmlTests(unittest.TestCase):
         title = "".join(by_style.get("ParagraphStyle/Chapter Title", []))
         self.assertIn("One & Only", title)
 
+    def test_table_caption_becomes_caption_paragraph(self):
+        book = support.make_book([Chapter(
+            title="A", html="<table><caption>Table 1: Codes</caption>"
+                             "<tr><td>x</td></tr></table>")])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "cap.icml")
+            write_icml(book, path)
+            root = _tree(open(path, "rb").read())
+        by_style = {}
+        for psr in root.iter("ParagraphStyleRange"):
+            by_style.setdefault(psr.get("AppliedParagraphStyle") or "", []) \
+                .append("".join(psr.itertext()))
+        self.assertIn("Table 1: Codes",
+                      "".join(by_style.get("ParagraphStyle/Caption", [])))
+
     def test_chapter_start_overrides(self):
         breaks = _break_values(self.story)
         self.assertGreaterEqual(breaks.count("NextOddPage"), 2)  # both chapters

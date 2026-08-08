@@ -132,10 +132,13 @@ table {
   border-collapse: collapse;
   margin: 1.2em auto;
   font-size: 0.9em;
-  page-break-inside: avoid; break-inside: avoid;
 }
+caption { caption-side: top; text-align: center; margin-bottom: 0.5em; text-indent: 0; }
 th, td { border-bottom: 0.5pt solid #999; padding: 0.35em 0.7em; text-align: left; }
 thead th { border-bottom: 1pt solid #333; }
+/* A table taller than the page must break; keep whole rows intact so a
+   cell never splits, and let the caption stay atop the first-page rows. */
+tr { page-break-inside: avoid; break-inside: avoid; }
 
 a { color: #555; text-decoration: none; }
 /* A link note's retained words and its L call read as one quiet hyperlink. */

@@ -99,6 +99,8 @@ header.chapter-head h1.chapter-title { font-size: 2.05em; }
 /* Section heads keep the small-cap voice, then italic. */
 h2 { font-size: 1.15em; font-variant: small-caps; font-weight: normal; letter-spacing: 0.06em; }
 h3 { font-size: 1em; font-style: italic; font-weight: normal; }
+/* A folded-in table title reads in the same small-cap voice as h2. */
+caption { font-size: 1.15em; font-variant: small-caps; letter-spacing: 0.06em; }
 
 /* Title page: \\scshape title and subtitle, then "by" and the author in
    italic ({\\itshape\\large by} over {\\itshape\\Large \\authorname}). */

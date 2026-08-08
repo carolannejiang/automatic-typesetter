@@ -533,6 +533,11 @@ class _Converter:
             self._list(node, 0)
             self.first_body = True
         elif tag == "table":
+            caption = node.find("caption")
+            if caption is not None:
+                runs = self._inline(caption.children)
+                if _has_substance(runs):
+                    self.paras.append(Para("Caption", runs))
             for tr in node.find_all("tr"):
                 cells = [c for c in tr.children
                          if not c.is_text and c.tag in ("td", "th")]

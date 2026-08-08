@@ -297,6 +297,18 @@ class DocxTests(unittest.TestCase):
         self.assertIsNotNone(header_cells[0].find(f".//{W}b"))
         self.assertIn("Folio", _texts(rows[1]))
 
+    def test_table_caption_becomes_caption_paragraph(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "cap.docx")
+            write_docx(support.make_book([Chapter(
+                title="A", html="<table><caption>Table 1: Codes</caption>"
+                                 "<tr><td>x</td></tr></table>")]), path)
+            doc = ET.fromstring(zipfile.ZipFile(path).read("word/document.xml"))
+        caps = [p for p in doc.iter(f"{W}p")
+                if (p.find(f"{W}pPr/{W}pStyle") is not None
+                    and p.find(f"{W}pPr/{W}pStyle").get(f"{W}val") == "Caption")]
+        self.assertEqual([_texts(p) for p in caps], ["Table 1: Codes"])
+
 
 class DocxPipelineTests(unittest.TestCase):
     def test_cli_writes_docx(self):

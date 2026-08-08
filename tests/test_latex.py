@@ -166,6 +166,15 @@ class WriteLatexTests(unittest.TestCase):
         self.assertIn("\\midrule", tex)
         self.assertIn("a \\& b & 1 \\\\", tex)
 
+    def test_table_caption_survives(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "book.tex")
+            write_latex(support.make_book([Chapter(
+                title="A", html="<table><caption>Table 1: Codes</caption>"
+                                 "<tr><td>x</td></tr></table>")]), path)
+            tex = open(path, encoding="utf-8").read()
+        self.assertIn("Table 1: Codes", tex)
+
     def test_link_notes_become_footnotes(self):
         tex = render()
         self.assertIn(
