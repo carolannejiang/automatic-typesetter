@@ -111,7 +111,11 @@ Invariants that span files and won't be obvious from any single one.
 - A raw chapter's `title` is its **own first heading** (any of h1–h6), or
   `""` when it has none — `ingest_matter` overwrites the filename-derived
   title so a headingless dedication/epigraph doesn't surface as a bogus
-  "Front Matter" line. Untitled matter (`title == ""`) is still typeset
+  "Front Matter" line. The web matter text boxes pass
+  `detect_titles=False`, which forces `""` regardless of headings — typed
+  matter is display markup, and a heading there is as likely an author's
+  name on a title block as a section title; CLI `--front-matter` files
+  keep heading detection. Untitled matter (`title == ""`) is still typeset
   (it's in the spine/body) but every contents list must skip it: the print
   TOC loop `continue`s, epub omits it from `chapter_hrefs` (nav), and latex
   drops its `\addcontentsline`. epub still needs a non-empty page `<title>`
