@@ -214,6 +214,10 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
             numbered = chapter_numbers and chapter.numbered
             if chapter.numbered:
                 seq += 1
+            # Untitled front/back matter (a dedication, a title block with no
+            # heading) carries no contents line.
+            if not chapter.title:
+                continue
             if toc_nums and numbered:
                 number = f'<span class="toc-number">{_esc(str(chapter.number or seq))}</span>'
             elif numbered and chapter.number:

@@ -1122,7 +1122,9 @@ def write_latex(book: Book, path: str, theme: str = "classic",
                 lines.append("\\phantomsection")
             else:
                 lines.append("\\chapter*{%s}" % title)
-            lines.append("\\addcontentsline{toc}{chapter}{%s}" % title)
+            # Untitled raw matter (a dedication) takes no contents line.
+            if title:
+                lines.append("\\addcontentsline{toc}{chapter}{%s}" % title)
             # \chapter* doesn't step the chapter counter, so \counterwithin*
             # won't restart footnotes here — reset by hand so an unnumbered
             # chapter opens at 1 like the print CSS and docx sections do.

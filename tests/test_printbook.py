@@ -219,6 +219,17 @@ class ChapterNumberingTests(unittest.TestCase):
         # Still labels the contents page.
         self.assertIn('<a href="#chapter-1">Silicon Shadows</a>', html)
 
+    def test_untitled_matter_renders_but_is_not_in_contents(self):
+        book = Book(meta=BookMeta(title="T", author="A"), chapters=[
+            Chapter(title="", html='<div align="center"><p>For my parents.</p></div>',
+                    numbered=False, raw=True),
+            Chapter(title="One", html="<p>Body.</p>"),
+        ])
+        html = printbook.build_print_html(book)
+        self.assertIn("For my parents.", html)          # body still typeset
+        self.assertNotIn('href="#chapter-1"', html)     # no contents line for it
+        self.assertIn('<a href="#chapter-2">One</a>', html)
+
     def test_position_numbering_skips_front_matter(self):
         book = Book(meta=BookMeta(title="T", author="A"), chapters=[
             Chapter(title="Introduction", html="<p>a</p>", numbered=False),
