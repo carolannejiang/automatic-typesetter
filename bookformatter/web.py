@@ -163,8 +163,6 @@ def run_build(params: dict, uploads: list, workdir: str,
         inputs.append(url)
 
     cover: Asset = None
-    front_paths: list = []
-    back_paths: list = []
     taken: set = set()
     for field, filename, data in uploads:
         if field == "cover":
@@ -186,12 +184,7 @@ def run_build(params: dict, uploads: list, workdir: str,
         path = os.path.join(input_dir, _safe_upload_name(filename, taken))
         with open(path, "wb") as fh:
             fh.write(data)
-        if field == "front_matter":
-            front_paths.append(path)
-        elif field == "back_matter":
-            back_paths.append(path)
-        else:
-            inputs.append(path)
+        inputs.append(path)
 
     pasted = _first(params, "pasted")
     if pasted:
@@ -243,22 +236,31 @@ def run_build(params: dict, uploads: list, workdir: str,
     )
     book = Book(meta=meta, chapters=result.chapters, assets=result.assets, cover=cover)
 
-    # Author-supplied front/back matter: each uploaded file becomes one
-    # unnumbered section, front matter before chapter 1, back matter after
-    # the last chapter.
-    if front_paths or back_paths:
+    # Author-supplied front/back matter, typed as text/Markdown: each field
+    # becomes one unnumbered section, front matter before chapter 1, back
+    # matter after the last chapter.
+    front_text = _first(params, "front_matter")
+    back_text = _first(params, "back_matter")
+    if front_text or back_text:
         matter_opts = ingester.IngestOptions(
             images=opts.images, split="none", progress=progress)
-        if front_paths:
-            fm = ingester.ingest_matter(front_paths, matter_opts)
-            out.warnings.extend(w for w in fm.warnings if w not in out.warnings)
-            book.chapters[0:0] = fm.chapters
-            book.assets.extend(fm.assets)
-        if back_paths:
-            bm = ingester.ingest_matter(back_paths, matter_opts)
-            out.warnings.extend(w for w in bm.warnings if w not in out.warnings)
-            book.chapters.extend(bm.chapters)
-            book.assets.extend(bm.assets)
+
+        def _add_matter(text, filename, at_front):
+            path = os.path.join(input_dir, filename)
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(text)
+            res = ingester.ingest_matter([path], matter_opts)
+            out.warnings.extend(w for w in res.warnings if w not in out.warnings)
+            if at_front:
+                book.chapters[0:0] = res.chapters
+            else:
+                book.chapters.extend(res.chapters)
+            book.assets.extend(res.assets)
+
+        if front_text:
+            _add_matter(front_text, "front-matter.md", at_front=True)
+        if back_text:
+            _add_matter(back_text, "back-matter.md", at_front=False)
 
     out.book_title = meta.title
     # Front/back matter (an unnumbered Introduction, References, Appendix)
@@ -850,10 +852,10 @@ footer a { color: var(--link); }
       <textarea id="pasted" name="pasted" rows="5" placeholder="# Chapter One&#10;&#10;It was a dark and stormy night&hellip;"></textarea>
       <details>
         <summary>Front &amp; back matter (optional) — a preface, foreword, afterword, or appendix</summary>
-        <label for="front_matter">Front matter (.md, .txt, .html, .docx, .pdf — set after the contents page, before chapter 1)</label>
-        <input type="file" id="front_matter" name="front_matter" multiple accept=".md,.markdown,.mdown,.mkd,.txt,.text,.html,.htm,.xhtml,.docx,.pdf">
-        <label for="back_matter">Back matter (set after the last chapter)</label>
-        <input type="file" id="back_matter" name="back_matter" multiple accept=".md,.markdown,.mdown,.mkd,.txt,.text,.html,.htm,.xhtml,.docx,.pdf">
+        <label for="front_matter">Front matter — text / Markdown (set after the contents page, before chapter 1)</label>
+        <textarea id="front_matter" name="front_matter" rows="4" placeholder="# Preface&#10;&#10;Before we begin&hellip;"></textarea>
+        <label for="back_matter">Back matter — text / Markdown (set after the last chapter)</label>
+        <textarea id="back_matter" name="back_matter" rows="4" placeholder="# Afterword&#10;&#10;A final word&hellip;"></textarea>
       </details>
     </div>
 
