@@ -475,11 +475,12 @@ def _memoir_preamble(theme, trim, font_size, line_height, chapter_start,
     """The reference 6×9 memoir novel template's setup (main.tex /
     options.sty): memoir class, 12pt EB Garamond on a 1.125
     baselinestretch, titlesec [center,sc] chapter heads, fancyhdr italic
-    running heads with outer folios, per-page symbol footnotes.
+    running heads with outer folios, per-page symbol footnotes (footmisc's
+    symbol* option swaps in numbers when a page outruns the symbol list).
     Template-only dress (chapter art, color names, CJK, lettrine) is not
     carried over — except for theme memoir2, which keeps the lettrine
-    chapter openings — and footmisc's symbol* option swaps in numbers
-    when a page outruns the symbol list. The template's tocloft load and
+    chapter openings and numbers its footnotes continuously rather than
+    marking them per page with symbols. The template's tocloft load and
     \\numberline{} renewal are dropped: memoir carries the cft commands
     natively and numbers its chapter entries with \\chapternumberline."""
     width, height = TRIM_SIZES.get(trim, TRIM_SIZES["6x9"])
@@ -543,10 +544,22 @@ def _memoir_preamble(theme, trim, font_size, line_height, chapter_start,
         % ("Chapter \\thechapter. " if chapter_numbers else ""),
         "\\renewcommand{\\headrulewidth}{0pt}",
         "\\renewcommand*{\\headwidth}{\\hsize}",
-        # Footnotes: symbols, reset every page.
-        "\\usepackage[symbol*]{footmisc}",
-        "\\usepackage{perpage}",
-        "\\MakePerPage{footnote}",
+    ])
+    if theme == "memoir2":
+        # Footnotes numbered continuously through the book (memoir resets
+        # the counter per chapter; \counterwithout undoes that).
+        lines.extend([
+            "\\usepackage{footmisc}",
+            "\\counterwithout{footnote}{chapter}",
+        ])
+    else:
+        # Footnotes marked with symbols, reset every page.
+        lines.extend([
+            "\\usepackage[symbol*]{footmisc}",
+            "\\usepackage{perpage}",
+            "\\MakePerPage{footnote}",
+        ])
+    lines.extend([
         "\\usepackage[normalem]{ulem}",
         "\\usepackage{booktabs}",
         "\\usepackage[hidelinks]{hyperref}",

@@ -185,7 +185,11 @@ def print_css(theme: str = "classic", trim: str = "6x9", font_size: str = "11pt"
         css += mod.PRINT_EXTRA.substitute(params)
     if drop_caps:
         css += base.DROP_CAP
-    if footnote_numbering == "per-chapter":
+    # memoir/memoir2 (symbol / by-design continuous footnotes) and tufte
+    # (margin sidenotes) define their own footnote scheme; the toggle skips
+    # them here just as the LaTeX writer does, so both paths stay consistent.
+    if footnote_numbering == "per-chapter" and theme not in (
+            "memoir", "memoir2", "tufte"):
         css += base.FOOTNOTE_PER_CHAPTER
     css += _title_fit_css(mod, book_title, book_subtitle, trim, font_size)
     return css

@@ -73,7 +73,7 @@ def build_parser() -> argparse.ArgumentParser:
                              "Very Short Introduction series, classicthesis after "
                              "Miede's ClassicThesis LaTeX style, memoir after a "
                              "6x9 memoir-class novel template, memoir2 that "
-                             "template in full dress — drop caps, symbol "
+                             "template in full dress — drop caps, numbered "
                              "footnotes — mydiss after Ummels's mydiss "
                              "dissertation class, and polimi after the "
                              "Cerberus Polimi thesis (memoir veelo chapter "
@@ -96,6 +96,8 @@ def build_parser() -> argparse.ArgumentParser:
     design.add_argument("--no-chapter-numbers", action="store_true",
                         help="omit 'Chapter N' labels above chapter titles")
     design.add_argument("--no-toc", action="store_true", help="omit the table of contents page in print output")
+    design.add_argument("--drop-source-toc", action="store_true",
+                        help="remove a contents page found in the source (by default it is kept, with a warning that it may duplicate the generated one)")
     design.add_argument("--no-footnotes", action="store_true",
                         help="keep footnotes as an end-of-chapter list instead of setting them at the foot of the page")
     design.add_argument("--footnote-numbering", default="continuous",
@@ -165,7 +167,8 @@ def main(argv=None) -> int:
 
     opts = ingester.IngestOptions(
         split=args.split, images=args.images, order=args.order,
-        max_items=args.max_items, fetch_full=args.fetch_full, verbose=args.verbose,
+        max_items=args.max_items, fetch_full=args.fetch_full,
+        drop_source_toc=args.drop_source_toc, verbose=args.verbose,
     )
     print("Collecting content...", file=sys.stderr)
     result = ingester.ingest(args.inputs, opts)

@@ -63,3 +63,36 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+---
+
+## Project contracts
+
+Invariants that span files and won't be obvious from any single one.
+
+### Chapter numbering (models.Chapter.numbered / .number)
+
+- `numbered=False` marks front/back matter (Introduction, Conclusion,
+  References, Appendix). `number` holds an author-typed figure ("I", "2");
+  `None` means number by position. Both are set by `ingest.classify_chapters`
+  at the end of `ingest()`: typed `I. `/`1. ` title figures that count 1..k
+  in document order (at least two — one is too weak a signal) become display
+  numbers, stripped from the titles; otherwise standard furniture titles
+  fall back unnumbered.
+- A chapter's number is its position **among numbered chapters only** —
+  never its index in `book.chapters`. Every writer counts with a `seq` that
+  unnumbered chapters don't advance (printbook, epub, latex, indesign).
+  Keep that pattern in new writers and in anything iterating chapters.
+- Print and epub writers emit `class="chapter unnumbered"` on matter, and
+  theme CSS keys off it: the shared DROP_CAP rule, polimi's lettrine and
+  its counter spine (`counter-increment: chapter`), and section-number
+  suppression. If a writer stops emitting the class, or a theme adds
+  chapter-scoped counters/decoration without excluding `.unnumbered`,
+  numbering silently goes wrong. The LaTeX equivalents: `\chapter*` +
+  `\addcontentsline`, secnumdepth saved/restored around the chapter, and
+  lettrine openers skipped.
+- The global `chapter_numbers` option only suppresses display; it does not
+  change classification, and matter dress rules (no drop cap/lettrine) key
+  on `chapter.numbered` alone.
+- Theme `chapter_label(number)` implementations must interpolate the number
+  (str or int), not do arithmetic on it — typed figures arrive as strings.

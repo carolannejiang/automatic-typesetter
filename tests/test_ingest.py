@@ -7,10 +7,10 @@ import unittest
 from unittest import mock
 
 from bookformatter import fetch
-from bookformatter.ingest import (IngestOptions, PER_HOST_FETCHES,
-                                  _fetch_parallel, _host,
+from bookformatter.ingest import (IngestOptions, IngestResult, PER_HOST_FETCHES,
+                                  _fetch_parallel, _host, _is_source_toc,
                                   _looks_like_index_url, _match_feed_item,
-                                  classify_chapters, ingest)
+                                  classify_chapters, handle_source_toc, ingest)
 from bookformatter.feeds import FeedItem
 from bookformatter.models import Chapter
 
@@ -249,6 +249,58 @@ class ClassifyChaptersTests(unittest.TestCase):
                           ("FIRST STUDY", True, "I"),
                           ("SECOND STUDY", True, "II"),
                           ("REFERENCES", False, None)])
+
+
+class SourceTocTests(unittest.TestCase):
+    def _result(self, *chapters):
+        r = IngestResult()
+        r.chapters = list(chapters)
+        return r
+
+    def test_dot_leader_page_is_detected(self):
+        toc = Chapter(title="Contents",
+                      html="<p>Chapter One ...... 12</p><p>Chapter Two ...... 34</p>")
+        self.assertTrue(_is_source_toc(toc))
+
+    def test_anchor_list_page_is_detected(self):
+        toc = Chapter(title="Table of Contents",
+                      html='<ul><li><a href="#a">One</a></li>'
+                           '<li><a href="#b">Two</a></li>'
+                           '<li><a href="#c">Three</a></li></ul>')
+        self.assertTrue(_is_source_toc(toc))
+
+    def test_real_chapter_titled_contents_is_not_detected(self):
+        ch = Chapter(title="Contents",
+                     html="<p>The contents of the jar were unknown to us.</p>")
+        self.assertFalse(_is_source_toc(ch))
+
+    def test_toc_like_body_under_other_title_is_not_detected(self):
+        ch = Chapter(title="Chapter 1", html="<p>Once ....... 5</p>")
+        self.assertFalse(_is_source_toc(ch))
+
+    def test_default_keeps_but_warns(self):
+        toc = Chapter(title="Contents", html="<p>Intro ..... 1</p><p>End ..... 9</p>")
+        keep = Chapter(title="Chapter 1", html="<p>hi</p>")
+        result = self._result(toc, keep)
+        handle_source_toc(result, drop=False)
+        self.assertEqual(result.chapters, [toc, keep])
+        self.assertTrue(toc.is_source_toc)
+        self.assertTrue(any("may duplicate" in w for w in result.warnings))
+
+    def test_opt_in_strips_and_warns(self):
+        toc = Chapter(title="Contents", html="<p>Intro ..... 1</p><p>End ..... 9</p>")
+        keep = Chapter(title="Chapter 1", html="<p>hi</p>")
+        result = self._result(toc, keep)
+        handle_source_toc(result, drop=True)
+        self.assertEqual(result.chapters, [keep])
+        self.assertTrue(any("removed the source" in w for w in result.warnings))
+
+    def test_no_source_toc_is_silent(self):
+        keep = Chapter(title="Chapter 1", html="<p>hi</p>")
+        result = self._result(keep)
+        handle_source_toc(result, drop=True)
+        self.assertEqual(result.chapters, [keep])
+        self.assertEqual(result.warnings, [])
 
 
 PROSE = ("A reasonably long paragraph, with commas, that scores well in "

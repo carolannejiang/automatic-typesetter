@@ -179,9 +179,18 @@ section.chapter:not(.unnumbered) > p:first-of-type::first-letter {
 # itself: a counter-reset on section.chapter would replace, not merge with,
 # a theme's own section.chapter reset (polimi resets section/figure there),
 # whereas the head's reset still scopes to the chapter's following content.
-# memoir2 keeps its own per-chapter reset for its symbol footnotes.
+# print_css only emits this for themes without their own footnote scheme.
 FOOTNOTE_PER_CHAPTER = """
 section.chapter > header.chapter-head { counter-reset: footnote 0; }
+"""
+
+# Shared by the epub and print stylesheets (see EPUB_EXTRA / PRINT_EXTRA).
+_REFERENCES = """
+/* References page: APA hanging indents. */
+section.references p.ref-entry {
+  text-indent: -1.4em; padding-left: 1.4em;
+  margin: 0 0 0.4em; text-align: left;
+}
 """
 
 EPUB_EXTRA = Template(
@@ -201,13 +210,8 @@ aside.linknote p { text-indent: 0; margin: 0; text-align: left; }
 /* Bare selector: the URL anchor also appears parenthesized inside content
    footnotes, where links unfold in place rather than gaining an L note. */
 a.linknote-url { overflow-wrap: anywhere; word-break: break-all; }
-
-/* References page: APA hanging indents. */
-section.references p.ref-entry {
-  text-indent: -1.4em; padding-left: 1.4em;
-  margin: 0 0 0.4em; text-align: left;
-}
 """
+    + _REFERENCES
 )
 
 PRINT_EXTRA = Template(
@@ -328,13 +332,9 @@ span.linknote::footnote-marker { content: none; }
 /* Bare selector: a link already inside a content footnote unfolds its URL
    in parentheses within that note (span.footnote), not as an L note. */
 a.linknote-url { overflow-wrap: anywhere; }
-
-/* References page: APA hanging indents. */
-section.references p.ref-entry {
-  text-indent: -1.4em; padding-left: 1.4em;
-  margin: 0 0 0.4em; text-align: left;
-}
-
+"""
+    + _REFERENCES
+    + """
 /* Book-end link notes: with the "end" placement the L notes gather in a
    back-matter Notes section instead of floating to each page's foot. The
    section opens like a chapter — same break, and its chapter-head sets the
@@ -380,3 +380,27 @@ def default_margins(width: float, height: float) -> dict:
 
 def default_chapter_label(number: int) -> str:
     return f"Chapter {number}"
+
+
+def params(name: str, font_size: str, line_height: str, **overrides) -> dict:
+    """Substitutions for the shared templates; a theme passes only what it
+    changes. The defaults describe the classic design — serif throughout,
+    centered normal-weight heads — and each theme overrides the keys that
+    differ (fonts, alignment, indent, drops, and any theme-specific tokens)."""
+    values = {
+        "THEME_NAME": name,
+        "BODY_FONT": SERIF_STACK,
+        "HEADING_FONT": SERIF_STACK,
+        "MONO_FONT": MONO_STACK,
+        "HEADING_WEIGHT": "normal",
+        "HEADING_ALIGN": "center",
+        "FONT_SIZE": font_size,
+        "LINE_HEIGHT": line_height,
+        "INDENT": "1em",
+        "PARA_EXTRA": "",
+        "TITLE_EXTRA": "",
+        "CHAPTER_DROP": "2.8em",
+        "TITLE_DROP": "1.6in",
+    }
+    values.update(overrides)
+    return values

@@ -329,7 +329,11 @@ class WriteLatexTests(unittest.TestCase):
         self.assertIn("extrafontsizes]{memoir}", tex)
         self.assertIn("\\setstocksize{9in}{6in}", tex)
         self.assertIn("\\usepackage{ebgaramond}", tex)
-        self.assertIn("\\usepackage[symbol*]{footmisc}", tex)
+        # ...but footnotes numbered continuously rather than per-page symbols,
+        self.assertIn("\\usepackage{footmisc}", tex)
+        self.assertNotIn("\\usepackage[symbol*]{footmisc}", tex)
+        self.assertIn("\\counterwithout{footnote}{chapter}", tex)
+        self.assertNotIn("\\MakePerPage{footnote}", tex)
         # ...plus lettrine chapter openings on plain-word chapters,
         self.assertIn("\\usepackage{lettrine}", tex)
         self.assertIn("\\lettrine{F}{irst} chapter with an image.", tex)
@@ -540,12 +544,16 @@ class FootnoteNumberingTests(unittest.TestCase):
         self.assertNotIn("\\counterwithout{footnote}{chapter}", tex)
 
     def test_symbol_and_sidenote_themes_keep_their_own_scheme(self):
-        # memoir/memoir2 (per-page symbols) and tufte (margin notes) manage
-        # their own footnote counters, so the toggle leaves them untouched.
+        # memoir (per-page symbols), memoir2 (by-design continuous) and tufte
+        # (margin notes) define their own footnote scheme, so the toggle is a
+        # no-op: the output is identical either way and never carries the
+        # per-chapter \counterwithin* the other themes get.
         for theme in ("memoir", "memoir2", "tufte"):
-            for mode in ("continuous", "per-chapter"):
-                tex = render(theme=theme, footnote_numbering=mode)
-                self.assertNotIn("counterwith", tex, (theme, mode))
+            continuous = render(theme=theme, footnote_numbering="continuous")
+            per_chapter = render(theme=theme, footnote_numbering="per-chapter")
+            self.assertEqual(continuous, per_chapter, theme)
+            self.assertNotIn("\\counterwithin*{footnote}{chapter}",
+                             per_chapter, theme)
 
     def _unnumbered_tex(self, **kwargs):
         # An unnumbered chapter is set with \chapter*, which doesn't step the
