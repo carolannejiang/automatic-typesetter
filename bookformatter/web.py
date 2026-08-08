@@ -211,6 +211,7 @@ def run_build(params: dict, uploads: list, workdir: str,
         order=_first(params, "order", "auto"),
         max_items=max_items,
         fetch_full=True if _first(params, "fetch_full") == "on" else None,
+        drop_source_toc=_first(params, "drop_source_toc") == "on",
         progress=progress,
     )
     result = ingester.ingest(inputs, opts)
@@ -943,6 +944,7 @@ footer a { color: var(--link); }
           <label><input type="checkbox" name="drop_caps"> Drop caps on chapter openings</label>
           <label><input type="checkbox" name="no_chapter_numbers"> Omit &ldquo;Chapter N&rdquo; labels</label>
           <label><input type="checkbox" name="no_toc"> Omit the contents page (print)</label>
+          <label><input type="checkbox" name="drop_source_toc"> Drop the source's contents page</label>
           <label><input type="checkbox" name="no_footnotes"> Content footnotes: collect as endnotes</label>
           <label><input type="checkbox" name="no_link_citations"> Bare URLs in link notes (skip APA-style citations)</label>
           <label><input type="checkbox" name="references"> Append an APA References page</label>
