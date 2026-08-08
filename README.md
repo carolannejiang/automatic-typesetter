@@ -104,9 +104,10 @@ your browser): paste article/feed links, upload `.md`/`.txt`/`.html`
 files, or paste text directly; set the title, author, cover image, and
 every option the CLI has (theme, trim size, formats, fonts, chapter
 behavior, feed handling, PDF engine); optionally type your own front and
-back matter (Markdown/HTML, rendered verbatim) and a custom copyright
-page; click **Make the book**; download the EPUB/PDF/HTML/Word file when
-the build finishes.
+back matter (Markdown/HTML, rendered verbatim and left out of the
+contents page — a heading typed there is display markup, not a contents
+entry) and a custom copyright page; click **Make the book**; download
+the EPUB/PDF/HTML/Word file when the build finishes.
 
 It runs entirely on your machine — nothing is uploaded anywhere. It's
 standard library only, like the rest of the tool. `--port` changes the

@@ -1005,13 +1005,19 @@ def ingest(inputs: list, opts: Optional[IngestOptions] = None) -> IngestResult:
     return result
 
 
-def ingest_matter(inputs: list, opts: Optional[IngestOptions] = None) -> IngestResult:
+def ingest_matter(inputs: list, opts: Optional[IngestOptions] = None,
+                  detect_titles: bool = True) -> IngestResult:
     """Ingest author-supplied front/back matter the same way as chapters, but
     mark every resulting section as unnumbered furniture so it opens plainly
     (no chapter number, no drop cap) and sits before/after the numbered
     chapters. The author's own markup is kept verbatim (raw=True) — a typed
     heading, centered title block, etc. renders as-is with no generated
-    chapter head. The caller decides placement (prepend vs append)."""
+    chapter head. The caller decides placement (prepend vs append).
+
+    detect_titles=False leaves every section untitled regardless of its
+    headings — for matter typed into the web text boxes, where a heading is
+    display markup (an author's name on a title page) as often as a section
+    title, and a wrong guess puts that name in the contents."""
     opts = opts or IngestOptions()
     opts.promote_title = False
     result = ingest(inputs, opts)
@@ -1024,7 +1030,8 @@ def ingest_matter(inputs: list, opts: Optional[IngestOptions] = None) -> IngestR
         # dedication, an epigraph — is untitled: drop the filename-derived
         # placeholder so writers leave it out of the contents rather than
         # listing a bogus "Front Matter" line.
-        heading = htmldom.parse(chapter.html).find(_HEADING_TAGS)
+        heading = (htmldom.parse(chapter.html).find(_HEADING_TAGS)
+                   if detect_titles else None)
         chapter.title = (htmldom.normalize_ws(heading.text_content())
                          if heading is not None else "")
     return result

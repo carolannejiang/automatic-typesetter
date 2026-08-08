@@ -110,6 +110,20 @@ class IngestTests(unittest.TestCase):
         self.assertIn("<h1>My Title</h1>", ch.html)  # kept in body, not hoisted
         self.assertEqual(ch.title, "My Title")        # still labels the TOC
 
+    def test_ingest_matter_detect_titles_off_is_always_untitled(self):
+        # The web text boxes pass detect_titles=False: a heading there is
+        # display markup (an author's name on a title block), so it stays in
+        # the body but never becomes the section title / contents entry.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(
+                tmp, "front-matter.md",
+                '<div align="center">\n\nAn Essay Presented\n\nby\n\n'
+                '# Jane Doe\n\nto\n\n## The Committee\n\n</div>')
+            result = ingest_matter([path], detect_titles=False)
+        ch = result.chapters[0]
+        self.assertEqual(ch.title, "")
+        self.assertIn("<h1>Jane Doe</h1>", ch.html)
+
     def test_plain_text(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = self._write(tmp, "my-old-journal.txt", "First para.\n\nSecond para.")

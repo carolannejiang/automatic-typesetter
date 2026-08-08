@@ -249,7 +249,11 @@ def run_build(params: dict, uploads: list, workdir: str,
             path = os.path.join(input_dir, filename)
             with open(path, "w", encoding="utf-8") as fh:
                 fh.write(text)
-            res = ingester.ingest_matter([path], matter_opts)
+            # detect_titles=False: typed matter is display markup — a
+            # heading is as likely an author's name on a title block as a
+            # section title, so never surface one in the contents.
+            res = ingester.ingest_matter([path], matter_opts,
+                                         detect_titles=False)
             out.warnings.extend(w for w in res.warnings if w not in out.warnings)
             if at_front:
                 book.chapters[0:0] = res.chapters
@@ -852,9 +856,9 @@ footer a { color: var(--link); }
       <textarea id="pasted" name="pasted" rows="5" placeholder="# Chapter One&#10;&#10;It was a dark and stormy night&hellip;"></textarea>
       <details>
         <summary>Front &amp; back matter (optional) — a preface, foreword, afterword, or appendix</summary>
-        <label for="front_matter">Front matter — Markdown &amp; HTML, kept as typed (set after the contents page, before chapter 1)</label>
+        <label for="front_matter">Front matter — Markdown &amp; HTML, kept as typed and left out of the contents page (set after it, before chapter 1)</label>
         <textarea id="front_matter" name="front_matter" rows="4" placeholder='&lt;div align="center"&gt;&#10;# A Title&#10;by **Author**&#10;&lt;/div&gt;'></textarea>
-        <label for="back_matter">Back matter — Markdown &amp; HTML, kept as typed (set after the last chapter)</label>
+        <label for="back_matter">Back matter — Markdown &amp; HTML, kept as typed and left out of the contents page (set after the last chapter)</label>
         <textarea id="back_matter" name="back_matter" rows="4" placeholder="# Afterword&#10;&#10;A final word&hellip;"></textarea>
       </details>
     </div>

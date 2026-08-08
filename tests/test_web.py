@@ -301,9 +301,17 @@ class WebTests(unittest.TestCase):
         name = status["files"][0]["name"]
         code, epub = self._get(f"/download?id={resp['id']}&file={name}")
         with zipfile.ZipFile(io.BytesIO(epub)) as zf:
+            # Typed matter is display markup, never a contents entry: the
+            # sections bracket the chapter in the spine but a typed heading
+            # ("# Preface") must not surface in the nav.
             nav = zf.read("OEBPS/nav.xhtml").decode()
-            self.assertLess(nav.index("Preface"), nav.index("Middle Chapter"))
-            self.assertLess(nav.index("Middle Chapter"), nav.index("Afterword"))
+            self.assertIn("Middle Chapter", nav)
+            self.assertNotIn("Preface", nav)
+            self.assertNotIn("Afterword", nav)
+            front = zf.read("OEBPS/text/chapter-001.xhtml").decode()
+            self.assertIn("Before we begin.", front)
+            back = zf.read("OEBPS/text/chapter-003.xhtml").decode()
+            self.assertIn("After all that.", back)
             copy = zf.read("OEBPS/text/copyright.xhtml").decode()
             self.assertIn("All wrongs reversed.", copy)
             self.assertNotIn("Produced with bookformatter.", copy)
