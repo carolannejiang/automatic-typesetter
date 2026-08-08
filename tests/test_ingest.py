@@ -78,6 +78,24 @@ class IngestTests(unittest.TestCase):
         self.assertEqual(result.chapters[0].title, "Preface")
         self.assertFalse(result.chapters[0].numbered)
         self.assertIsNone(result.chapters[0].number)
+        self.assertTrue(result.chapters[0].raw)
+
+    def test_ingest_matter_title_is_first_heading_not_filename(self):
+        # A heading of any level names the section (for the contents line)…
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, "front-matter.md", "## Foreword\n\nBy a friend.")
+            result = ingest_matter([path])
+        self.assertEqual(result.chapters[0].title, "Foreword")
+
+    def test_ingest_matter_without_heading_is_untitled(self):
+        # …and matter with no heading (a dedication) is untitled, not labeled
+        # with the filename-derived "Front Matter".
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, "front-matter.md",
+                               '<div align="center">\n\nFor my parents.\n\n</div>')
+            result = ingest_matter([path])
+        self.assertEqual(result.chapters[0].title, "")
+        self.assertIn("For my parents", result.chapters[0].html)
 
     def test_ingest_matter_keeps_author_markup_verbatim(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -108,6 +108,15 @@ Invariants that span files and won't be obvious from any single one.
   the body, don't hoist it to the title) and sets `raw=True`,
   `numbered=False`, `number=None`. The web/CLI front-back-matter fields
   prepend/append the result to `book.chapters`.
+- A raw chapter's `title` is its **own first heading** (any of h1–h6), or
+  `""` when it has none — `ingest_matter` overwrites the filename-derived
+  title so a headingless dedication/epigraph doesn't surface as a bogus
+  "Front Matter" line. Untitled matter (`title == ""`) is still typeset
+  (it's in the spine/body) but every contents list must skip it: the print
+  TOC loop `continue`s, epub omits it from `chapter_hrefs` (nav), and latex
+  drops its `\addcontentsline`. epub still needs a non-empty page `<title>`
+  (falls back to the book title) for epubcheck. Titled matter (a "Preface",
+  a typed title block) lists normally.
 - Every writer must skip its generated chapter head when `chapter.raw`,
   while still listing the chapter in the contents (print/epub omit the
   `chapter_head_html`; indesign skips the head paragraph; latex stars the

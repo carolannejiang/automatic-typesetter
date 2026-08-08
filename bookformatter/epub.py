@@ -158,13 +158,17 @@ def write_epub(book: Book, path: str, theme: str = "classic",
         body = _chapter_body(chapter.number or seq, chapter.title, content,
                              show_number, theme, chapter.numbered, chapter.raw)
         href = f"text/chapter-{i:03d}.xhtml"
-        files.append((f"OEBPS/{href}", _xhtml(chapter.title, body, lang)))
+        # Untitled matter still needs a non-empty <title> for epubcheck.
+        files.append((f"OEBPS/{href}", _xhtml(chapter.title or meta.title, body, lang)))
         manifest.append((f"ch{i:03d}", href, "application/xhtml+xml", None))
         spine.append(f"ch{i:03d}")
-        # A figure the author typed into the title stays on the nav line.
-        toc_title = (f"{chapter.number}. {chapter.title}"
-                     if show_number and chapter.number else chapter.title)
-        chapter_hrefs.append((href, toc_title))
+        # Untitled front/back matter (a dedication, a title block with no
+        # heading) is read in the spine but left off the nav, as in print.
+        if chapter.title:
+            # A figure the author typed into the title stays on the nav line.
+            toc_title = (f"{chapter.number}. {chapter.title}"
+                         if show_number and chapter.number else chapter.title)
+            chapter_hrefs.append((href, toc_title))
 
     if references:
         ref_entries = apacite.reference_entries(link_citations)

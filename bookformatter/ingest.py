@@ -25,6 +25,8 @@ DOCX_EXTS = {".docx"}
 PDF_EXTS = {".pdf"}
 ALL_EXTS = MARKDOWN_EXTS | HTML_EXTS | TEXT_EXTS | DOCX_EXTS | PDF_EXTS
 
+_HEADING_TAGS = {"h1", "h2", "h3", "h4", "h5", "h6"}
+
 
 @dataclass
 class IngestOptions:
@@ -1017,4 +1019,12 @@ def ingest_matter(inputs: list, opts: Optional[IngestOptions] = None) -> IngestR
         chapter.numbered = False
         chapter.number = None
         chapter.raw = True
+        # The section's title is its own first heading, if it has one (a
+        # "Preface", a typed title block). Matter without a heading — a
+        # dedication, an epigraph — is untitled: drop the filename-derived
+        # placeholder so writers leave it out of the contents rather than
+        # listing a bogus "Front Matter" line.
+        heading = htmldom.parse(chapter.html).find(_HEADING_TAGS)
+        chapter.title = (htmldom.normalize_ws(heading.text_content())
+                         if heading is not None else "")
     return result
