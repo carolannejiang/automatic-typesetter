@@ -111,6 +111,14 @@ _LINKNOTE_MARK = re.compile(r"^L\d+$")
 
 _TAG_STRIP = re.compile(r"<[^>]+>")
 
+# A heading Word placed just above a table ("Table 1: ...") is really the
+# table's title; fold it into the table as a <caption> (see convert()). A
+# heading is unambiguously a title; a bare paragraph is not ("Table 1 shows
+# ..." is prose), so there we require punctuation after the figure number —
+# which is also how Word's Caption style ("Table 1: Codes") reads here.
+_TABLE_TITLE = re.compile(r"^\s*table\s+\d", re.I)
+_TABLE_CAPTION = re.compile(r"^\s*table\s+\d+\s*[.:]", re.I)
+
 _OFF_VALUES = {"0", "false", "none", "off"}
 
 
@@ -454,6 +462,22 @@ class _Reader:
                 rows.append("<tr>%s</tr>" % "".join(cells))
         return "<table>%s</table>" % "".join(rows) if rows else ""
 
+    def _bind_table_caption(self, out: list, table: str) -> str:
+        """Fold a 'Table N ...' heading Word placed just above a table into
+        the table as a <caption>. As its own block the title can be stranded
+        on a page by itself when the table breaks across pages; a <caption>
+        is part of the table and always renders with its first rows."""
+        if not out:
+            return table
+        m = re.match(r"^<(h[1-6]|p)>(.*)</\1>$", out[-1], re.S)
+        if not m:
+            return table
+        pattern = _TABLE_TITLE if m.group(1)[0] == "h" else _TABLE_CAPTION
+        if not pattern.match(_TAG_STRIP.sub("", m.group(2)).strip()):
+            return table
+        out.pop()
+        return "<table><caption>%s</caption>%s" % (m.group(2), table[len("<table>"):])
+
     def _flush_notes(self, out: list) -> None:
         if self.pending_notes:
             out.append('<div class="footnotes"><ol>%s</ol></div>'
@@ -479,7 +503,7 @@ class _Reader:
                 flush_lists()
                 table = self._table_html(el)
                 if table:
-                    out.append(table)
+                    out.append(self._bind_table_caption(out, table))
                 continue
 
             kind = self._para_kind(el)

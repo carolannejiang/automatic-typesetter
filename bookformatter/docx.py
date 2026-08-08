@@ -126,6 +126,11 @@ class _WordConverter(_Converter):
         if node.tag != "table":
             super()._block(node, quote_style)
             return
+        cap = node.find("caption")
+        if cap is not None:
+            runs = self._inline(cap.children)
+            if _has_substance(runs):
+                self.paras.append(Para("Caption", runs))
         rows = []
         for tr in node.find_all("tr"):
             cells = []

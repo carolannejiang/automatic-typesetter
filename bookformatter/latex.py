@@ -250,9 +250,14 @@ class _TexConverter:
         if not rows:
             return []
         ncols = max(len(texts) for _, texts in rows)
-        lines = ["\\begin{center}",
-                 "\\begin{tabular}{%s}" % ("l" * ncols),
-                 "\\toprule"]
+        lines = ["\\begin{center}"]
+        caption = node.find("caption")
+        if caption is not None:
+            text = _tidy(self._inline(caption.children))
+            if text:
+                lines.append("{\\itshape\\small %s\\par}" % text)
+        lines.extend(["\\begin{tabular}{%s}" % ("l" * ncols),
+                      "\\toprule"])
         for i, (is_header, texts) in enumerate(rows):
             lines.append(" & ".join(texts) + " \\\\")
             if i == 0 and is_header and len(rows) > 1:
