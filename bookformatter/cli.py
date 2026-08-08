@@ -56,8 +56,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="PDF renderer (default: auto = weasyprint, then headless "
                              "Chrome); latex typesets a .tex source with latexmk — "
                              "genuine classicthesis.sty for --theme classicthesis, "
-                             "the genuine memoir class for --theme memoir, "
-                             "memoir2, or polimi, "
+                             "the genuine memoir class for --theme memoir2 "
+                             "or polimi, "
                              "the genuine tufte-book class for --theme tufte "
                              "(which fixes its own 10/14 leading and letter "
                              "geometry, so --font-size, --line-height, and "
@@ -71,10 +71,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="typography theme; classical sets the page after "
                              "WeasyPrint's book-classical sample, vsi after Oxford's "
                              "Very Short Introduction series, classicthesis after "
-                             "Miede's ClassicThesis LaTeX style, memoir after a "
-                             "6x9 memoir-class novel template, memoir2 that "
-                             "template in full dress — drop caps, numbered "
-                             "footnotes — mydiss after Ummels's mydiss "
+                             "Miede's ClassicThesis LaTeX style, memoir2 after "
+                             "a 6x9 memoir-class novel template in full dress — "
+                             "drop caps, numbered footnotes — mydiss after "
+                             "Ummels's mydiss "
                              "dissertation class, and polimi after the "
                              "Cerberus Polimi thesis (memoir veelo chapter "
                              "bars, Minion & Myriad) (default: classic)")
@@ -84,11 +84,11 @@ def build_parser() -> argparse.ArgumentParser:
                              "156x234mm for mydiss, 6x9 otherwise)")
     design.add_argument("--font-size", default=None,
                         help="print body size (default: the theme's design size — "
-                             "8.5pt for vsi, 12pt for the memoir themes, "
+                             "8.5pt for vsi, 12pt for memoir2, "
                              "9pt for mydiss, 11pt otherwise)")
     design.add_argument("--line-height", default=None,
                         help="body leading (default: the theme's design leading — "
-                             "1.30 for classicthesis, 1.36 for the memoir themes, "
+                             "1.30 for classicthesis, 1.36 for memoir2, "
                              "1.41 for vsi, 1.53 for mydiss, 1.45 otherwise)")
     design.add_argument("--chapter-start", default="right", choices=["right", "any"],
                         help="print: chapters open on a recto page or any page (default: right)")

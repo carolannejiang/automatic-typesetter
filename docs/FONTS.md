@@ -41,7 +41,7 @@ the stack falls through to the fallbacks.
 ## LaTeX export path (`latex.py`, needs a TeX distribution)
 
 - **TeX Gyre** (Pagella / Schola / Termes) + DejaVu Sans Mono — general books
-- TeX packages: **`ebgaramond`** (memoir), **`XCharter`** (mydiss)
+- TeX packages: **`ebgaramond`** (memoir2), **`XCharter`** (mydiss)
 - polimi uses `\IfFontExistsTF{Minion Pro}` / `{Myriad Pro}` / `{Monaco}`, falling back to
   TeX Gyre / DejaVu files if not installed
 

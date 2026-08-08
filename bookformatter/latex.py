@@ -9,21 +9,20 @@ rather than imitated. Two document shapes:
   Miede's classicthesis.sty from the local TeX installation — the very
   package the CSS theme transcribes — compiled with pdflatex, the engine
   the reference ClassicThesis.pdf was made with.
-* theme "memoir" emits the genuine article as well: the memoir class set
-  up as the reference 6×9 novel template's main.tex / options.sty
-  (12pt EB Garamond, titlesec's centered small-caps chapters, fancyhdr
-  italic running heads, per-page symbol footnotes), compiled with
-  pdflatex as the template is.
 * theme "tufte" emits the genuine article too: the tufte-book class, whose
   asymmetric margin column, ragged-right Palatino body, sans allcaps title
   page, and \\sidenote/\\marginnote furniture the CSS theme transcribes.
   Content footnotes and link notes become margin sidenotes; figure captions
   become margin notes. Compiled with pdflatex, the tier its Palatino and
   soul letterspacing want.
-* theme "memoir2" is that same document in the template's full dress:
-  lettrine drop caps opening every chapter, the template's flyleaf and
-  half-title front matter, and the unstarred \\tableofcontents that
-  lists itself, exactly as the reference PDF shows.
+* theme "memoir2" emits the genuine article too: the memoir class set up
+  as the reference 6×9 novel template's main.tex / options.sty (12pt EB
+  Garamond, titlesec's centered small-caps chapters, fancyhdr italic
+  running heads), in the template's full dress — lettrine drop caps
+  opening every chapter, footnotes numbered continuously, the template's
+  flyleaf and half-title front matter, and the unstarred \\tableofcontents
+  that lists itself, exactly as the reference PDF shows. Compiled with
+  pdflatex as the template is.
 * theme "mydiss" transcribes Michael Ummels's mydiss dissertation class
   (an extbook derivative not on CTAN) into a self-contained preamble: 9pt
   Charter (XCharter with oldstyle figures, standing in for the commercial
@@ -473,16 +472,14 @@ def _classicthesis_preamble(theme, trim, font_size, chapter_start,
 def _memoir_preamble(theme, trim, font_size, line_height, chapter_start,
                      chapter_numbers, language, meta) -> list:
     """The reference 6×9 memoir novel template's setup (main.tex /
-    options.sty): memoir class, 12pt EB Garamond on a 1.125
-    baselinestretch, titlesec [center,sc] chapter heads, fancyhdr italic
-    running heads with outer folios, per-page symbol footnotes (footmisc's
-    symbol* option swaps in numbers when a page outruns the symbol list).
-    Template-only dress (chapter art, color names, CJK, lettrine) is not
-    carried over — except for theme memoir2, which keeps the lettrine
-    chapter openings and numbers its footnotes continuously rather than
-    marking them per page with symbols. The template's tocloft load and
-    \\numberline{} renewal are dropped: memoir carries the cft commands
-    natively and numbers its chapter entries with \\chapternumberline."""
+    options.sty), in the template's full dress: memoir class, 12pt EB
+    Garamond on a 1.125 baselinestretch, titlesec [center,sc] chapter
+    heads, fancyhdr italic running heads with outer folios, lettrine
+    chapter openings, and footnotes numbered continuously through the book.
+    Template-only dress (chapter art, color names, CJK) is not carried
+    over. The template's tocloft load and \\numberline{} renewal are
+    dropped: memoir carries the cft commands natively and numbers its
+    chapter entries with \\chapternumberline."""
     width, height = TRIM_SIZES.get(trim, TRIM_SIZES["6x9"])
     margins = themes.theme_margins(theme, width, height)
     body_pt = _pt_size(font_size, 12.0)
@@ -512,9 +509,8 @@ def _memoir_preamble(theme, trim, font_size, line_height, chapter_start,
         % (margins["M_TOP"], margins["M_BOTTOM"]),
         "\\checkandfixthelayout",
         "\\usepackage{ebgaramond}",
+        "\\usepackage{lettrine}",
     ])
-    if theme == "memoir2":
-        lines.append("\\usepackage{lettrine}")
     if line_height == themes.default_line_height(theme):
         lines.append("\\renewcommand{\\baselinestretch}{1.125}")
     else:
@@ -545,20 +541,12 @@ def _memoir_preamble(theme, trim, font_size, line_height, chapter_start,
         "\\renewcommand{\\headrulewidth}{0pt}",
         "\\renewcommand*{\\headwidth}{\\hsize}",
     ])
-    if theme == "memoir2":
-        # Footnotes numbered continuously through the book (memoir resets
-        # the counter per chapter; \counterwithout undoes that).
-        lines.extend([
-            "\\usepackage{footmisc}",
-            "\\counterwithout{footnote}{chapter}",
-        ])
-    else:
-        # Footnotes marked with symbols, reset every page.
-        lines.extend([
-            "\\usepackage[symbol*]{footmisc}",
-            "\\usepackage{perpage}",
-            "\\MakePerPage{footnote}",
-        ])
+    # Footnotes numbered continuously through the book (memoir resets
+    # the counter per chapter; \counterwithout undoes that).
+    lines.extend([
+        "\\usepackage{footmisc}",
+        "\\counterwithout{footnote}{chapter}",
+    ])
     lines.extend([
         "\\usepackage[normalem]{ulem}",
         "\\usepackage{booktabs}",
@@ -854,7 +842,7 @@ def _front_matter(book: Book, toc: bool, style: str) -> list:
     if style == "tufte":
         return _tufte_front_matter(book, toc)
     classicthesis = style == "classicthesis"
-    memoir = style in ("memoir", "memoir2")
+    memoir = style == "memoir2"
     polimi = style == "polimi"
     # memoir's title-page environment is titlingpage; titlepage is the
     # standard classes'.
@@ -932,11 +920,11 @@ def _front_matter(book: Book, toc: bool, style: str) -> list:
     lines.append("\\par}")
 
     if toc:
-        # memoir's plain \tableofcontents lists itself; the starred form
-        # doesn't. memoir2 keeps the template's unstarred call — the
+        # polimi's starred \tableofcontents* omits its own entry; memoir2
+        # keeps the template's unstarred call, which lists itself — the
         # reference PDF opens its contents with "Contents  vii".
         lines.extend(["\\cleardoublepage",
-                      "\\tableofcontents*" if style in ("memoir", "polimi")
+                      "\\tableofcontents*" if style == "polimi"
                       else "\\tableofcontents"])
     lines.extend(["\\cleardoublepage",
                   "\\pagenumbering{arabic}" if classicthesis
@@ -1033,7 +1021,7 @@ def write_latex(book: Book, path: str, theme: str = "classic",
     if theme == "classicthesis":
         lines = _classicthesis_preamble(theme, trim, font_size, chapter_start,
                                         chapter_numbers, line_height, language)
-    elif theme in ("memoir", "memoir2"):
+    elif theme == "memoir2":
         lines = _memoir_preamble(theme, trim, font_size, line_height,
                                  chapter_start, chapter_numbers, language,
                                  book.meta)
@@ -1063,7 +1051,7 @@ def write_latex(book: Book, path: str, theme: str = "classic",
     lines.append("\\begin{document}")
     lines.extend(_front_matter(
         book, toc,
-        theme if theme in ("classicthesis", "memoir", "memoir2", "tufte",
+        theme if theme in ("classicthesis", "memoir2", "tufte",
                            "polimi") else ""))
 
     assets = {a.filename: a for a in book.assets}

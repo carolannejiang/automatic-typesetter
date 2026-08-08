@@ -40,14 +40,11 @@ python3 -m bookformatter chapters/ -t "Essays" --theme classical
 # numbers, letterspaced small-cap heads, and dot-leaderless contents
 python3 -m bookformatter chapters/ -t "Essays" --theme classicthesis
 
-# Or a 6x9 memoir-class novel page: 12pt EB Garamond, centered small-cap
-# chapter openers, italic running heads with folios in the top outer
-# corners, and a leaderless contents page
-python3 -m bookformatter chapters/ -t "Essays" --theme memoir
-
-# The same template in full dress — lettrine drop caps opening each
-# chapter, footnotes numbered continuously (1, 2, 3), numbered bold contents
-# lines, and the byline and copyright dropped to the page foot
+# Or a 6x9 memoir-class novel page in full dress: 12pt EB Garamond,
+# centered small-cap chapter openers, italic running heads with folios in
+# the top outer corners, lettrine drop caps opening each chapter, footnotes
+# numbered continuously (1, 2, 3), numbered bold contents lines, and the
+# byline and copyright dropped to the page foot
 python3 -m bookformatter chapters/ -t "Essays" --theme memoir2
 
 # Or the Cerberus Polimi thesis design (memoir's veelo chapter style):
@@ -264,15 +261,13 @@ compiles on its own; keep the `images/` folder beside it).
   ClassicThesis.pdf was. pdflatex covers Latin-script text; a chapter
   with e.g. Greek or CJK characters fails with a warning naming the
   character (the `.tex` is kept to fix or compile by hand).
-- `--theme memoir` likewise emits the genuine article: the `memoir`
+- `--theme memoir2` likewise emits the genuine article: the `memoir`
   class set up as the reference 6×9 novel template — 12pt EB Garamond,
   titlesec's centered small-caps chapters, fancyhdr italic running
-  heads, per-page symbol footnotes — compiled with pdflatex like the
-  template itself. `--theme memoir2` adds the template's full dress:
-  `lettrine` drop caps on every chapter, the flyleaf and half-title
-  front matter, and the self-listing unstarred contents — and numbers its
-  footnotes continuously (1, 2, 3) rather than marking them per page with
-  symbols.
+  heads — in the template's full dress: `lettrine` drop caps on every
+  chapter, footnotes numbered continuously (1, 2, 3), the flyleaf and
+  half-title front matter, and the self-listing unstarred contents —
+  compiled with pdflatex like the template itself.
 - `--theme polimi` likewise: `memoir` set up as the Polimi thesis's own
   `thesis_polimi.tex` — the veelo chapter style, the companion-copied
   running heads, titlesec's TikZ section bar, white-on-black caption
