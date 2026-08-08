@@ -996,3 +996,15 @@ def ingest(inputs: list, opts: Optional[IngestOptions] = None) -> IngestResult:
     if not result.title_hint and len(result.chapters) == 1:
         result.title_hint = result.chapters[0].title
     return result
+
+
+def ingest_matter(inputs: list, opts: Optional[IngestOptions] = None) -> IngestResult:
+    """Ingest author-supplied front/back matter the same way as chapters, but
+    mark every resulting section as unnumbered furniture so it opens plainly
+    (no chapter number, no drop cap) and sits before/after the numbered
+    chapters. The caller decides placement (prepend vs append)."""
+    result = ingest(inputs, opts)
+    for chapter in result.chapters:
+        chapter.numbered = False
+        chapter.number = None
+    return result

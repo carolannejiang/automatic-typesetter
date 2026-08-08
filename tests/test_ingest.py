@@ -10,7 +10,8 @@ from bookformatter import fetch
 from bookformatter.ingest import (IngestOptions, IngestResult, PER_HOST_FETCHES,
                                   _fetch_parallel, _host, _is_source_toc,
                                   _looks_like_index_url, _match_feed_item,
-                                  classify_chapters, handle_source_toc, ingest)
+                                  classify_chapters, handle_source_toc, ingest,
+                                  ingest_matter)
 from bookformatter.feeds import FeedItem
 from bookformatter.models import Chapter
 
@@ -68,6 +69,15 @@ class IngestTests(unittest.TestCase):
         self.assertEqual(len(result.chapters), 1)
         self.assertEqual(result.chapters[0].title, "A Lone Essay")
         self.assertNotIn("<h1>", result.chapters[0].html)
+
+    def test_ingest_matter_marks_unnumbered(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, "preface.md", "# Preface\n\nA word before we begin.")
+            result = ingest_matter([path])
+        self.assertEqual(len(result.chapters), 1)
+        self.assertEqual(result.chapters[0].title, "Preface")
+        self.assertFalse(result.chapters[0].numbered)
+        self.assertIsNone(result.chapters[0].number)
 
     def test_plain_text(self):
         with tempfile.TemporaryDirectory() as tmp:

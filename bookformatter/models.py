@@ -46,6 +46,8 @@ class BookMeta:
     rights: Optional[str] = None
     date: Optional[str] = None  # YYYY-MM-DD
     source_url: Optional[str] = None
+    copyright: Optional[str] = None  # custom copyright-page text (one line per
+                                     # paragraph); replaces the generated lines
 
 
 @dataclass

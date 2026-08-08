@@ -23,6 +23,9 @@ def _esc(text: str) -> str:
 def copyright_lines(book: Book) -> list:
     """The copyright page's sentences, as plain text."""
     meta = book.meta
+    if meta.copyright:
+        # Author-supplied copy: one line per paragraph, verbatim.
+        return [line.strip() for line in meta.copyright.splitlines() if line.strip()]
     year = (meta.date or str(_dt.date.today()))[:4]
     lines = []
     if meta.author:

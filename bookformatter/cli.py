@@ -38,6 +38,10 @@ def build_parser() -> argparse.ArgumentParser:
     meta.add_argument("--description", help="subtitle / one-line description")
     meta.add_argument("--publisher", help="publisher name for the title page")
     meta.add_argument("--rights", help="rights statement for the copyright page")
+    meta.add_argument("--copyright",
+                      help="custom copyright-page text (one line per paragraph); "
+                           "replaces the auto-generated lines. Use $'line1\\nline2' "
+                           "for multiple paragraphs")
     meta.add_argument("--pub-date", dest="pub_date", help="publication date YYYY-MM-DD (default: today)")
     meta.add_argument("--cover", help="cover image file (jpg/png) for the EPUB")
 
@@ -128,6 +132,12 @@ def build_parser() -> argparse.ArgumentParser:
                              "chapters' own web sources when known")
 
     content = parser.add_argument_group("content handling")
+    content.add_argument("--front-matter", dest="front_matter", action="append", metavar="FILE",
+                         help="file to set as unnumbered front matter (before chapter 1); "
+                              "repeatable")
+    content.add_argument("--back-matter", dest="back_matter", action="append", metavar="FILE",
+                         help="file to set as unnumbered back matter (after the last chapter); "
+                              "repeatable")
     content.add_argument("--split", default="auto", choices=["auto", "h1", "h2", "none"],
                          help="split files into chapters at headings "
                               "(auto: split on h1 when a file has 2+)")
@@ -184,10 +194,22 @@ def main(argv=None) -> int:
         rights=args.rights,
         date=args.pub_date or _dt.date.today().isoformat(),
         source_url=result.source_url,
+        copyright=args.copyright,
     )
     book = Book(meta=meta, chapters=result.chapters, assets=result.assets)
     if args.cover:
         book.cover = _load_cover(args.cover)
+
+    if args.front_matter or args.back_matter:
+        matter_opts = ingester.IngestOptions(images=args.images, split="none")
+        if args.front_matter:
+            fm = ingester.ingest_matter(args.front_matter, matter_opts)
+            book.chapters[0:0] = fm.chapters
+            book.assets.extend(fm.assets)
+        if args.back_matter:
+            bm = ingester.ingest_matter(args.back_matter, matter_opts)
+            book.chapters.extend(bm.chapters)
+            book.assets.extend(bm.assets)
 
     name = args.name or slugify(meta.title)
 
