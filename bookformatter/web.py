@@ -235,8 +235,13 @@ def run_build(params: dict, uploads: list, workdir: str,
     )
     book = Book(meta=meta, chapters=result.chapters, assets=result.assets, cover=cover)
     out.book_title = meta.title
+    # Front/back matter (an unnumbered Introduction, References, Appendix)
+    # is counted apart so the tally doesn't read as missed detection.
+    matter = sum(1 for ch in book.chapters if not ch.numbered)
     out.stats = (
-        f"{len(book.chapters)} chapter(s) · {book.word_count():,} words"
+        f"{len(book.chapters) - matter} chapter(s)"
+        + (f" + {matter} front/back matter" if matter else "")
+        + f" · {book.word_count():,} words"
         + (f" · {len(book.assets)} image(s)" if book.assets else "")
     )
 
