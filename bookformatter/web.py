@@ -163,6 +163,8 @@ def run_build(params: dict, uploads: list, workdir: str,
         inputs.append(url)
 
     cover: Asset = None
+    front_paths: list = []
+    back_paths: list = []
     taken: set = set()
     for field, filename, data in uploads:
         if field == "cover":
@@ -184,7 +186,12 @@ def run_build(params: dict, uploads: list, workdir: str,
         path = os.path.join(input_dir, _safe_upload_name(filename, taken))
         with open(path, "wb") as fh:
             fh.write(data)
-        inputs.append(path)
+        if field == "front_matter":
+            front_paths.append(path)
+        elif field == "back_matter":
+            back_paths.append(path)
+        else:
+            inputs.append(path)
 
     pasted = _first(params, "pasted")
     if pasted:
@@ -232,8 +239,27 @@ def run_build(params: dict, uploads: list, workdir: str,
         rights=_first(params, "rights") or None,
         date=pub_date or _dt.date.today().isoformat(),
         source_url=result.source_url,
+        copyright=_first(params, "copyright") or None,
     )
     book = Book(meta=meta, chapters=result.chapters, assets=result.assets, cover=cover)
+
+    # Author-supplied front/back matter: each uploaded file becomes one
+    # unnumbered section, front matter before chapter 1, back matter after
+    # the last chapter.
+    if front_paths or back_paths:
+        matter_opts = ingester.IngestOptions(
+            images=opts.images, split="none", progress=progress)
+        if front_paths:
+            fm = ingester.ingest_matter(front_paths, matter_opts)
+            out.warnings.extend(w for w in fm.warnings if w not in out.warnings)
+            book.chapters[0:0] = fm.chapters
+            book.assets.extend(fm.assets)
+        if back_paths:
+            bm = ingester.ingest_matter(back_paths, matter_opts)
+            out.warnings.extend(w for w in bm.warnings if w not in out.warnings)
+            book.chapters.extend(bm.chapters)
+            book.assets.extend(bm.assets)
+
     out.book_title = meta.title
     # Front/back matter (an unnumbered Introduction, References, Appendix)
     # is counted apart so the tally doesn't read as missed detection.
@@ -822,6 +848,13 @@ footer a { color: var(--link); }
       <input type="file" id="files" name="files" multiple accept=".md,.markdown,.mdown,.mkd,.txt,.text,.html,.htm,.xhtml,.docx,.pdf">
       <label for="pasted">&hellip;or paste text / Markdown directly</label>
       <textarea id="pasted" name="pasted" rows="5" placeholder="# Chapter One&#10;&#10;It was a dark and stormy night&hellip;"></textarea>
+      <details>
+        <summary>Front &amp; back matter (optional) — a preface, foreword, afterword, or appendix</summary>
+        <label for="front_matter">Front matter (.md, .txt, .html, .docx, .pdf — set after the contents page, before chapter 1)</label>
+        <input type="file" id="front_matter" name="front_matter" multiple accept=".md,.markdown,.mdown,.mkd,.txt,.text,.html,.htm,.xhtml,.docx,.pdf">
+        <label for="back_matter">Back matter (set after the last chapter)</label>
+        <input type="file" id="back_matter" name="back_matter" multiple accept=".md,.markdown,.mdown,.mkd,.txt,.text,.html,.htm,.xhtml,.docx,.pdf">
+      </details>
     </div>
 
     <div class="card">
@@ -850,6 +883,8 @@ footer a { color: var(--link); }
           <div><label for="pub_date">Publication date</label>
             <input type="text" id="pub_date" name="pub_date" placeholder="YYYY-MM-DD (blank = today)"></div>
         </div>
+        <label for="copyright">Copyright page text <span style="font-style:italic">(blank = auto-generated from author, rights, and source)</span></label>
+        <textarea id="copyright" name="copyright" rows="3" placeholder="Copyright &copy; 2026 Jane Author. All rights reserved.&#10;No part of this book may be reproduced without permission."></textarea>
         <label for="name">Download file name (blank = from title)</label>
         <input type="text" id="name" name="name" placeholder="my-book">
       </details>

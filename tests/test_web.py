@@ -267,6 +267,47 @@ class WebTests(unittest.TestCase):
             nav = zf.read("OEBPS/nav.xhtml").decode()
             self.assertIn("Uploaded Chapter", nav)
 
+    def test_build_front_back_matter_and_custom_copyright(self):
+        boundary = "matterboundary7"
+
+        def field(name, value):
+            return (
+                f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"'
+                f"\r\n\r\n{value}\r\n"
+            ).encode()
+
+        def file_part(name, filename, data, ctype):
+            head = (
+                f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"; '
+                f'filename="{filename}"\r\nContent-Type: {ctype}\r\n\r\n'
+            ).encode()
+            return head + data + b"\r\n"
+
+        body = (
+            field("title", "Matter Book")
+            + field("author", "Matter Tester")
+            + field("formats", "epub")
+            + field("copyright", "Copyright 2026 Matter Tester.\nAll wrongs reversed.")
+            + file_part("files", "chapter.md", b"# Middle Chapter\n\nThe body.\n", "text/markdown")
+            + file_part("front_matter", "preface.md", b"# Preface\n\nBefore we begin.\n", "text/markdown")
+            + file_part("back_matter", "afterword.md", b"# Afterword\n\nAfter all that.\n", "text/markdown")
+            + f"--{boundary}--\r\n".encode()
+        )
+        code, resp = self._post("/build", body, f"multipart/form-data; boundary={boundary}")
+        self.assertEqual(code, 200)
+        status = self._wait_for_job(resp["id"])
+        self.assertEqual(status["status"], "done", status["message"])
+
+        name = status["files"][0]["name"]
+        code, epub = self._get(f"/download?id={resp['id']}&file={name}")
+        with zipfile.ZipFile(io.BytesIO(epub)) as zf:
+            nav = zf.read("OEBPS/nav.xhtml").decode()
+            self.assertLess(nav.index("Preface"), nav.index("Middle Chapter"))
+            self.assertLess(nav.index("Middle Chapter"), nav.index("Afterword"))
+            copy = zf.read("OEBPS/text/copyright.xhtml").decode()
+            self.assertIn("All wrongs reversed.", copy)
+            self.assertNotIn("Produced with bookformatter.", copy)
+
     def test_no_input_is_rejected(self):
         form = urllib.parse.urlencode({"title": "Empty"}).encode()
         code, body = self._post("/build", form, "application/x-www-form-urlencoded")
