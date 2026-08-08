@@ -877,7 +877,7 @@ footer a { color: var(--link); }
       </div>
       <label>Formats</label>
       <div class="checks">
-        <label><input type="checkbox" name="formats" value="epub" checked> EPUB (e-readers)</label>
+        <label><input type="checkbox" name="formats" value="epub"> EPUB (e-readers)</label>
         <label><input type="checkbox" name="formats" value="pdf" checked> PDF (print)</label>
         <label><input type="checkbox" name="formats" value="html"> HTML (page source)</label>
         <label><input type="checkbox" name="formats" value="docx"> Word (.docx &mdash; editable manuscript)</label>
