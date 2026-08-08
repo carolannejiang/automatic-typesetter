@@ -36,6 +36,9 @@ class IngestOptions:
                                        # True: every item; False: never
     drop_source_toc: bool = False  # remove a contents page found in the source
                                    # (default: keep it, but warn about the dup)
+    promote_title: bool = True     # hoist a lone leading h1 to the chapter
+                                   # title; False keeps author markup verbatim
+                                   # (front/back matter typed with its own head)
     verbose: bool = False
     progress: Optional[Callable] = None  # called with status messages (web UI)
 
@@ -98,15 +101,17 @@ def _chapters_from_markup(html_text: str, fallback_title: str,
             for title, body in _split_fragment(html_text, split_tag, fallback_title)
         ]
 
-    # Single chapter: promote a lone leading h1 to the title.
+    # Single chapter: promote a lone leading h1 to the title (unless the
+    # caller keeps the markup verbatim — front/back matter with its own head).
     title = fallback_title
     if h1_count >= 1:
         h1 = root.find("h1")
         text = htmldom.normalize_ws(h1.text_content())
         if text:
             title = text
-        h1.detach()
-        html_text = htmldom.inner_html(root).strip()
+        if opts.promote_title:
+            h1.detach()
+            html_text = htmldom.inner_html(root).strip()
     return [Chapter(title=title, html=html_text, source=source)]
 
 
@@ -1002,9 +1007,14 @@ def ingest_matter(inputs: list, opts: Optional[IngestOptions] = None) -> IngestR
     """Ingest author-supplied front/back matter the same way as chapters, but
     mark every resulting section as unnumbered furniture so it opens plainly
     (no chapter number, no drop cap) and sits before/after the numbered
-    chapters. The caller decides placement (prepend vs append)."""
+    chapters. The author's own markup is kept verbatim (raw=True) — a typed
+    heading, centered title block, etc. renders as-is with no generated
+    chapter head. The caller decides placement (prepend vs append)."""
+    opts = opts or IngestOptions()
+    opts.promote_title = False
     result = ingest(inputs, opts)
     for chapter in result.chapters:
         chapter.numbered = False
         chapter.number = None
+        chapter.raw = True
     return result

@@ -90,6 +90,28 @@ class MarkdownTests(unittest.TestCase):
     def test_html_block_passthrough(self):
         html = to_html("<figure>\n<img src='x.png'>\n</figure>")
         self.assertIn("<figure>", html)
+        self.assertIn("<img src='x.png'>", html)  # raw, not markdown-parsed
+
+    def test_div_wrapper_processes_inner_markdown(self):
+        html = to_html('<div align="center">\n# Title<br>Sub\n\n**bold**\n\n</div>')
+        self.assertIn('<div align="center">', html)
+        self.assertIn("<h1>Title<br />Sub</h1>", html)  # heading inside the div
+        self.assertIn("<strong>bold</strong>", html)
+        self.assertIn("</div>", html)
+
+    def test_div_closes_without_blank_line_before_it(self):
+        # The web UI placeholder pattern: </div> sits directly after a
+        # paragraph, with no blank line. It must close the div, not be
+        # swallowed into the paragraph and escaped.
+        html = to_html('<div align="center">\n# A Title\nby **Author**\n</div>')
+        self.assertNotIn("&lt;/div&gt;", html)
+        self.assertTrue(html.rstrip().endswith("</div>"))
+        self.assertIn("<strong>Author</strong>", html)
+
+    def test_raw_img_inside_wrapper_survives(self):
+        html = to_html('<div align="center">\n<img src="logo.png">\n</div>')
+        self.assertIn('<img src="logo.png">', html)  # not escaped to text
+        self.assertNotIn("&lt;img", html)
 
     def test_hard_break(self):
         html = to_html("line one  \nline two")

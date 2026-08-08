@@ -162,10 +162,11 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
             content = _bake_lettrine(content)
         classes = "chapter" if chapter.numbered else "chapter unnumbered"
         chapter_parts.append(f'<section class="{classes}" id="chapter-{i}">')
-        chapter_parts.append(
-            frontmatter.chapter_head_html(theme, chapter.number or seq,
-                                          chapter.title,
-                                          chapter_numbers and chapter.numbered))
+        if not chapter.raw:
+            chapter_parts.append(
+                frontmatter.chapter_head_html(theme, chapter.number or seq,
+                                              chapter.title,
+                                              chapter_numbers and chapter.numbered))
         chapter_parts.append(content)
         chapter_parts.append("</section>")
 

@@ -22,7 +22,16 @@ _SETEXT_RE = re.compile(r"^ {0,3}(=+|-+)\s*$")
 _TABLE_SEP_RE = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$")
 _HTML_BLOCK_RE = re.compile(
     r"^ {0,3}</?(address|article|aside|blockquote|details|div|dl|figure|figcaption"
-    r"|footer|form|h[1-6]|header|hr|iframe|main|nav|ol|p|pre|section|table|ul|video)\b",
+    r"|footer|form|h[1-6]|header|hr|iframe|img|main|nav|ol|p|pre|section|table|ul|video)\b",
+    re.I,
+)
+# A semantic wrapper alone on its line (e.g. <div align="center">, </section>):
+# emit the tag but keep parsing the lines it wraps as markdown, so a centered
+# title block can mix HTML with "# heading", **bold**, and <br>. Elements that
+# carry raw HTML children (figure/table/pre/…) are left to _HTML_BLOCK_RE, which
+# passes them through verbatim.
+_HTML_WRAPPER_RE = re.compile(
+    r"^ {0,3}(</?(?:div|section|article|header|footer|aside|main|nav|center)\b[^>]*>)\s*$",
     re.I,
 )
 
@@ -262,6 +271,13 @@ def to_html(source: str) -> str:
             out.append(_parse_table(table_lines))
             continue
 
+        # Transparent wrapper: emit the lone tag, keep parsing what it wraps.
+        wrapper = _HTML_WRAPPER_RE.match(line)
+        if wrapper:
+            out.append(wrapper.group(1))
+            i += 1
+            continue
+
         # Raw HTML block: pass through until blank line.
         if _HTML_BLOCK_RE.match(line):
             block = []
@@ -286,7 +302,8 @@ def to_html(source: str) -> str:
                 para = None
                 break
             if (_ATX_RE.match(nxt.strip()) or _FENCE_RE.match(nxt.strip()) or _HR_RE.match(nxt.strip())
-                    or _UL_RE.match(nxt) or _OL_RE.match(nxt) or _QUOTE_RE.match(nxt)):
+                    or _UL_RE.match(nxt) or _OL_RE.match(nxt) or _QUOTE_RE.match(nxt)
+                    or _HTML_WRAPPER_RE.match(nxt)):
                 break
             para.append(nxt.lstrip())
             i += 1

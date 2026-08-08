@@ -21,6 +21,9 @@ class Chapter:
                                   # "2"); None numbers the chapter by position
     is_source_toc: bool = False  # a contents page carried in from the source,
                                  # which would duplicate the generated one
+    raw: bool = False  # author-typed front/back matter: emit html verbatim,
+                       # with no generated chapter head (its own markup —
+                       # centered title block, etc. — stands as the section)
 
     def word_count(self) -> int:
         text = re.sub(r"<[^>]+>", " ", self.html)

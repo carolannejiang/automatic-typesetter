@@ -79,6 +79,19 @@ class IngestTests(unittest.TestCase):
         self.assertFalse(result.chapters[0].numbered)
         self.assertIsNone(result.chapters[0].number)
 
+    def test_ingest_matter_keeps_author_markup_verbatim(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(
+                tmp, "front.md",
+                '<div align="center">\n# My Title\n\nby me\n\n</div>')
+            result = ingest_matter([path])
+        ch = result.chapters[0]
+        self.assertTrue(ch.raw)
+        self.assertFalse(ch.numbered)
+        self.assertIn('<div align="center">', ch.html)
+        self.assertIn("<h1>My Title</h1>", ch.html)  # kept in body, not hoisted
+        self.assertEqual(ch.title, "My Title")        # still labels the TOC
+
     def test_plain_text(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = self._write(tmp, "my-old-journal.txt", "First para.\n\nSecond para.")
