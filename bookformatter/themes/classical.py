@@ -139,18 +139,10 @@ chapter_label = base.default_chapter_label
 
 
 def params(font_size: str, line_height: str) -> dict:
-    return {
-        "THEME_NAME": NAME,
-        "BODY_FONT": SERIF_STACK,
-        "HEADING_FONT": SERIF_STACK,
-        "MONO_FONT": base.MONO_STACK,
-        "HEADING_WEIGHT": "normal",
-        "HEADING_ALIGN": "center",
-        "FONT_SIZE": font_size,
-        "LINE_HEIGHT": line_height,
-        "INDENT": "1em",
-        "PARA_EXTRA": "",
-        "TITLE_EXTRA": "",
-        "CHAPTER_DROP": "6em",
-        "TITLE_DROP": "1.8in",
-    }
+    return base.params(
+        NAME, font_size, line_height,
+        BODY_FONT=SERIF_STACK,
+        HEADING_FONT=SERIF_STACK,
+        CHAPTER_DROP="6em",
+        TITLE_DROP="1.8in",
+    )

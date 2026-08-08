@@ -26,19 +26,14 @@ chapter_label = base.default_chapter_label
 
 
 def params(font_size: str, line_height: str) -> dict:
-    return {
-        "THEME_NAME": NAME,
-        "BODY_FONT": base.SERIF_STACK,
-        "HEADING_FONT": base.SANS_STACK,
-        "MONO_FONT": base.MONO_STACK,
-        "HEADING_WEIGHT": "600",
-        "HEADING_ALIGN": "left",
-        "FONT_SIZE": font_size,
-        "LINE_HEIGHT": line_height,
-        "INDENT": "0",
+    return base.params(
+        NAME, font_size, line_height,
+        HEADING_FONT=base.SANS_STACK,
+        HEADING_WEIGHT="600",
+        HEADING_ALIGN="left",
+        INDENT="0",
         # Block paragraphs: exactly one text line between, no indent.
-        "PARA_EXTRA": f"p + p {{ margin-top: {line_height}em; }}",
-        "TITLE_EXTRA": "",
-        "CHAPTER_DROP": "2.4em",
-        "TITLE_DROP": "1.8in",
-    }
+        PARA_EXTRA=f"p + p {{ margin-top: {line_height}em; }}",
+        CHAPTER_DROP="2.4em",
+        TITLE_DROP="1.8in",
+    )

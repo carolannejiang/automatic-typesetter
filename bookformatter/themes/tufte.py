@@ -465,20 +465,16 @@ def chapter_label(number: int) -> str:
 
 
 def params(font_size: str, line_height: str) -> dict:
-    return {
-        "THEME_NAME": NAME,
-        "BODY_FONT": SERIF_STACK,
-        "HEADING_FONT": SERIF_STACK,
-        "MONO_FONT": MONO_STACK,
-        "HEADING_WEIGHT": "normal",
-        "HEADING_ALIGN": "left",
-        "FONT_SIZE": font_size,
-        "LINE_HEIGHT": line_height,
-        "INDENT": "1.2em",       # \parindent 1 pc
-        "PARA_EXTRA": "",
-        "TITLE_EXTRA": "font-style: italic; font-weight: normal;",
-        "CHAPTER_DROP": "5rem",  # titlespacing: 50 pt above the chapter
-        "TITLE_DROP": "0",       # the flex title page sets its own drops
-        "TUFTE_SANS": SANS_STACK,
-        "TUFTE_DARKGRAY": _DARKGRAY,
-    }
+    return base.params(
+        NAME, font_size, line_height,
+        BODY_FONT=SERIF_STACK,
+        HEADING_FONT=SERIF_STACK,
+        MONO_FONT=MONO_STACK,
+        HEADING_ALIGN="left",
+        INDENT="1.2em",       # \parindent 1 pc
+        TITLE_EXTRA="font-style: italic; font-weight: normal;",
+        CHAPTER_DROP="5rem",  # titlespacing: 50 pt above the chapter
+        TITLE_DROP="0",       # the flex title page sets its own drops
+        TUFTE_SANS=SANS_STACK,
+        TUFTE_DARKGRAY=_DARKGRAY,
+    )
