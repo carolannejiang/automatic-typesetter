@@ -121,6 +121,22 @@ class WriteLatexTests(unittest.TestCase):
         # Typed roman figures switch \thechapter to roman book-wide.
         self.assertIn("\\renewcommand{\\thechapter}{\\Roman{chapter}}", tex)
 
+    def test_unnumbered_chapters_open_without_lettrine(self):
+        thesis = support.make_book([
+            Chapter(title="INTRODUCTION", html="<p>Whyever so.</p>",
+                    numbered=False),
+            Chapter(title="ELITE MANIFESTOS", html="<p>Whatever else.</p>",
+                    number="I"),
+        ])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "book.tex")
+            write_latex(thesis, path, theme="memoir2")
+            with open(path, encoding="utf-8") as fh:
+                tex = fh.read()
+        self.assertIn("Whyever so.", tex)
+        self.assertNotIn("\\lettrine{W}{hyever}", tex)
+        self.assertIn("\\lettrine{W}{hatever}", tex)
+
     def test_global_numbers_off_keeps_plain_chapters(self):
         thesis = support.make_book([
             Chapter(title="INTRODUCTION", html="<p>Why.</p>", numbered=False),

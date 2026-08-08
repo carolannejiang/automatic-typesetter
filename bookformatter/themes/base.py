@@ -165,7 +165,7 @@ nav.print-toc h1, section.tocpage h1 { text-align: center; font-size: 1.4em; mar
 )
 
 DROP_CAP = """
-section.chapter > p:first-of-type::first-letter {
+section.chapter:not(.unnumbered) > p:first-of-type::first-letter {
   font-size: 3.1em; float: left; line-height: 0.83;
   padding-right: 0.06em; margin-top: 0.02em;
   font-family: inherit;

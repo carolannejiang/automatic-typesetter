@@ -155,7 +155,9 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
             content = hoist_margin_notes(content)
         # Lettrine themes (memoir2) open on a drop cap with the rest of
         # the word in small caps; CSS can't select either, so bake both.
-        if themes.lettrine_run(theme):
+        # Front/back matter opens plainly, like the drop-cap CSS's
+        # .unnumbered exclusion.
+        if themes.lettrine_run(theme) and chapter.numbered:
             content = _bake_lettrine(content)
         classes = "chapter" if chapter.numbered else "chapter unnumbered"
         chapter_parts.append(f'<section class="{classes}" id="chapter-{i}">')

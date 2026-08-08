@@ -1077,9 +1077,10 @@ def write_latex(book: Book, path: str, theme: str = "classic",
             # the figure; the plain form keeps the contents entry free.
             lines.append("\\chapter{%s}" % title)
         body = _TexConverter(assets, sidenotes=theme == "tufte").convert(root)
-        if body and theme == "memoir2":
+        # Front/back matter opens plainly — no lettrine drop cap.
+        if body and theme == "memoir2" and chapter.numbered:
             body = _lettrine_open(body)
-        elif body and theme == "polimi":
+        elif body and theme == "polimi" and chapter.numbered:
             body = _lettrine_open(body, command="start")
         if body:
             lines.append(body)

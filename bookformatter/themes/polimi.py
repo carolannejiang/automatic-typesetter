@@ -220,7 +220,7 @@ h4 { font-style: normal; font-weight: bold; margin: 1.2em 0 0.25em; }
    to the thesis's four lines. The extra ancestors outrank the generic
    drop-cap block appended when the user also ticks drop caps, so the
    initial keeps its design. */
-html body section.chapter:not(.references) > p:first-of-type::first-letter {
+html body section.chapter:not(.references):not(.unnumbered) > p:first-of-type::first-letter {
   float: left;
   color: $POLIMI_BRICKRED;
   font-size: 3.2em;
@@ -357,13 +357,13 @@ section.chapter, section.endnotes {
    floats over the spacer at zero net advance: width + margins cancel,
    so the text metrics never depend on the glyph. The float bottoms stop
    a hair short of the fifth line so it returns to the measure. */
-html body section.chapter:not(.references) > p:first-of-type::before {
+html body section.chapter:not(.references):not(.unnumbered) > p:first-of-type::before {
   content: "";
   float: left;
   width: 5.5em;
   height: 4.8em;
 }
-html body section.chapter:not(.references) > p:first-of-type::first-letter {
+html body section.chapter:not(.references):not(.unnumbered) > p:first-of-type::first-letter {
   float: left;
   font-size: 6.5em;
   line-height: 0.745;

@@ -226,6 +226,17 @@ class ChapterNumberingTests(unittest.TestCase):
         self.assertIn("section.chapter.unnumbered h2::before "
                       "{ content: none; }", html)
 
+    def test_no_drop_cap_or_lettrine_in_unnumbered_chapters(self):
+        html = printbook.build_print_html(self._thesis_book(),
+                                          theme="memoir2", drop_caps=True)
+        intro = html[html.index('id="chapter-1"'):html.index('id="chapter-2"')]
+        study = html[html.index('id="chapter-2"'):html.index('id="chapter-3"')]
+        self.assertNotIn('<span class="lettrine">', intro)
+        self.assertIn('<span class="lettrine">', study)
+        # The shared drop-cap rule excludes front/back matter too.
+        self.assertIn("section.chapter:not(.unnumbered) > "
+                      "p:first-of-type::first-letter", html)
+
     def test_global_numbers_off_overrides_typed_figures(self):
         html = printbook.build_print_html(self._thesis_book(),
                                           chapter_numbers=False)
