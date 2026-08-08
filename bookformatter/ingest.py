@@ -154,12 +154,14 @@ def classify_chapters(chapters: list) -> None:
     titles — INTRODUCTION, REFERENCES, APPENDIX — become unnumbered
     front/back matter. A figure sequence that doesn't count from one is
     part of the titles themselves ("2001. A Space Odyssey"), so nothing is
-    touched. Without typed figures, fall back to recognizing standard
-    furniture titles; everything else stays numbered by position.
+    touched — and a single figure is too weak a signal to demote every
+    other title, so typed mode needs at least two. Otherwise fall back to
+    recognizing standard furniture titles; everything else stays numbered
+    by position.
     """
     matches = [_TYPED_NUMBER.match(ch.title or "") for ch in chapters]
     values = [_number_value(m.group(1)) for m in matches if m is not None]
-    if values and values == list(range(1, len(values) + 1)):
+    if len(values) >= 2 and values == list(range(1, len(values) + 1)):
         for chapter, match in zip(chapters, matches):
             if match is None:
                 chapter.numbered = False

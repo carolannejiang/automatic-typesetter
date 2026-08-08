@@ -201,6 +201,18 @@ class ClassifyChaptersTests(unittest.TestCase):
         self.assertEqual([c.number for c in chapters[1:]], ["1", "2"])
         self.assertEqual(chapters[1].title, "Beginnings")
 
+    def test_single_typed_figure_does_not_demote_the_rest(self):
+        # One "1. " title is too weak a signal to strip every other
+        # chapter of its number.
+        chapters = self._chapters(
+            "Foreword", "1. The Best Essay", "On Dogs", "On Cats")
+        classify_chapters(chapters)
+        self.assertEqual(chapters[1].title, "1. The Best Essay")
+        self.assertTrue(all(c.number is None for c in chapters))
+        # The furniture fallback still applies.
+        self.assertEqual([c.numbered for c in chapters],
+                         [False, True, True, True])
+
     def test_figures_not_counting_from_one_are_titles(self):
         # "2001." names the year, not chapter two thousand and one.
         chapters = self._chapters("2001. A Space Odyssey", "The Sequel")
@@ -225,7 +237,7 @@ class ClassifyChaptersTests(unittest.TestCase):
 
     def test_ingested_markdown_is_classified(self):
         text = ("# INTRODUCTION\n\nWhy.\n\n# I. FIRST STUDY\n\nWhat.\n\n"
-                "# REFERENCES\n\nWho.\n")
+                "# II. SECOND STUDY\n\nHow.\n\n# REFERENCES\n\nWho.\n")
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "thesis.md")
             with open(path, "w") as fh:
@@ -235,6 +247,7 @@ class ClassifyChaptersTests(unittest.TestCase):
                           for c in result.chapters],
                          [("INTRODUCTION", False, None),
                           ("FIRST STUDY", True, "I"),
+                          ("SECOND STUDY", True, "II"),
                           ("REFERENCES", False, None)])
 
 

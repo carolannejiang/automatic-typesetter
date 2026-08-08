@@ -60,9 +60,12 @@ def _build_date() -> str:
 
 
 def _chapter_body(number, title: str, content_html: str, show_number: bool,
-                  theme: str = "classic") -> str:
+                  theme: str = "classic", numbered: bool = True) -> str:
+    # The unnumbered class mirrors build_print_html: theme CSS shared with
+    # print (polimi's section boxes) keys numbering suppression off it.
+    classes = "chapter" if numbered else "chapter unnumbered"
     return (
-        f'<section class="chapter" epub:type="chapter" role="doc-chapter">\n'
+        f'<section class="{classes}" epub:type="chapter" role="doc-chapter">\n'
         + frontmatter.chapter_head_html(theme, number, title, show_number)
         + "\n"
         + content_html
@@ -150,7 +153,7 @@ def write_epub(book: Book, path: str, theme: str = "classic",
                 citations=link_citations, marker=link_marker)
         show_number = chapter_numbers and chapter.numbered
         body = _chapter_body(chapter.number or seq, chapter.title, content,
-                             show_number, theme)
+                             show_number, theme, chapter.numbered)
         href = f"text/chapter-{i:03d}.xhtml"
         files.append((f"OEBPS/{href}", _xhtml(chapter.title, body, lang)))
         manifest.append((f"ch{i:03d}", href, "application/xhtml+xml", None))

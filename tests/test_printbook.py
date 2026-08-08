@@ -214,6 +214,18 @@ class ChapterNumberingTests(unittest.TestCase):
         self.assertIn('<span class="chapter-number">Chapter 2</span>', html)
         self.assertNotIn("Chapter 3", html)
 
+    def test_polimi_counters_skip_unnumbered_chapters(self):
+        html = printbook.build_print_html(self._thesis_book(), theme="polimi")
+        self.assertIn('<section class="chapter unnumbered" id="chapter-1">',
+                      html)
+        self.assertIn('<section class="chapter" id="chapter-2">', html)
+        # The chapter counter must not advance on front/back matter, or
+        # chapter I's sections would print as 2.1.
+        self.assertIn("section.chapter:not(.unnumbered) "
+                      "{ counter-increment: chapter; }", html)
+        self.assertIn("section.chapter.unnumbered h2::before "
+                      "{ content: none; }", html)
+
     def test_global_numbers_off_overrides_typed_figures(self):
         html = printbook.build_print_html(self._thesis_book(),
                                           chapter_numbers=False)

@@ -198,8 +198,9 @@ h2::before {
 }
 section.references h2::before { content: none; }
 /* Front/back matter (an unnumbered Introduction or Appendix) numbers
-   neither its chapter nor its sections. */
+   neither its chapter nor its sections and subsections. */
 section.chapter.unnumbered h2::before { content: none; }
+section.chapter.unnumbered h3::before { content: none; }
 
 /* Subsections: memoir's \\large bold roman with the three-part number. */
 h3 {
@@ -375,8 +376,10 @@ html body section.chapter:not(.references) > p:first-of-type::first-letter {
 }
 
 /* The numbering spine: chapters count themselves so sections, figures,
-   and marks can carry chapter.section numbers. */
-section.chapter { counter-increment: chapter; }
+   and marks can carry chapter.section numbers. Unnumbered front/back
+   matter must not advance the count — an Introduction before chapter I
+   would offset every section, figure, and mark by one. */
+section.chapter:not(.unnumbered) { counter-increment: chapter; }
 h2 { position: relative; }
 h2::before {
   content: counter(chapter) "." counter(section);
@@ -401,6 +404,7 @@ section.chapter h2 {
   string-set: section-mark counter(chapter) "." counter(section) ". " content();
 }
 section.references h2 { string-set: none; }
+section.chapter.unnumbered h2 { string-set: none; }
 
 /* The companion head: the two top boxes tile the measure plus the 49pt
    \\headwidth overhang into the fore-edge (the outer box's width and

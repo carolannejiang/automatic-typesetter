@@ -81,6 +81,10 @@ class EpubTests(unittest.TestCase):
             study = zf.read("OEBPS/text/chapter-002.xhtml").decode("utf-8")
             nav = zf.read("OEBPS/nav.xhtml").decode("utf-8")
         self.assertNotIn("chapter-number", intro)
+        # Theme CSS shared with print keys numbering suppression off the
+        # unnumbered class (polimi's section boxes).
+        self.assertIn('<section class="chapter unnumbered"', intro)
+        self.assertIn('<section class="chapter"', study)
         self.assertIn('<span class="chapter-number">Chapter I</span>', study)
         # The typed figure stays on the contents line; front matter is bare.
         self.assertIn(">I. Elite Manifestos</a>", nav)
