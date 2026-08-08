@@ -23,7 +23,9 @@ def write_outputs(book, formats, out_dir: str, name: str, *,
                   footnotes: bool = True, link_notes: str = "foot",
                   link_marker: str = "letter",
                   link_citations: dict = None, references: bool = False,
-                  link_note_color: str = "#555", pdf_engine: str = "auto",
+                  link_note_color: str = "#555",
+                  footnote_numbering: str = "continuous",
+                  pdf_engine: str = "auto",
                   files: dict = None, warnings: list = None,
                   progress=lambda message: None) -> dict:
     """Write every requested format for an assembled Book.
@@ -62,7 +64,8 @@ def write_outputs(book, formats, out_dir: str, name: str, *,
                                link_notes=link_notes != "off",
                                link_marker=link_marker,
                                link_citations=link_citations,
-                               references=references)
+                               references=references,
+                               footnote_numbering=footnote_numbering)
         files[f"{name}.docx"] = docx_path
 
     if "icml" in formats:
@@ -104,7 +107,7 @@ def write_outputs(book, formats, out_dir: str, name: str, *,
             line_height=line_height, chapter_start=chapter_start, toc=toc,
             chapter_numbers=chapter_numbers, footnotes=footnotes,
             link_notes=link_notes != "off", link_citations=link_citations,
-            references=references)
+            references=references, footnote_numbering=footnote_numbering)
         if "tex" in formats:
             files[f"{name}.tex"] = tex_path
         if book.assets:
@@ -140,6 +143,7 @@ def write_outputs(book, formats, out_dir: str, name: str, *,
             link_marker=link_marker,
             link_citations=link_citations, references=references,
             link_note_color=link_note_color,
+            footnote_numbering=footnote_numbering,
         )
         with open(html_path, "w", encoding="utf-8") as fh:
             fh.write(page)

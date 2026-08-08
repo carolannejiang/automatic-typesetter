@@ -141,76 +141,8 @@ class ClassicthesisCssTests(unittest.TestCase):
         self.assertNotIn("left: calc(100% + 0.278in);", css)
 
 
-class MemoirCssTests(unittest.TestCase):
-    def test_chapter_label_spells_out_chapter(self):
-        self.assertEqual(themes.chapter_label("memoir", 3), "Chapter 3")
-
-    def test_declares_the_template_type_setting(self):
-        self.assertEqual(themes.default_font_size("memoir"), "12pt")
-        self.assertEqual(themes.default_line_height("memoir"), "1.36")
-        self.assertEqual(themes.default_trim("memoir"), "6x9")
-
-    def test_exposes_template_print_guidance(self):
-        specs = themes.print_specs("memoir")
-        self.assertEqual(specs["title"],
-                         "Recommended memoir template print setup")
-        guidance = " ".join(value for _, value in specs["items"])
-        # Faithful to the template's own settings, and only those.
-        self.assertIn("6 × 9 in (152 × 229 mm)", guidance)
-        self.assertIn("no bleed", guidance)
-        self.assertIn("0.75 in spine, 0.625 in fore-edge", guidance)
-        self.assertIn("12pt EB Garamond", guidance)
-        self.assertIn("per page with symbols", guidance)
-        # The template prescribes no stock/binding; the note says so
-        # rather than inventing figures.
-        self.assertIn("prescribes no paper stock", specs["note"])
-        self.assertNotIn("gsm", guidance + specs["note"])
-        # The panel cites the template it was transcribed from.
-        self.assertEqual(specs["source"]["url"],
-                         "https://www.overleaf.com/project/6a73ee79766a5d9bbca17c3e")
-
-    def test_print_css_sets_outer_folios_and_italic_center_heads(self):
-        css = themes.print_css(theme="memoir", book_title="Field Notes")
-        # Folios in the top outer corners (fancyhead[LE,RO]{\thepage})...
-        self.assertIn("@top-left { content: counter(page)", css)
-        self.assertIn("@top-right { content: counter(page)", css)
-        # ...the verso center carries the book title, the recto center
-        # "Chapter N. Title", both italic...
-        self.assertIn("string-set: chapter-label content() \". \";", css)
-        self.assertIn("content: string(chapter-label, first-except) "
-                      "string(chapter-title, first-except);", css)
-        self.assertIn("font-style: italic", css)
-        # ...and the theme block comes after the shared furniture it
-        # replaces (bottom-center folio, small-cap top-center heads).
-        furniture = css.index("memoir print furniture")
-        self.assertGreater(furniture, css.index("string(book-title, first-except)"))
-        self.assertGreater(furniture, css.index("content: counter(page)"))
-        self.assertGreater(furniture, css.index('leader(". ")'))
-        # The contents page drops its dot leaders for a plain space.
-        self.assertNotIn('leader(". ")', css[furniture:])
-        self.assertIn('leader(" ")', css[furniture:])
-        self.assertIn("EB Garamond", css)
-
-    def test_print_css_openers_take_a_plain_folio(self):
-        css = themes.print_css(theme="memoir")
-        self.assertIn("header.chapter-head { page: clean; }", css)
-        self.assertIn("section.chapter { page: auto; }", css)
-        clean = css.index("@page clean")
-        self.assertIn("@bottom-center { content: counter(page)", css[clean:])
-
-    def test_print_geometry_matches_the_template(self):
-        css = themes.print_css(theme="memoir", trim="6x9")
-        self.assertIn("margin: 0.75in 0.625in 0.75in 0.75in;", css)
-
-    def test_epub_css_restyles_without_paged_furniture(self):
-        css = themes.epub_css(theme="memoir")
-        self.assertIn("memoir overrides", css)
-        self.assertNotIn("@top-left", css)
-        self.assertNotIn("page: clean", css)
-
-
 class Memoir2CssTests(unittest.TestCase):
-    """The same template as memoir, in full dress."""
+    """The 6×9 memoir-class novel template, in full dress."""
 
     def test_chapter_label_spells_out_chapter(self):
         self.assertEqual(themes.chapter_label("memoir2", 3), "Chapter 3")
@@ -223,9 +155,7 @@ class Memoir2CssTests(unittest.TestCase):
     def test_asks_for_baked_lettrine_and_toc_numbers(self):
         self.assertTrue(themes.lettrine_run("memoir2"))
         self.assertTrue(themes.toc_numbers("memoir2"))
-        # The plainer memoir theme and the rest stay unbaked.
-        self.assertFalse(themes.lettrine_run("memoir"))
-        self.assertFalse(themes.toc_numbers("memoir"))
+        # The other themes stay unbaked.
         self.assertFalse(themes.lettrine_run("nonsense"))
         self.assertFalse(themes.toc_numbers("classic"))
 
@@ -342,7 +272,7 @@ class Memoir2CssTests(unittest.TestCase):
         self.assertIn("<p><em>Italic</em> openings stay.</p>", page)
         self.assertIn("<p>A one-letter word stays.</p>", page)
         # Other themes bake nothing.
-        self.assertNotIn("lettrine", printbook.build_print_html(book, theme="memoir"))
+        self.assertNotIn("lettrine", printbook.build_print_html(book, theme="classic"))
 
     def test_print_toc_numbers_follow_the_chapter_numbers_flag(self):
         book = _book()
@@ -355,7 +285,7 @@ class Memoir2CssTests(unittest.TestCase):
                                           chapter_numbers=False)
         self.assertNotIn('<span class="toc-number">', page)
         # Other themes keep their plain contents lines.
-        page = printbook.build_print_html(book, theme="memoir")
+        page = printbook.build_print_html(book, theme="classic")
         self.assertNotIn('<span class="toc-number">', page)
 
     def test_print_toc_leaves_the_notes_line_unnumbered(self):
@@ -778,7 +708,7 @@ class ThemeLabelTests(unittest.TestCase):
 class ThemeSourceTests(unittest.TestCase):
     def test_template_themes_cite_a_linked_source(self):
         # The LaTeX-template themes carry their source in PRINT_SPECS.
-        for name in ("memoir", "memoir2", "classicthesis", "tufte", "mydiss"):
+        for name in ("memoir2", "classicthesis", "tufte", "mydiss"):
             source = themes.theme_source(name)
             self.assertTrue(source["name"], name)
             self.assertTrue(source["url"].startswith("https://"), name)

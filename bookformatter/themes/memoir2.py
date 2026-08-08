@@ -1,10 +1,9 @@
-"""The memoir2 theme: the same 6×9 memoir-class novel template as the
-memoir theme (main.tex / options.sty, "Memoir Book Template 6x9"), but in
-full dress — the template details the memoir theme leaves off.
+"""The memoir2 theme: the 6×9 memoir-class novel template (main.tex /
+options.sty, "Memoir Book Template 6x9") in full dress.
 
-On top of memoir's page (12pt EB Garamond, 1.125 baselinestretch, .75in
-spine / .625in fore-edge, italic running heads with outer folios, plain
-bottom-folio openers), this theme carries over:
+On top of the template's page (12pt EB Garamond, 1.125 baselinestretch,
+.75in spine / .625in fore-edge, italic running heads with outer folios,
+plain bottom-folio openers), this theme carries over:
 
 * lettrine chapter openings — a two-line drop cap with the rest of the
   opening word run in small caps (the template's ``\\lettrine{L}{etterine}``
@@ -49,7 +48,7 @@ LETTRINE_RUN = True
 TOC_NUMBERS = True
 
 # Production guidance drawn strictly from the reference template's own
-# settings, as for the memoir theme (same template, same page).
+# settings.
 PRINT_SPECS = {
     "title": "Recommended memoir template print setup",
     "items": (
@@ -136,9 +135,9 @@ section.copyrightpage p { margin-bottom: 1em; }
 """
 )
 
-# Print furniture as the template's fancyhdr setup draws it (identical to
-# the memoir theme): folios in the top outer corners, the book title
-# italic across the verso center, "Chapter N. Title" italic across the
+# Print furniture as the template's fancyhdr setup draws it: folios in the
+# top outer corners, the book title italic across the verso center,
+# "Chapter N. Title" italic across the
 # recto center, no head rule, empty foot, plain bottom-folio openers —
 # plus the dress only the paged output can wear: the lettrine opening,
 # numbered footnotes, and the template's foot-anchored front matter.

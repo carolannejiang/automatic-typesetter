@@ -204,37 +204,6 @@ class WriteLatexTests(unittest.TestCase):
         self.assertIn("paper=a4", tex)  # class option stays canonical
         self.assertIn("paperwidth=6in,paperheight=9in", tex)
 
-    def test_memoir_uses_real_class(self):
-        tex = render(theme="memoir")
-        self.assertTrue(tex.startswith("% !TEX program = pdflatex"))
-        self.assertIn("\\documentclass[12pt,twoside,onecolumn,openright,"
-                      "extrafontsizes]{memoir}", tex)
-        # The template's stock, margins, face, and leading.
-        self.assertIn("\\setstocksize{9in}{6in}", tex)
-        self.assertIn("\\setlrmarginsandblock{0.75in}{0.625in}{*}", tex)
-        self.assertIn("\\setulmarginsandblock{0.75in}{0.75in}{*}", tex)
-        self.assertIn("\\usepackage{ebgaramond}", tex)
-        self.assertIn("\\renewcommand{\\baselinestretch}{1.125}", tex)
-        # Centered small-caps chapters, fancyhdr heads, symbol footnotes.
-        self.assertIn("\\usepackage[center,sc]{titlesec}", tex)
-        self.assertIn("\\fancyhead[LE,RO]{\\thepage}", tex)
-        self.assertIn("\\fancyhead[CE]{\\itshape Test \\& Book :"
-                      " A sub<title>}", tex)
-        self.assertIn("\\markboth{Chapter \\thechapter. #1}{}", tex)
-        self.assertIn("\\usepackage[symbol*]{footmisc}", tex)
-        self.assertIn("\\MakePerPage{footnote}", tex)
-        # memoir's own title-page environment and starred contents.
-        self.assertIn("\\begin{titlingpage}", tex)
-        self.assertIn("{\\scshape\\Huge Test \\& Book\\par}", tex)
-        self.assertIn("{\\itshape\\large by\\par}", tex)
-        self.assertIn("\\tableofcontents*", tex)
-        self.assertIn("\\frontmatter", tex)
-
-    def test_memoir_off_default_leading_computes_linespread(self):
-        tex = render(theme="memoir", line_height="1.5")
-        self.assertIn("\\renewcommand{\\baselinestretch}{1.25}", tex)
-        self.assertNotIn("{1.125}", tex)
-
     def test_tufte_uses_real_class(self):
         tex = render(theme="tufte")
         self.assertTrue(tex.startswith("% !TEX program = pdflatex"))
@@ -325,25 +294,34 @@ class WriteLatexTests(unittest.TestCase):
         self.assertIn("openright", render(theme="polimi",
                                           chapter_start="any"))
 
-    def test_memoir_leaves_the_full_dress_off(self):
-        tex = render(theme="memoir")
-        self.assertNotIn("\\usepackage{lettrine}", tex)
-        self.assertNotIn("\\lettrine{", tex)
-        self.assertNotIn("\\MakeUppercase", tex)
-
-    def test_memoir2_adds_the_template_full_dress(self):
+    def test_memoir2_uses_the_real_class_in_full_dress(self):
         tex = render(theme="memoir2")
-        # The same genuine memoir setup as --theme memoir...
+        # The genuine memoir-class setup: pdflatex, the template's stock,
+        # margins, face, leading, and centered small-caps chapters.
         self.assertTrue(tex.startswith("% !TEX program = pdflatex"))
-        self.assertIn("extrafontsizes]{memoir}", tex)
+        self.assertIn("\\documentclass[12pt,twoside,onecolumn,openright,"
+                      "extrafontsizes]{memoir}", tex)
         self.assertIn("\\setstocksize{9in}{6in}", tex)
+        self.assertIn("\\setlrmarginsandblock{0.75in}{0.625in}{*}", tex)
+        self.assertIn("\\setulmarginsandblock{0.75in}{0.75in}{*}", tex)
         self.assertIn("\\usepackage{ebgaramond}", tex)
-        # ...but footnotes numbered continuously rather than per-page symbols,
+        self.assertIn("\\renewcommand{\\baselinestretch}{1.125}", tex)
+        self.assertIn("\\usepackage[center,sc]{titlesec}", tex)
+        self.assertIn("\\fancyhead[LE,RO]{\\thepage}", tex)
+        self.assertIn("\\fancyhead[CE]{\\itshape Test \\& Book :"
+                      " A sub<title>}", tex)
+        self.assertIn("\\markboth{Chapter \\thechapter. #1}{}", tex)
+        # memoir's own title-page environment and unstarred contents.
+        self.assertIn("\\begin{titlingpage}", tex)
+        self.assertIn("{\\scshape\\Huge Test \\& Book\\par}", tex)
+        self.assertIn("{\\itshape\\large by\\par}", tex)
+        self.assertIn("\\frontmatter", tex)
+        # Footnotes numbered continuously rather than per-page symbols,
         self.assertIn("\\usepackage{footmisc}", tex)
         self.assertNotIn("\\usepackage[symbol*]{footmisc}", tex)
         self.assertIn("\\counterwithout{footnote}{chapter}", tex)
         self.assertNotIn("\\MakePerPage{footnote}", tex)
-        # ...plus lettrine chapter openings on plain-word chapters,
+        # plus lettrine chapter openings on plain-word chapters,
         self.assertIn("\\usepackage{lettrine}", tex)
         self.assertIn("\\lettrine{F}{irst} chapter with an image.", tex)
         self.assertIn("\\lettrine{R}{ead} ", tex)
@@ -496,9 +474,6 @@ class CompileTests(unittest.TestCase):
     def test_classicthesis_compiles(self):
         self._compile(theme="classicthesis")
 
-    def test_memoir_compiles(self):
-        self._compile(theme="memoir")
-
     def test_tufte_compiles(self):
         self._compile(theme="tufte")
 
@@ -539,6 +514,50 @@ class CliTests(unittest.TestCase):
                 tex = fh.read()
             self.assertIn("\\chapter{Alpha}", tex)
             self.assertIn("\\end{document}", tex)
+
+
+class FootnoteNumberingTests(unittest.TestCase):
+    def test_continuous_is_the_default(self):
+        tex = render()
+        self.assertIn("\\counterwithout{footnote}{chapter}", tex)
+        self.assertNotIn("\\counterwithin*{footnote}{chapter}", tex)
+
+    def test_per_chapter_resets_the_counter(self):
+        tex = render(footnote_numbering="per-chapter")
+        self.assertIn("\\counterwithin*{footnote}{chapter}", tex)
+        self.assertNotIn("\\counterwithout{footnote}{chapter}", tex)
+
+    def test_symbol_and_sidenote_themes_keep_their_own_scheme(self):
+        # memoir (per-page symbols), memoir2 (by-design continuous) and tufte
+        # (margin notes) define their own footnote scheme, so the toggle is a
+        # no-op: the output is identical either way and never carries the
+        # per-chapter \counterwithin* the other themes get.
+        for theme in ("memoir", "memoir2", "tufte"):
+            continuous = render(theme=theme, footnote_numbering="continuous")
+            per_chapter = render(theme=theme, footnote_numbering="per-chapter")
+            self.assertEqual(continuous, per_chapter, theme)
+            self.assertNotIn("\\counterwithin*{footnote}{chapter}",
+                             per_chapter, theme)
+
+    def _unnumbered_tex(self, **kwargs):
+        # An unnumbered chapter is set with \chapter*, which doesn't step the
+        # chapter counter that \counterwithin* keys off.
+        b = support.make_book([Chapter(title="Intro", html="<p>x</p>",
+                                       numbered=False)])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "book.tex")
+            write_latex(b, path, **kwargs)
+            with open(path, encoding="utf-8") as fh:
+                return fh.read()
+
+    def test_per_chapter_resets_footnotes_in_unnumbered_chapters(self):
+        tex = self._unnumbered_tex(footnote_numbering="per-chapter")
+        self.assertIn("\\chapter*{Intro}", tex)
+        self.assertIn("\\setcounter{footnote}{0}", tex)
+
+    def test_continuous_does_not_reset_unnumbered_chapters(self):
+        tex = self._unnumbered_tex(footnote_numbering="continuous")
+        self.assertNotIn("\\setcounter{footnote}{0}", tex)
 
 
 if __name__ == "__main__":

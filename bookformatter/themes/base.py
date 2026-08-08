@@ -175,6 +175,18 @@ section.chapter:not(.unnumbered) > p:first-of-type::first-letter {
 }
 """
 
+# Per-chapter footnote numbering: reset WeasyPrint's book-wide footnote
+# counter at every chapter so each opens at 1. The default (no reset) runs
+# the count continuously across the whole book. The reset hangs off each
+# chapter's head (always the section's first child) rather than the section
+# itself: a counter-reset on section.chapter would replace, not merge with,
+# a theme's own section.chapter reset (polimi resets section/figure there),
+# whereas the head's reset still scopes to the chapter's following content.
+# print_css only emits this for themes without their own footnote scheme.
+FOOTNOTE_PER_CHAPTER = """
+section.chapter > header.chapter-head { counter-reset: footnote 0; }
+"""
+
 # Shared by the epub and print stylesheets (see EPUB_EXTRA / PRINT_EXTRA).
 _REFERENCES = """
 /* References page: APA hanging indents. */
