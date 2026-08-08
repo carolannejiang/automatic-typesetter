@@ -142,6 +142,19 @@ class WebTests(unittest.TestCase):
                       '<p class="theme-source">Source: '
                       'Inspired by A Very Short Introduction series</p>', page)
 
+    def test_stats_count_front_matter_apart(self):
+        thesis = ("# INTRODUCTION\n\nWhy.\n\n# I. FIRST\n\nWhat.\n\n"
+                  "# II. SECOND\n\nHow.\n\n# APPENDIX\n\nTables.\n")
+        form = urllib.parse.urlencode(
+            {"pasted": thesis, "title": "Thesis", "formats": ["html"]},
+            doseq=True).encode()
+        code, body = self._post("/build", form,
+                                "application/x-www-form-urlencoded")
+        self.assertEqual(code, 200)
+        status = self._wait_for_job(body["id"])
+        self.assertEqual(status["status"], "done", status["message"])
+        self.assertIn("2 chapter(s) + 2 front/back matter", status["stats"])
+
     def test_build_from_pasted_text_with_options(self):
         form = urllib.parse.urlencode(
             {
