@@ -10,8 +10,9 @@ from bookformatter import fetch
 from bookformatter.ingest import (IngestOptions, PER_HOST_FETCHES,
                                   _fetch_parallel, _host,
                                   _looks_like_index_url, _match_feed_item,
-                                  ingest)
+                                  classify_chapters, ingest)
 from bookformatter.feeds import FeedItem
+from bookformatter.models import Chapter
 
 PNG_1PX = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
@@ -175,6 +176,66 @@ class IngestTests(unittest.TestCase):
         result = ingest(["/nonexistent/path.md"])
         self.assertEqual(result.chapters, [])
         self.assertTrue(result.warnings)
+
+
+class ClassifyChaptersTests(unittest.TestCase):
+    @staticmethod
+    def _chapters(*titles):
+        return [Chapter(title=t, html="<p>x</p>") for t in titles]
+
+    def test_typed_roman_figures_number_the_chapters(self):
+        chapters = self._chapters(
+            "INTRODUCTION", "I. ELITE MANIFESTOS", "II. FORUMS",
+            "III. INTERVIEWS", "CONCLUSION", "REFERENCES", "APPENDIX")
+        classify_chapters(chapters)
+        self.assertEqual([c.numbered for c in chapters],
+                         [False, True, True, True, False, False, False])
+        self.assertEqual([c.number for c in chapters[1:4]], ["I", "II", "III"])
+        self.assertEqual(chapters[1].title, "ELITE MANIFESTOS")
+        self.assertEqual(chapters[0].title, "INTRODUCTION")  # untouched
+
+    def test_typed_arabic_figures_number_the_chapters(self):
+        chapters = self._chapters("Preface", "1. Beginnings", "2. Endings")
+        classify_chapters(chapters)
+        self.assertEqual([c.numbered for c in chapters], [False, True, True])
+        self.assertEqual([c.number for c in chapters[1:]], ["1", "2"])
+        self.assertEqual(chapters[1].title, "Beginnings")
+
+    def test_figures_not_counting_from_one_are_titles(self):
+        # "2001." names the year, not chapter two thousand and one.
+        chapters = self._chapters("2001. A Space Odyssey", "The Sequel")
+        classify_chapters(chapters)
+        self.assertEqual(chapters[0].title, "2001. A Space Odyssey")
+        self.assertTrue(all(c.numbered for c in chapters))
+        self.assertTrue(all(c.number is None for c in chapters))
+
+    def test_initials_are_not_roman_figures(self):
+        # "V." is worth five, so the sequence check rejects it.
+        chapters = self._chapters("V. S. Naipaul at Home", "Other Essays")
+        classify_chapters(chapters)
+        self.assertEqual(chapters[0].title, "V. S. Naipaul at Home")
+        self.assertTrue(all(c.numbered for c in chapters))
+
+    def test_furniture_titles_fall_back_unnumbered(self):
+        chapters = self._chapters(
+            "Introduction", "The Cellar Door", "Appendix A: Tables")
+        classify_chapters(chapters)
+        self.assertEqual([c.numbered for c in chapters], [False, True, False])
+        self.assertTrue(all(c.number is None for c in chapters))
+
+    def test_ingested_markdown_is_classified(self):
+        text = ("# INTRODUCTION\n\nWhy.\n\n# I. FIRST STUDY\n\nWhat.\n\n"
+                "# REFERENCES\n\nWho.\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "thesis.md")
+            with open(path, "w") as fh:
+                fh.write(text)
+            result = ingest([path])
+        self.assertEqual([(c.title, c.numbered, c.number)
+                          for c in result.chapters],
+                         [("INTRODUCTION", False, None),
+                          ("FIRST STUDY", True, "I"),
+                          ("REFERENCES", False, None)])
 
 
 PROSE = ("A reasonably long paragraph, with commas, that scores well in "

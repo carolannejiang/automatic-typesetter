@@ -69,6 +69,23 @@ class EpubTests(unittest.TestCase):
         self.assertEqual(opf.find(f".//{dc}title").text, "Test & Book")
         self.assertEqual(opf.find(f".//{dc}creator").text, "A. Author <tester>")
 
+    def test_mixed_numbering_reaches_heads_and_nav(self):
+        thesis = support.make_book([
+            Chapter(title="Introduction", html="<p>Why.</p>", numbered=False),
+            Chapter(title="Elite Manifestos", html="<p>What.</p>", number="I"),
+        ])
+        path = os.path.join(self.tmp.name, "thesis.epub")
+        write_epub(thesis, path)
+        with zipfile.ZipFile(path) as zf:
+            intro = zf.read("OEBPS/text/chapter-001.xhtml").decode("utf-8")
+            study = zf.read("OEBPS/text/chapter-002.xhtml").decode("utf-8")
+            nav = zf.read("OEBPS/nav.xhtml").decode("utf-8")
+        self.assertNotIn("chapter-number", intro)
+        self.assertIn('<span class="chapter-number">Chapter I</span>', study)
+        # The typed figure stays on the contents line; front matter is bare.
+        self.assertIn(">I. Elite Manifestos</a>", nav)
+        self.assertIn(">Introduction</a>", nav)
+
     def test_nav_lists_chapters(self):
         nav = self.zf.read("OEBPS/nav.xhtml").decode("utf-8")
         self.assertIn("One &amp; Only", nav)

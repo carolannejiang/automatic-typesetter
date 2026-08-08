@@ -197,6 +197,9 @@ h2::before {
   margin-right: 0.55em;
 }
 section.references h2::before { content: none; }
+/* Front/back matter (an unnumbered Introduction or Appendix) numbers
+   neither its chapter nor its sections. */
+section.chapter.unnumbered h2::before { content: none; }
 
 /* Subsections: memoir's \\large bold roman with the three-part number. */
 h3 {

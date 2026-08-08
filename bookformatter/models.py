@@ -16,6 +16,9 @@ class Chapter:
     source: str = ""  # file path or URL this came from
     author: Optional[str] = None
     date: Optional[_dt.datetime] = None
+    numbered: bool = True  # False: front/back matter (Introduction, Appendix)
+    number: Optional[str] = None  # display number typed by the author ("I",
+                                  # "2"); None numbers the chapter by position
 
     def word_count(self) -> int:
         text = re.sub(r"<[^>]+>", " ", self.html)

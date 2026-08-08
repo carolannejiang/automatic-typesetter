@@ -109,6 +109,70 @@ def _chapters_from_markup(html_text: str, fallback_title: str,
 
 
 # ---------------------------------------------------------------------------
+# chapter numbering
+
+# A title the author numbered themselves: "I. ELITE MANIFESTOS",
+# "2. The Stairs". Only an upper-case roman or arabic figure followed by a
+# dot and a space counts — "IV Drips" or "I met a traveller" do not.
+_TYPED_NUMBER = re.compile(r"^\s*(\d{1,4}|[IVXLCDM]{1,8})\.\s+(\S.*)$")
+
+# Standard front/back-matter titles that never carry a chapter number.
+_UNNUMBERED_TITLES = frozenset((
+    "introduction", "conclusion", "preface", "foreword", "prologue",
+    "epilogue", "afterword", "acknowledgments", "acknowledgements",
+    "references", "bibliography", "works cited", "notes", "glossary",
+    "index", "abstract", "dedication", "appendix", "appendices",
+))
+
+_ROMAN_DIGITS = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500,
+                 "M": 1000}
+
+
+def _number_value(figure: str) -> int:
+    """The integer a typed chapter figure names — arabic or roman."""
+    if figure.isdigit():
+        return int(figure)
+    total = 0
+    for digit, following in zip(figure, figure[1:] + " "):
+        value = _ROMAN_DIGITS[digit]
+        total += -value if _ROMAN_DIGITS.get(following, 0) > value else value
+    return total
+
+
+def _is_furniture_title(title: str) -> bool:
+    text = (title or "").strip().lower()
+    return (text in _UNNUMBERED_TITLES
+            or text.startswith(("appendix ", "appendix:")))
+
+
+def classify_chapters(chapters: list) -> None:
+    """Decide, in place, which chapters carry a chapter number.
+
+    Trust the author first: when the titles that open with a typed
+    "I. " / "1. " figure count 1..k in document order, each figure becomes
+    its chapter's display number (stripped from the title) and the untyped
+    titles — INTRODUCTION, REFERENCES, APPENDIX — become unnumbered
+    front/back matter. A figure sequence that doesn't count from one is
+    part of the titles themselves ("2001. A Space Odyssey"), so nothing is
+    touched. Without typed figures, fall back to recognizing standard
+    furniture titles; everything else stays numbered by position.
+    """
+    matches = [_TYPED_NUMBER.match(ch.title or "") for ch in chapters]
+    values = [_number_value(m.group(1)) for m in matches if m is not None]
+    if values and values == list(range(1, len(values) + 1)):
+        for chapter, match in zip(chapters, matches):
+            if match is None:
+                chapter.numbered = False
+            else:
+                chapter.number = match.group(1)
+                chapter.title = match.group(2)
+        return
+    for chapter in chapters:
+        if _is_furniture_title(chapter.title):
+            chapter.numbered = False
+
+
+# ---------------------------------------------------------------------------
 # file ingestion
 
 
@@ -881,6 +945,7 @@ def ingest(inputs: list, opts: Optional[IngestOptions] = None) -> IngestResult:
         else:
             result.warn(f"input not found: {raw}")
     process_images(result, opts)
+    classify_chapters(result.chapters)
     if not result.title_hint and len(result.chapters) == 1:
         result.title_hint = result.chapters[0].title
     return result

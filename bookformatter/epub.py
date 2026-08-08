@@ -59,7 +59,7 @@ def _build_date() -> str:
     return now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _chapter_body(number: int, title: str, content_html: str, show_number: bool,
+def _chapter_body(number, title: str, content_html: str, show_number: bool,
                   theme: str = "classic") -> str:
     return (
         f'<section class="chapter" epub:type="chapter" role="doc-chapter">\n'
@@ -129,7 +129,11 @@ def write_epub(book: Book, path: str, theme: str = "classic",
 
     chapter_hrefs: list = []
     next_link_note = 1
+    seq = 0  # position among the numbered chapters; front/back matter
+             # (chapter.numbered False) doesn't advance it
     for i, chapter in enumerate(book.chapters, 1):
+        if chapter.numbered:
+            seq += 1
         # Round-trip through the DOM to guarantee well-formed XHTML, and
         # repoint asset srcs: chapters live in text/, assets in images/.
         root = htmldom.parse(chapter.html)
@@ -144,12 +148,17 @@ def write_epub(book: Book, path: str, theme: str = "classic",
             content, next_link_note = annotate_links(
                 content, start=next_link_note, mode="aside",
                 citations=link_citations, marker=link_marker)
-        body = _chapter_body(i, chapter.title, content, chapter_numbers, theme)
+        show_number = chapter_numbers and chapter.numbered
+        body = _chapter_body(chapter.number or seq, chapter.title, content,
+                             show_number, theme)
         href = f"text/chapter-{i:03d}.xhtml"
         files.append((f"OEBPS/{href}", _xhtml(chapter.title, body, lang)))
         manifest.append((f"ch{i:03d}", href, "application/xhtml+xml", None))
         spine.append(f"ch{i:03d}")
-        chapter_hrefs.append((href, chapter.title))
+        # A figure the author typed into the title stays on the nav line.
+        toc_title = (f"{chapter.number}. {chapter.title}"
+                     if show_number and chapter.number else chapter.title)
+        chapter_hrefs.append((href, toc_title))
 
     if references:
         ref_entries = apacite.reference_entries(link_citations)
