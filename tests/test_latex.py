@@ -105,6 +105,54 @@ class WriteLatexTests(unittest.TestCase):
         self.assertIn("\\begin{center}* * *\\end{center}", tex)
         self.assertIn("Line\\newline break.", tex)
 
+    def test_unnumbered_and_roman_figured_chapters(self):
+        thesis = support.make_book([
+            Chapter(title="INTRODUCTION", html="<p>Why.</p>", numbered=False),
+            Chapter(title="ELITE MANIFESTOS", html="<p>What.</p>", number="I"),
+        ])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "book.tex")
+            write_latex(thesis, path)
+            with open(path, encoding="utf-8") as fh:
+                tex = fh.read()
+        self.assertIn("\\chapter*{INTRODUCTION}", tex)
+        self.assertIn("\\addcontentsline{toc}{chapter}{INTRODUCTION}", tex)
+        self.assertIn("\\chapter{ELITE MANIFESTOS}", tex)
+        # Typed roman figures switch \thechapter to roman book-wide.
+        self.assertIn("\\renewcommand{\\thechapter}{\\Roman{chapter}}", tex)
+
+    def test_unnumbered_chapters_open_without_lettrine(self):
+        thesis = support.make_book([
+            Chapter(title="INTRODUCTION", html="<p>Whyever so.</p>",
+                    numbered=False),
+            Chapter(title="ELITE MANIFESTOS", html="<p>Whatever else.</p>",
+                    number="I"),
+        ])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "book.tex")
+            write_latex(thesis, path, theme="memoir2")
+            with open(path, encoding="utf-8") as fh:
+                tex = fh.read()
+        self.assertIn("Whyever so.", tex)
+        self.assertNotIn("\\lettrine{W}{hyever}", tex)
+        self.assertIn("\\lettrine{W}{hatever}", tex)
+
+    def test_global_numbers_off_keeps_plain_chapters(self):
+        thesis = support.make_book([
+            Chapter(title="INTRODUCTION", html="<p>Why.</p>", numbered=False),
+            Chapter(title="ELITE MANIFESTOS", html="<p>What.</p>", number="I"),
+        ])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "book.tex")
+            write_latex(thesis, path, chapter_numbers=False)
+            with open(path, encoding="utf-8") as fh:
+                tex = fh.read()
+        # secnumdepth already hides the figures; \chapter keeps TOC entries.
+        self.assertIn("\\setcounter{secnumdepth}{-1}", tex)
+        self.assertIn("\\chapter{INTRODUCTION}", tex)
+        self.assertNotIn("\\chapter*", tex)
+        self.assertNotIn("\\Roman{chapter}", tex)
+
     def test_verbatim_cannot_close_early(self):
         tex = render()
         self.assertIn("code_block %raw&", tex)

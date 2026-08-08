@@ -1036,6 +1036,17 @@ def write_latex(book: Book, path: str, theme: str = "classic",
     else:
         lines = _book_preamble(theme, trim, font_size, line_height,
                                chapter_start, chapter_numbers, language)
+    # Chapters whose authors typed roman figures into their titles
+    # ("I. ELITE MANIFESTOS", parsed apart at ingest) number in roman
+    # everywhere \thechapter appears: openers, running heads, contents.
+    if chapter_numbers and any(ch.number and not ch.number.isdigit()
+                               for ch in book.chapters):
+        lines.append("\\renewcommand{\\thechapter}{\\Roman{chapter}}")
+    if chapter_numbers and any(not ch.numbered for ch in book.chapters):
+        # Holds the theme's secnumdepth while an unnumbered chapter's own
+        # sections go unnumbered too (a ".1" with an empty chapter part
+        # would otherwise head an Introduction's first section).
+        lines.append("\\newcounter{savedsecnumdepth}")
     lines.append("\\begin{document}")
     lines.extend(_front_matter(
         book, toc,
@@ -1052,14 +1063,30 @@ def write_latex(book: Book, path: str, theme: str = "classic",
                 citations=link_citations)
         root = htmldom.parse(markup)
         title = escape(htmldom.normalize_ws(chapter.title))
-        lines.append("\\chapter{%s}" % title)
+        starred = chapter_numbers and not chapter.numbered
+        if starred:
+            # Its sections must not number either — secnumdepth off for
+            # the chapter's span, restored to the theme's depth after.
+            lines.append(
+                "\\setcounter{savedsecnumdepth}{\\value{secnumdepth}}")
+            lines.append("\\setcounter{secnumdepth}{-1}")
+            lines.append("\\chapter*{%s}" % title)
+            lines.append("\\addcontentsline{toc}{chapter}{%s}" % title)
+        else:
+            # With numbering globally off, secnumdepth already suppresses
+            # the figure; the plain form keeps the contents entry free.
+            lines.append("\\chapter{%s}" % title)
         body = _TexConverter(assets, sidenotes=theme == "tufte").convert(root)
-        if body and theme == "memoir2":
+        # Front/back matter opens plainly — no lettrine drop cap.
+        if body and theme == "memoir2" and chapter.numbered:
             body = _lettrine_open(body)
-        elif body and theme == "polimi":
+        elif body and theme == "polimi" and chapter.numbered:
             body = _lettrine_open(body, command="start")
         if body:
             lines.append(body)
+        if starred:
+            lines.append(
+                "\\setcounter{secnumdepth}{\\value{savedsecnumdepth}}")
 
     if references:
         lines.extend(_references_section(book, assets, link_citations))

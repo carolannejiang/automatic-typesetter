@@ -129,7 +129,11 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
     endnotes: list = []  # (number, url) when link_notes == "end"
     seen_endnotes: dict = {}  # url -> L number, to dedupe repeats book-wide
     chapter_parts: list = []
+    seq = 0  # position among the numbered chapters; front/back matter
+             # (chapter.numbered False) doesn't advance it
     for i, chapter in enumerate(book.chapters, 1):
+        if chapter.numbered:
+            seq += 1
         content = htmldom.normalize_fragment(chapter.html)
         content = _inline_assets(content, assets_by_name)
         if footnotes:
@@ -151,11 +155,16 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
             content = hoist_margin_notes(content)
         # Lettrine themes (memoir2) open on a drop cap with the rest of
         # the word in small caps; CSS can't select either, so bake both.
-        if themes.lettrine_run(theme):
+        # Front/back matter opens plainly, like the drop-cap CSS's
+        # .unnumbered exclusion.
+        if themes.lettrine_run(theme) and chapter.numbered:
             content = _bake_lettrine(content)
-        chapter_parts.append(f'<section class="chapter" id="chapter-{i}">')
+        classes = "chapter" if chapter.numbered else "chapter unnumbered"
+        chapter_parts.append(f'<section class="{classes}" id="chapter-{i}">')
         chapter_parts.append(
-            frontmatter.chapter_head_html(theme, i, chapter.title, chapter_numbers))
+            frontmatter.chapter_head_html(theme, chapter.number or seq,
+                                          chapter.title,
+                                          chapter_numbers and chapter.numbered))
         chapter_parts.append(content)
         chapter_parts.append("</section>")
 
@@ -198,8 +207,20 @@ def build_print_html(book: Book, theme: str = "classic", trim: str = None,
         parts.append('<nav class="print-toc frontmatter">')
         parts.append("<h1>Contents</h1>")
         parts.append("<ol>")
+        seq = 0
         for i, chapter in enumerate(book.chapters, 1):
-            number = f'<span class="toc-number">{i}</span>' if toc_nums else ""
+            numbered = chapter_numbers and chapter.numbered
+            if chapter.numbered:
+                seq += 1
+            if toc_nums and numbered:
+                number = f'<span class="toc-number">{_esc(str(chapter.number or seq))}</span>'
+            elif numbered and chapter.number:
+                # The author typed the figure into the title ("I. ELITE
+                # MANIFESTOS"), so the contents line keeps it even in
+                # themes whose own lines are unnumbered.
+                number = _esc(f"{chapter.number}. ")
+            else:
+                number = ""
             parts.append(
                 f'<li><a href="#chapter-{i}">{number}{_esc(chapter.title)}</a></li>')
         if endnotes:

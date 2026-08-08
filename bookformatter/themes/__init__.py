@@ -65,7 +65,10 @@ def _geometry(trim: str, theme: str = "classic") -> dict:
     return geometry
 
 
-def chapter_label(theme: str, number: int) -> str:
+def chapter_label(theme: str, number) -> str:
+    """The chapter-number slot's text. number is the chapter's position
+    (int) or the author's own typed figure (str, e.g. "IV"); every theme
+    interpolates either."""
     return _theme(theme).chapter_label(number)
 
 

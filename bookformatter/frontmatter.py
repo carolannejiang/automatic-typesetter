@@ -52,9 +52,11 @@ def titlepage_divs(meta: BookMeta) -> str:
     return "\n".join(parts)
 
 
-def chapter_head_html(theme: str, number: int, title: str,
+def chapter_head_html(theme: str, number, title: str,
                       show_number: bool) -> str:
-    """A chapter's opening header: optional theme-styled number, then title."""
+    """A chapter's opening header: optional theme-styled number, then title.
+    number is the chapter's position (int) or the author's own typed figure
+    (str, e.g. "IV"); themes interpolate either into their label."""
     parts = ['<header class="chapter-head">']
     if show_number:
         parts.append(f'<span class="chapter-number">'

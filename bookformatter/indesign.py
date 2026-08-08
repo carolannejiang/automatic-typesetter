@@ -624,7 +624,11 @@ def book_to_story_items(book: Book, theme: str = "classic",
                           start="NextPage" if i == 0 else None))
 
     next_link_note = 1
-    for number, chapter in enumerate(book.chapters, 1):
+    seq = 0  # position among the numbered chapters; front/back matter
+             # (chapter.numbered False) doesn't advance it
+    for chapter in book.chapters:
+        if chapter.numbered:
+            seq += 1
         markup = footnotes.inline_footnotes(chapter.html)
         if link_notes:
             markup, next_link_note = annotate_links(
@@ -633,9 +637,10 @@ def book_to_story_items(book: Book, theme: str = "classic",
         root = htmldom.parse(markup)
         opener: list = []
         title_attrs = None
-        if chapter_numbers:
+        if chapter_numbers and chapter.numbered:
             opener.append(Para("Chapter Number",
-                               [TextRun(themes.chapter_label(theme, number))]))
+                               [TextRun(themes.chapter_label(
+                                   theme, chapter.number or seq))]))
             title_attrs = {"SpaceBefore": "0"}
         opener.append(Para("Chapter Title", [TextRun(chapter.title)],
                            attrs=title_attrs))

@@ -180,6 +180,70 @@ class ReferencesPageTests(unittest.TestCase):
         self.assertNotIn("Chapter sources", html)
 
 
+class ChapterNumberingTests(unittest.TestCase):
+    def _thesis_book(self):
+        return Book(meta=BookMeta(title="T", author="A"), chapters=[
+            Chapter(title="INTRODUCTION", html="<p>Why.</p>", numbered=False),
+            Chapter(title="ELITE MANIFESTOS", html="<p>What.</p>", number="I"),
+            Chapter(title="FORUMS", html="<p>Where.</p>", number="II"),
+            Chapter(title="REFERENCES", html="<p>Who.</p>", numbered=False),
+        ])
+
+    def test_unnumbered_chapter_head_has_no_number(self):
+        html = printbook.build_print_html(self._thesis_book())
+        intro = html[html.index('id="chapter-1"'):html.index('id="chapter-2"')]
+        self.assertNotIn("chapter-number", intro)
+        self.assertIn("INTRODUCTION", intro)
+
+    def test_typed_figure_reaches_chapter_head_and_toc(self):
+        html = printbook.build_print_html(self._thesis_book())
+        self.assertIn('<span class="chapter-number">Chapter I</span>', html)
+        self.assertIn('<a href="#chapter-2">I. ELITE MANIFESTOS</a>', html)
+        # Unnumbered contents lines stay bare.
+        self.assertIn('<a href="#chapter-1">INTRODUCTION</a>', html)
+        self.assertIn('<a href="#chapter-4">REFERENCES</a>', html)
+
+    def test_position_numbering_skips_front_matter(self):
+        book = Book(meta=BookMeta(title="T", author="A"), chapters=[
+            Chapter(title="Introduction", html="<p>a</p>", numbered=False),
+            Chapter(title="One", html="<p>b</p>"),
+            Chapter(title="Two", html="<p>c</p>"),
+        ])
+        html = printbook.build_print_html(book)
+        self.assertIn('<span class="chapter-number">Chapter 1</span>', html)
+        self.assertIn('<span class="chapter-number">Chapter 2</span>', html)
+        self.assertNotIn("Chapter 3", html)
+
+    def test_polimi_counters_skip_unnumbered_chapters(self):
+        html = printbook.build_print_html(self._thesis_book(), theme="polimi")
+        self.assertIn('<section class="chapter unnumbered" id="chapter-1">',
+                      html)
+        self.assertIn('<section class="chapter" id="chapter-2">', html)
+        # The chapter counter must not advance on front/back matter, or
+        # chapter I's sections would print as 2.1.
+        self.assertIn("section.chapter:not(.unnumbered) "
+                      "{ counter-increment: chapter; }", html)
+        self.assertIn("section.chapter.unnumbered h2::before "
+                      "{ content: none; }", html)
+
+    def test_no_drop_cap_or_lettrine_in_unnumbered_chapters(self):
+        html = printbook.build_print_html(self._thesis_book(),
+                                          theme="memoir2", drop_caps=True)
+        intro = html[html.index('id="chapter-1"'):html.index('id="chapter-2"')]
+        study = html[html.index('id="chapter-2"'):html.index('id="chapter-3"')]
+        self.assertNotIn('<span class="lettrine">', intro)
+        self.assertIn('<span class="lettrine">', study)
+        # The shared drop-cap rule excludes front/back matter too.
+        self.assertIn("section.chapter:not(.unnumbered) > "
+                      "p:first-of-type::first-letter", html)
+
+    def test_global_numbers_off_overrides_typed_figures(self):
+        html = printbook.build_print_html(self._thesis_book(),
+                                          chapter_numbers=False)
+        self.assertNotIn('<span class="chapter-number">', html)
+        self.assertIn('<a href="#chapter-2">ELITE MANIFESTOS</a>', html)
+
+
 class _nullcontext:
     def __enter__(self):
         return None

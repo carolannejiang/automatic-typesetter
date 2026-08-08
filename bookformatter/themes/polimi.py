@@ -197,6 +197,10 @@ h2::before {
   margin-right: 0.55em;
 }
 section.references h2::before { content: none; }
+/* Front/back matter (an unnumbered Introduction or Appendix) numbers
+   neither its chapter nor its sections and subsections. */
+section.chapter.unnumbered h2::before { content: none; }
+section.chapter.unnumbered h3::before { content: none; }
 
 /* Subsections: memoir's \\large bold roman with the three-part number. */
 h3 {
@@ -216,7 +220,7 @@ h4 { font-style: normal; font-weight: bold; margin: 1.2em 0 0.25em; }
    to the thesis's four lines. The extra ancestors outrank the generic
    drop-cap block appended when the user also ticks drop caps, so the
    initial keeps its design. */
-html body section.chapter:not(.references) > p:first-of-type::first-letter {
+html body section.chapter:not(.references):not(.unnumbered) > p:first-of-type::first-letter {
   float: left;
   color: $POLIMI_BRICKRED;
   font-size: 3.2em;
@@ -353,13 +357,13 @@ section.chapter, section.endnotes {
    floats over the spacer at zero net advance: width + margins cancel,
    so the text metrics never depend on the glyph. The float bottoms stop
    a hair short of the fifth line so it returns to the measure. */
-html body section.chapter:not(.references) > p:first-of-type::before {
+html body section.chapter:not(.references):not(.unnumbered) > p:first-of-type::before {
   content: "";
   float: left;
   width: 5.5em;
   height: 4.8em;
 }
-html body section.chapter:not(.references) > p:first-of-type::first-letter {
+html body section.chapter:not(.references):not(.unnumbered) > p:first-of-type::first-letter {
   float: left;
   font-size: 6.5em;
   line-height: 0.745;
@@ -372,8 +376,10 @@ html body section.chapter:not(.references) > p:first-of-type::first-letter {
 }
 
 /* The numbering spine: chapters count themselves so sections, figures,
-   and marks can carry chapter.section numbers. */
-section.chapter { counter-increment: chapter; }
+   and marks can carry chapter.section numbers. Unnumbered front/back
+   matter must not advance the count — an Introduction before chapter I
+   would offset every section, figure, and mark by one. */
+section.chapter:not(.unnumbered) { counter-increment: chapter; }
 h2 { position: relative; }
 h2::before {
   content: counter(chapter) "." counter(section);
@@ -398,6 +404,7 @@ section.chapter h2 {
   string-set: section-mark counter(chapter) "." counter(section) ". " content();
 }
 section.references h2 { string-set: none; }
+section.chapter.unnumbered h2 { string-set: none; }
 
 /* The companion head: the two top boxes tile the measure plus the 49pt
    \\headwidth overhang into the fore-edge (the outer box's width and
