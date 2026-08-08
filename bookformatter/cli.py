@@ -73,7 +73,7 @@ def build_parser() -> argparse.ArgumentParser:
                              "Very Short Introduction series, classicthesis after "
                              "Miede's ClassicThesis LaTeX style, memoir after a "
                              "6x9 memoir-class novel template, memoir2 that "
-                             "template in full dress — drop caps, symbol "
+                             "template in full dress — drop caps, numbered "
                              "footnotes — mydiss after Ummels's mydiss "
                              "dissertation class, and polimi after the "
                              "Cerberus Polimi thesis (memoir veelo chapter "
