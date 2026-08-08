@@ -528,5 +528,45 @@ class CliTests(unittest.TestCase):
             self.assertIn("\\end{document}", tex)
 
 
+class FootnoteNumberingTests(unittest.TestCase):
+    def test_continuous_is_the_default(self):
+        tex = render()
+        self.assertIn("\\counterwithout{footnote}{chapter}", tex)
+        self.assertNotIn("\\counterwithin*{footnote}{chapter}", tex)
+
+    def test_per_chapter_resets_the_counter(self):
+        tex = render(footnote_numbering="per-chapter")
+        self.assertIn("\\counterwithin*{footnote}{chapter}", tex)
+        self.assertNotIn("\\counterwithout{footnote}{chapter}", tex)
+
+    def test_symbol_and_sidenote_themes_keep_their_own_scheme(self):
+        # memoir/memoir2 (per-page symbols) and tufte (margin notes) manage
+        # their own footnote counters, so the toggle leaves them untouched.
+        for theme in ("memoir", "memoir2", "tufte"):
+            for mode in ("continuous", "per-chapter"):
+                tex = render(theme=theme, footnote_numbering=mode)
+                self.assertNotIn("counterwith", tex, (theme, mode))
+
+    def _unnumbered_tex(self, **kwargs):
+        # An unnumbered chapter is set with \chapter*, which doesn't step the
+        # chapter counter that \counterwithin* keys off.
+        b = support.make_book([Chapter(title="Intro", html="<p>x</p>",
+                                       numbered=False)])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "book.tex")
+            write_latex(b, path, **kwargs)
+            with open(path, encoding="utf-8") as fh:
+                return fh.read()
+
+    def test_per_chapter_resets_footnotes_in_unnumbered_chapters(self):
+        tex = self._unnumbered_tex(footnote_numbering="per-chapter")
+        self.assertIn("\\chapter*{Intro}", tex)
+        self.assertIn("\\setcounter{footnote}{0}", tex)
+
+    def test_continuous_does_not_reset_unnumbered_chapters(self):
+        tex = self._unnumbered_tex(footnote_numbering="continuous")
+        self.assertNotIn("\\setcounter{footnote}{0}", tex)
+
+
 if __name__ == "__main__":
     unittest.main()

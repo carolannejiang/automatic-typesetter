@@ -98,6 +98,12 @@ def build_parser() -> argparse.ArgumentParser:
     design.add_argument("--no-toc", action="store_true", help="omit the table of contents page in print output")
     design.add_argument("--no-footnotes", action="store_true",
                         help="keep footnotes as an end-of-chapter list instead of setting them at the foot of the page")
+    design.add_argument("--footnote-numbering", default="continuous",
+                        choices=["continuous", "per-chapter"],
+                        help="continuous numbers footnotes 1, 2, 3… across the whole "
+                             "book; per-chapter restarts the count at 1 each chapter "
+                             "(default: continuous). Symbol-footnote themes (memoir, "
+                             "memoir2) and margin-note tufte keep their own scheme")
     design.add_argument("--link-notes", default="foot", choices=["foot", "end", "off"],
                         help="where each hyperlink's L-numbered URL note is set in "
                              "print output: at the foot of its page, or gathered in "
@@ -219,6 +225,7 @@ def main(argv=None) -> int:
         footnotes=not args.no_footnotes, link_notes=link_notes,
         link_marker=args.link_marker,
         link_citations=citations, references=args.references,
+        footnote_numbering=args.footnote_numbering,
         pdf_engine=args.pdf_engine,
         warnings=warnings, progress=lambda message: print(message, file=sys.stderr),
     )

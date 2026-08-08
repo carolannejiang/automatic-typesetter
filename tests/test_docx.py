@@ -327,6 +327,28 @@ class DocxPipelineTests(unittest.TestCase):
                 self.assertIn("word/document.xml", zf.namelist())
 
 
+class FootnoteNumberingTests(unittest.TestCase):
+    def _document(self, **kwargs):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "t.docx")
+            write_docx(make_book(), path, **kwargs)
+            with zipfile.ZipFile(path) as zf:
+                return zf.read("word/document.xml").decode("utf-8")
+
+    def test_continuous_keeps_one_section_and_no_restart(self):
+        doc = self._document()  # continuous is the default
+        self.assertEqual(doc.count("<w:sectPr>"), 1)
+        self.assertNotIn("numRestart", doc)
+
+    def test_per_chapter_makes_sections_that_restart(self):
+        doc = self._document(footnote_numbering="per-chapter")
+        # Front matter plus each chapter is its own section, and each
+        # section restarts Word's footnote count.
+        self.assertGreater(doc.count("<w:sectPr>"), 1)
+        self.assertEqual(doc.count("<w:sectPr>"),
+                         doc.count('w:numRestart w:val="eachSect"'))
+
+
 class DocxPackagingTests(unittest.TestCase):
     def test_zip_entries_carry_fixed_dates(self):
         # Deterministic packaging (ziputil): identical input, identical bytes.
