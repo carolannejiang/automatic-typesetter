@@ -76,6 +76,13 @@ python3 -m bookformatter build/my-book.docx -f epub,pdf
 # Hand off to a designer: an InCopy story to Place, plus a full
 # InDesign document
 python3 -m bookformatter manuscript.md -t "My Book" -f icml,idml
+
+# Add your own front/back matter and copyright page. The matter files
+# keep their own markup verbatim (a centered title block, a dedication)
+# and set before chapter 1 / after the last chapter, listed in contents
+python3 -m bookformatter manuscript.md -t "My Book" \
+    --front-matter titlepage.md --back-matter about-the-author.md \
+    --copyright $'Copyright © 2026 Jane Doe.\nAll rights reserved.'
 ```
 
 Outputs land in `./build/` (change with `-o`): `<slug>.epub`, `<slug>.pdf`,
@@ -96,8 +103,10 @@ This starts a local web app at <http://127.0.0.1:8000> (and opens it in
 your browser): paste article/feed links, upload `.md`/`.txt`/`.html`
 files, or paste text directly; set the title, author, cover image, and
 every option the CLI has (theme, trim size, formats, fonts, chapter
-behavior, feed handling, PDF engine); click **Make the book**; download
-the EPUB/PDF/HTML/Word file when the build finishes.
+behavior, feed handling, PDF engine); optionally type your own front and
+back matter (Markdown/HTML, rendered verbatim) and a custom copyright
+page; click **Make the book**; download the EPUB/PDF/HTML/Word file when
+the build finishes.
 
 It runs entirely on your machine — nothing is uploaded anywhere. It's
 standard library only, like the rest of the tool. `--port` changes the
