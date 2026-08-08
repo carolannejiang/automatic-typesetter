@@ -1022,7 +1022,8 @@ def write_latex(book: Book, path: str, theme: str = "classic",
                 line_height: str = None, chapter_start: str = "right",
                 toc: bool = True, chapter_numbers: bool = True,
                 footnotes: bool = True, link_notes: bool = True,
-                link_citations: dict = None, references: bool = False) -> None:
+                link_citations: dict = None, references: bool = False,
+                footnote_numbering: str = "continuous") -> None:
     trim = trim if trim is not None else themes.default_trim(theme)
     font_size = (font_size if font_size is not None
                  else themes.default_font_size(theme))
@@ -1060,6 +1061,15 @@ def write_latex(book: Book, path: str, theme: str = "classic",
         # sections go unnumbered too (a ".1" with an empty chapter part
         # would otherwise head an Introduction's first section).
         lines.append("\\newcounter{savedsecnumdepth}")
+    # Footnote numbering: "continuous" runs the count book-wide,
+    # "per-chapter" restarts it at 1 each chapter (the starred form resets
+    # without prefixing the chapter number). memoir/memoir2 (per-page symbol
+    # footnotes) and tufte (margin sidenotes) manage their own counters.
+    if theme not in ("memoir", "memoir2", "tufte"):
+        if footnote_numbering == "per-chapter":
+            lines.append("\\counterwithin*{footnote}{chapter}")
+        else:
+            lines.append("\\counterwithout{footnote}{chapter}")
     lines.append("\\begin{document}")
     lines.extend(_front_matter(
         book, toc,
@@ -1085,6 +1095,12 @@ def write_latex(book: Book, path: str, theme: str = "classic",
             lines.append("\\setcounter{secnumdepth}{-1}")
             lines.append("\\chapter*{%s}" % title)
             lines.append("\\addcontentsline{toc}{chapter}{%s}" % title)
+            # \chapter* doesn't step the chapter counter, so \counterwithin*
+            # won't restart footnotes here — reset by hand so an unnumbered
+            # chapter opens at 1 like the print CSS and docx sections do.
+            if (footnote_numbering == "per-chapter"
+                    and theme not in ("memoir", "memoir2", "tufte")):
+                lines.append("\\setcounter{footnote}{0}")
         else:
             # With numbering globally off, secnumdepth already suppresses
             # the figure; the plain form keeps the contents entry free.

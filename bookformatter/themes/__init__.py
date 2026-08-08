@@ -164,7 +164,8 @@ def epub_css(theme: str = "classic", font_size: str = "1em",
 def print_css(theme: str = "classic", trim: str = "6x9", font_size: str = "11pt",
               line_height: str = "1.45", book_title: str = "",
               book_subtitle: str = "", chapter_start: str = "right",
-              drop_caps: bool = False, link_note_color: str = "#555") -> str:
+              drop_caps: bool = False, link_note_color: str = "#555",
+              footnote_numbering: str = "continuous") -> str:
     mod = _theme(theme)
     params = mod.params(font_size, line_height)
     params.update(_geometry(trim, theme))
@@ -184,6 +185,12 @@ def print_css(theme: str = "classic", trim: str = "6x9", font_size: str = "11pt"
         css += mod.PRINT_EXTRA.substitute(params)
     if drop_caps:
         css += base.DROP_CAP
+    # memoir/memoir2 (symbol / by-design continuous footnotes) and tufte
+    # (margin sidenotes) define their own footnote scheme; the toggle skips
+    # them here just as the LaTeX writer does, so both paths stay consistent.
+    if footnote_numbering == "per-chapter" and theme not in (
+            "memoir", "memoir2", "tufte"):
+        css += base.FOOTNOTE_PER_CHAPTER
     css += _title_fit_css(mod, book_title, book_subtitle, trim, font_size)
     return css
 

@@ -254,6 +254,9 @@ def run_build(params: dict, uploads: list, workdir: str,
     chapter_numbers = _first(params, "no_chapter_numbers") != "on"
     toc = _first(params, "no_toc") != "on"
     footnotes = _first(params, "no_footnotes") != "on"
+    footnote_numbering = _first(params, "footnote_numbering", "continuous")
+    if footnote_numbering not in ("continuous", "per-chapter"):
+        footnote_numbering = "continuous"
     link_notes = _first(params, "link_notes", "foot")
     if link_notes not in ("foot", "end", "off"):
         link_notes = "foot"
@@ -305,7 +308,8 @@ def run_build(params: dict, uploads: list, workdir: str,
         chapter_numbers=chapter_numbers, footnotes=footnotes,
         link_notes=link_notes, link_marker=link_marker,
         link_citations=citations, references=references,
-        link_note_color=link_note_color, pdf_engine=pdf_engine,
+        link_note_color=link_note_color,
+        footnote_numbering=footnote_numbering, pdf_engine=pdf_engine,
         files=out.files, warnings=out.warnings, progress=progress,
     )
     return out
@@ -913,6 +917,11 @@ footer a { color: var(--link); }
               <option value="download">Embed in the book</option>
               <option value="link">Leave as links</option>
               <option value="strip">Remove</option>
+            </select></div>
+          <div><label for="footnote_numbering">Footnote numbering</label>
+            <select id="footnote_numbering" name="footnote_numbering">
+              <option value="continuous">Continuous through the book</option>
+              <option value="per-chapter">Restart each chapter</option>
             </select></div>
           <div><label for="link_notes">Hyperlink URL notes (L1, L2&hellip;)</label>
             <select id="link_notes" name="link_notes">

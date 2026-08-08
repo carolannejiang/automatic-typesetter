@@ -244,6 +244,29 @@ class ChapterNumberingTests(unittest.TestCase):
         self.assertIn('<a href="#chapter-2">ELITE MANIFESTOS</a>', html)
 
 
+class FootnoteNumberingTests(unittest.TestCase):
+    # The reset hangs off the chapter head, not section.chapter itself, so it
+    # never replaces a theme's own section.chapter counter-reset (polimi).
+    RESET = "section.chapter > header.chapter-head { counter-reset: footnote 0; }"
+
+    def test_continuous_is_the_default(self):
+        html = printbook.build_print_html(_book())
+        self.assertNotIn(self.RESET, html)
+
+    def test_per_chapter_resets_the_footnote_counter(self):
+        html = printbook.build_print_html(_book(),
+                                          footnote_numbering="per-chapter")
+        self.assertIn(self.RESET, html)
+
+    def test_per_chapter_keeps_polimi_section_reset(self):
+        # polimi resets section/figure on section.chapter; the footnote reset
+        # must not clobber that, so both declarations survive.
+        css = printbook.themes.print_css(theme="polimi", trim="a4",
+                                         footnote_numbering="per-chapter")
+        self.assertIn("section.chapter { counter-reset: section figure; }", css)
+        self.assertIn(self.RESET, css)
+
+
 class _nullcontext:
     def __enter__(self):
         return None

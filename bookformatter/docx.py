@@ -780,7 +780,8 @@ def write_docx(book: Book, path: str, theme: str = "classic",
                line_height: str = None, chapter_numbers: bool = True,
                link_notes: bool = True, link_marker: str = "letter",
                link_citations: dict = None,
-               references: bool = False) -> None:
+               references: bool = False,
+               footnote_numbering: str = "continuous") -> None:
     trim = trim if trim is not None else themes.default_trim(theme)
     font_size = font_size if font_size is not None else themes.default_font_size(theme)
     line_height = (line_height if line_height is not None
@@ -799,10 +800,45 @@ def write_docx(book: Book, path: str, theme: str = "classic",
                for k, v in themes.theme_margins(theme, width_in, height_in).items()}
     measure_pt = (width_in - margins["M_IN"] - margins["M_OUT"]) * 72.0
 
+    def inches_tw(value):
+        return int(round(value * 1440))
+
+    # Per-chapter footnote numbering restarts Word's count at each chapter.
+    # Word restarts only at section boundaries, so each chapter becomes its
+    # own section (numRestart=eachSect); the default runs one section, which
+    # Word numbers continuously book-wide. The section-property block is
+    # shared by the chapter breaks and the final section.
+    per_chapter = footnote_numbering == "per-chapter"
+    fn_restart = ('<w:footnotePr><w:numRestart w:val="eachSect"/></w:footnotePr>'
+                  if per_chapter else "")
+    sect_props = (
+        '<w:footerReference w:type="default" r:id="rId5"/>'
+        + fn_restart
+        + '<w:pgSz w:w="%d" w:h="%d"/>'
+        '<w:pgMar w:top="%d" w:right="%d" w:bottom="%d" w:left="%d" '
+        'w:header="576" w:footer="576" w:gutter="0"/>'
+        % (inches_tw(width_in), inches_tw(height_in),
+           inches_tw(margins["M_TOP"]), inches_tw(margins["M_OUT"]),
+           inches_tw(margins["M_BOTTOM"]), inches_tw(margins["M_IN"]))
+    )
+    break_sect = "<w:sectPr>" + sect_props + "</w:sectPr>"
+
     parts = _Parts({a.filename: a for a in book.assets}, catalog, measure_pt)
     body = []
     previous_table = False
+    seen_chapter = False
     for item in items:
+        if per_chapter and getattr(item, "start", False):
+            if seen_chapter:
+                # Close the previous chapter's section on its last paragraph
+                # (a section break lives in that paragraph's pPr); after a
+                # table, a bare paragraph carries the break instead.
+                if body and body[-1].startswith("<w:p>"):
+                    body[-1] = body[-1].replace(
+                        "</w:pPr>", break_sect + "</w:pPr>", 1)
+                else:
+                    body.append("<w:p><w:pPr>" + break_sect + "</w:pPr></w:p>")
+            seen_chapter = True
         if isinstance(item, TableItem):
             if previous_table:
                 # Adjacent tables merge in Word; keep them apart.
@@ -816,18 +852,7 @@ def write_docx(book: Book, path: str, theme: str = "classic",
         # A body may not end on a table.
         body.append('<w:p><w:pPr><w:pStyle w:val="BodyFirst"/></w:pPr></w:p>')
 
-    def inches_tw(value):
-        return int(round(value * 1440))
-
-    sect = (
-        '<w:sectPr><w:footerReference w:type="default" r:id="rId5"/>'
-        '<w:pgSz w:w="%d" w:h="%d"/>'
-        '<w:pgMar w:top="%d" w:right="%d" w:bottom="%d" w:left="%d" '
-        'w:header="576" w:footer="576" w:gutter="0"/></w:sectPr>'
-        % (inches_tw(width_in), inches_tw(height_in),
-           inches_tw(margins["M_TOP"]), inches_tw(margins["M_OUT"]),
-           inches_tw(margins["M_BOTTOM"]), inches_tw(margins["M_IN"]))
-    )
+    sect = "<w:sectPr>" + sect_props + "</w:sectPr>"
     document = (
         _XML_DECL
         + '<w:document xmlns:w="%s" xmlns:r="%s" xmlns:wp="%s">'
