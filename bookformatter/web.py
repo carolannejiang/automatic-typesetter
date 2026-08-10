@@ -835,6 +835,7 @@ footer a { color: var(--link); }
   .downloads a { flex: 1 1 100%; text-align: center; }
 }
 </style>
+<script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body>
 <div class="wrap">
